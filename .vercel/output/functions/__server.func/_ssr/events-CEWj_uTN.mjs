@@ -1,0 +1,699 @@
+import { i as __toESM } from "../_runtime.mjs";
+import { n as require_react } from "../_libs/@radix-ui/react-compose-refs+[...].mjs";
+import { C as require_jsx_runtime } from "../_libs/@tanstack/react-router+[...].mjs";
+import { B as useNssStore, D as formatLongDate, R as todayIso, l as activeVolunteers } from "./utils-BIiJ-s-U.mjs";
+import { n as CardContent, t as Card } from "./card-2ADCK2Ma.mjs";
+import { t as Badge } from "./badge-BMh2Hxac.mjs";
+import { t as Input } from "./input-CRT4sBU_.mjs";
+import { P as FileSpreadsheet, b as Newspaper, g as QrCode, h as RefreshCw, x as MessageCircle } from "../_libs/lucide-react.mjs";
+import { i as completeActivityReports } from "./reports-0LItQuD8.mjs";
+import { n as toast } from "../_libs/sonner.mjs";
+import { t as qrSvg } from "./qr-r2hriz89.mjs";
+import { t as Textarea } from "./textarea-CRsubrpt.mjs";
+import { a as eventBroadcastText, n as WhatsAppSendPanel, r as audienceLabel } from "./whatsapp-send-CZgw5BdW.mjs";
+import { g as Button } from "./router-Cdyjb-lJ.mjs";
+import { t as Label } from "./label-Bl0lQyM7.mjs";
+//#region node_modules/.nitro/vite/services/ssr/assets/events-CEWj_uTN.js
+var import_react = /* @__PURE__ */ __toESM(require_react());
+var import_jsx_runtime = require_jsx_runtime();
+function EventsPage() {
+	const state = useNssStore();
+	const [form, setForm] = (0, import_react.useState)({
+		name: "",
+		date: todayIso(),
+		endDate: todayIso(),
+		startTime: "09:00",
+		endTime: "13:00",
+		location: "Mansa",
+		hours: 4,
+		status: "upcoming",
+		description: "",
+		audience: "all",
+		participantIds: [],
+		qrEnabled: true,
+		geofenceEnabled: false,
+		geofenceLatitude: void 0,
+		geofenceLongitude: void 0,
+		geofenceRadiusMeters: 200
+	});
+	const [broadcast, setBroadcast] = (0, import_react.useState)(null);
+	const [qrEventId, setQrEventId] = (0, import_react.useState)(null);
+	const [qrSvgMarkup, setQrSvgMarkup] = (0, import_react.useState)("");
+	async function openEventQr(eventId, regenerate = false) {
+		const store = useNssStore.getState();
+		const token = regenerate ? store.regenerateEventQr(eventId) : store.generateEventQr(eventId);
+		if (!token) {
+			toast.error("Event not found.");
+			return;
+		}
+		const event = useNssStore.getState().events.find((row) => row.id === eventId);
+		if (!event) {
+			toast.error("Event not found.");
+			return;
+		}
+		const payload = JSON.stringify({
+			type: "NSS_EVENT_ATTENDANCE",
+			eventId: event.id,
+			eventName: event.name,
+			token,
+			issuedAt: (/* @__PURE__ */ new Date()).toISOString()
+		});
+		try {
+			const svg = await qrSvg(payload, 280);
+			setQrSvgMarkup(svg);
+			setQrEventId(eventId);
+			toast.success(regenerate ? "Event QR regenerated." : "Event QR ready.");
+		} catch {
+			toast.error("Unable to generate Event QR.");
+		}
+	}
+	function printEventQr() {
+		if (!qrSvgMarkup || !qrEventId) return;
+		const event = state.events.find((row) => row.id === qrEventId);
+		if (!event) return;
+		const popup = window.open("", "_blank", "width=600,height=760");
+		if (!popup) {
+			toast.error("Please allow pop-ups to print the QR.");
+			return;
+		}
+		popup.document.write(`
+      <!doctype html>
+      <html>
+        <head>
+          <title>NSS Event QR</title>
+          <style>
+            body {
+              font-family: Arial, sans-serif;
+              text-align: center;
+              padding: 30px;
+            }
+
+            svg {
+              max-width: 320px;
+              margin: 25px auto;
+            }
+
+            @media print {
+              button {
+                display: none;
+              }
+            }
+          </style>
+        </head>
+
+        <body>
+          <h1>${escapeHtml(event.name)}</h1>
+
+          <p>
+            ${escapeHtml(formatLongDate(event.date))}
+            ·
+            ${escapeHtml(event.location)}
+          </p>
+
+          <p>Scan this QR for NSS attendance</p>
+
+          ${qrSvgMarkup}
+
+          <button onclick="window.print()">
+            Print QR
+          </button>
+        </body>
+      </html>
+    `);
+		popup.document.close();
+		popup.focus();
+	}
+	const participation = (0, import_react.useMemo)(() => {
+		const rows = state.volunteers.filter((v) => v.status !== "alumni");
+		return new Map(state.events.map((event) => {
+			const assigned = event.participantIds?.length ? rows.filter((v) => event.participantIds?.includes(v.id)) : rows.filter((v) => {
+				if (event.audience === "girls") return v.gender === "Female";
+				if (event.audience === "boys") return v.gender === "Male";
+				if (event.audience === "leaders") return v.nssRole === "Leader";
+				return true;
+			});
+			const ids = new Set(assigned.map((v) => v.id));
+			const rsvps = (state.eventRsvps ?? []).filter((r) => r.eventId === event.id && ids.has(r.volunteerId));
+			const will = rsvps.filter((r) => r.status === "will_attend").length;
+			const wont = rsvps.filter((r) => r.status === "will_not_attend").length;
+			return [event.id, {
+				assigned: assigned.length,
+				will,
+				wont,
+				noResponse: Math.max(0, assigned.length - will - wont)
+			}];
+		}));
+	}, [
+		state.events,
+		state.eventRsvps,
+		state.volunteers
+	]);
+	const photoCount = (0, import_react.useMemo)(() => {
+		const map = /* @__PURE__ */ new Map();
+		for (const item of state.gallery ?? []) {
+			const key = item.eventId || item.eventName || "";
+			if (!key) continue;
+			map.set(key, (map.get(key) ?? 0) + 1);
+			if (item.eventName) map.set(item.eventName, (map.get(item.eventName) ?? 0) + 1);
+		}
+		return map;
+	}, [state.gallery]);
+	function save(openWhatsApp) {
+		if (!form.name.trim()) {
+			toast.error("Enter event name.");
+			return;
+		}
+		const created = state.addEvent({
+			name: form.name.trim(),
+			date: form.date,
+			endDate: form.endDate || form.date,
+			startTime: form.startTime,
+			endTime: form.endTime,
+			location: form.location.trim(),
+			hours: Number(form.hours) || 0,
+			status: form.status,
+			description: form.description.trim(),
+			audience: form.audience,
+			participantIds: form.participantIds.length ? form.participantIds : void 0,
+			qrEnabled: form.qrEnabled,
+			geofenceEnabled: form.geofenceEnabled,
+			geofenceLatitude: form.geofenceEnabled ? form.geofenceLatitude : void 0,
+			geofenceLongitude: form.geofenceEnabled ? form.geofenceLongitude : void 0,
+			geofenceRadiusMeters: form.geofenceEnabled ? Number(form.geofenceRadiusMeters) || 200 : void 0
+		});
+		toast.success("Event saved.");
+		if (openWhatsApp) {
+			setBroadcast({
+				text: eventBroadcastText(created.name, formatLongDate(created.date), created.location, created.description),
+				audience: created.audience ?? "all"
+			});
+			window.setTimeout(() => {
+				document.getElementById("wa-all")?.scrollIntoView({ behavior: "smooth" });
+			}, 80);
+		}
+		setForm({
+			name: "",
+			date: todayIso(),
+			endDate: todayIso(),
+			startTime: "09:00",
+			endTime: "13:00",
+			location: "Mansa",
+			hours: 4,
+			status: "upcoming",
+			description: "",
+			audience: "all",
+			participantIds: [],
+			qrEnabled: true,
+			geofenceEnabled: false,
+			geofenceLatitude: void 0,
+			geofenceLongitude: void 0,
+			geofenceRadiusMeters: 200
+		});
+	}
+	function add(e) {
+		e.preventDefault();
+		save(true);
+	}
+	async function completeActivity(id, name) {
+		state.updateEvent(id, { status: "completed" });
+		state.addLog("Activity completed", `Completed ${name}. Press report and yearly report generated.`);
+		toast.success("Activity completed. Opening press report with photos and yearly Excel.");
+		await completeActivityReports(useNssStore.getState(), id);
+	}
+	return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+		className: "space-y-6",
+		children: [
+			/* @__PURE__ */ (0, import_jsx_runtime.jsx)("h2", {
+				className: "font-display text-xl font-semibold",
+				children: "Events"
+			}),
+			/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Card, { children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(CardContent, {
+				className: "pt-5",
+				children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("form", {
+					className: "grid gap-3 sm:grid-cols-2",
+					onSubmit: add,
+					children: [
+						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+							className: "space-y-1.5 sm:col-span-2",
+							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Label, { children: "Event name" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Input, {
+								value: form.name,
+								onChange: (e) => setForm({
+									...form,
+									name: e.target.value
+								}),
+								required: true
+							})]
+						}),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+							className: "space-y-1.5",
+							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Label, { children: "Start date" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Input, {
+								type: "date",
+								value: form.date,
+								onChange: (e) => setForm({
+									...form,
+									date: e.target.value,
+									endDate: form.endDate || e.target.value
+								})
+							})]
+						}),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+							className: "space-y-1.5",
+							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Label, { children: "End date" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Input, {
+								type: "date",
+								min: form.date,
+								value: form.endDate,
+								onChange: (e) => setForm({
+									...form,
+									endDate: e.target.value
+								})
+							})]
+						}),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+							className: "space-y-1.5",
+							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Label, { children: "Start time" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Input, {
+								type: "time",
+								value: form.startTime,
+								onChange: (e) => setForm({
+									...form,
+									startTime: e.target.value
+								})
+							})]
+						}),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+							className: "space-y-1.5",
+							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Label, { children: "End time" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Input, {
+								type: "time",
+								value: form.endTime,
+								onChange: (e) => setForm({
+									...form,
+									endTime: e.target.value
+								})
+							})]
+						}),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+							className: "space-y-1.5",
+							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Label, { children: "Location" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Input, {
+								value: form.location,
+								onChange: (e) => setForm({
+									...form,
+									location: e.target.value
+								})
+							})]
+						}),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+							className: "space-y-1.5",
+							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Label, { children: "Service hours" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Input, {
+								type: "number",
+								min: 0,
+								value: form.hours,
+								onChange: (e) => setForm({
+									...form,
+									hours: Number(e.target.value)
+								})
+							})]
+						}),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+							className: "space-y-2 sm:col-span-2 rounded-xl border border-border p-3",
+							children: [
+								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", {
+									className: "flex items-center gap-2 text-sm font-medium",
+									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
+										type: "checkbox",
+										checked: form.geofenceEnabled,
+										onChange: (e) => setForm({
+											...form,
+											geofenceEnabled: e.target.checked
+										})
+									}), "Enable GPS / Geofence attendance"]
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+									className: "text-xs text-muted-foreground",
+									children: "When enabled, QR attendance must be marked within the configured radius of this event location."
+								}),
+								form.geofenceEnabled ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+									className: "grid gap-2 sm:grid-cols-3",
+									children: [
+										/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Input, {
+											type: "number",
+											step: "any",
+											placeholder: "Latitude",
+											value: form.geofenceLatitude ?? "",
+											onChange: (e) => setForm({
+												...form,
+												geofenceLatitude: e.target.value ? Number(e.target.value) : void 0
+											})
+										}),
+										/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Input, {
+											type: "number",
+											step: "any",
+											placeholder: "Longitude",
+											value: form.geofenceLongitude ?? "",
+											onChange: (e) => setForm({
+												...form,
+												geofenceLongitude: e.target.value ? Number(e.target.value) : void 0
+											})
+										}),
+										/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Input, {
+											type: "number",
+											min: "25",
+											step: "25",
+											placeholder: "Radius (m)",
+											value: form.geofenceRadiusMeters,
+											onChange: (e) => setForm({
+												...form,
+												geofenceRadiusMeters: Number(e.target.value) || 200
+											})
+										}),
+										/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, {
+											type: "button",
+											variant: "outline",
+											onClick: () => {
+												if (!navigator.geolocation) {
+													toast.error("GPS is not available in this browser.");
+													return;
+												}
+												navigator.geolocation.getCurrentPosition((pos) => setForm({
+													...form,
+													geofenceEnabled: true,
+													geofenceLatitude: pos.coords.latitude,
+													geofenceLongitude: pos.coords.longitude
+												}), () => toast.error("Could not read current location. Allow GPS permission."), {
+													enableHighAccuracy: true,
+													timeout: 1e4,
+													maximumAge: 0
+												});
+											},
+											children: "Use current location"
+										})
+									]
+								}) : null
+							]
+						}),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+							className: "space-y-1.5",
+							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Label, { children: "Status" }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("select", {
+								className: "h-10 w-full rounded-md border border-border bg-card px-3 text-sm",
+								value: form.status,
+								onChange: (e) => setForm({
+									...form,
+									status: e.target.value
+								}),
+								children: [
+									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", {
+										value: "upcoming",
+										children: "Upcoming"
+									}),
+									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", {
+										value: "completed",
+										children: "Completed"
+									}),
+									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", {
+										value: "cancelled",
+										children: "Cancelled"
+									})
+								]
+							})]
+						}),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+							className: "space-y-1.5 sm:col-span-2",
+							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Label, { children: "Audience (WhatsApp group)" }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("select", {
+								className: "h-10 w-full rounded-md border border-border bg-card px-3 text-sm",
+								value: form.audience,
+								onChange: (e) => setForm({
+									...form,
+									audience: e.target.value
+								}),
+								children: [
+									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", {
+										value: "all",
+										children: "All (girls + boys groups)"
+									}),
+									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", {
+										value: "girls",
+										children: "Girls only"
+									}),
+									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", {
+										value: "boys",
+										children: "Boys only"
+									}),
+									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", {
+										value: "leaders",
+										children: "Leaders group"
+									})
+								]
+							})]
+						}),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+							className: "space-y-2 sm:col-span-2",
+							children: [
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Label, { children: "Assign volunteers (optional)" }),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+									className: "text-xs text-muted-foreground",
+									children: "Leave empty to assign by the selected audience. Select specific volunteers when this event is for a fixed group."
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+									className: "grid max-h-48 gap-2 overflow-auto rounded-xl border border-border p-3 sm:grid-cols-2",
+									children: activeVolunteers(state).map((v) => {
+										const checked = form.participantIds.includes(v.id);
+										return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", {
+											className: "flex items-center gap-2 text-sm",
+											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
+												type: "checkbox",
+												checked,
+												onChange: (e) => setForm({
+													...form,
+													participantIds: e.target.checked ? [...form.participantIds, v.id] : form.participantIds.filter((id) => id !== v.id)
+												})
+											}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", { children: [
+												v.fullName,
+												" ",
+												/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
+													className: "text-muted-foreground",
+													children: [
+														"(",
+														v.volunteerId,
+														")"
+													]
+												})
+											] })]
+										}, v.id);
+									})
+								})
+							]
+						}),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+							className: "space-y-1.5 sm:col-span-2",
+							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Label, { children: "Description" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Textarea, {
+								value: form.description,
+								onChange: (e) => setForm({
+									...form,
+									description: e.target.value
+								})
+							})]
+						}),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+							className: "flex flex-wrap gap-2 sm:col-span-2",
+							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)(Button, {
+								type: "submit",
+								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(MessageCircle, {}), "Save & WhatsApp"]
+							}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, {
+								type: "button",
+								variant: "outline",
+								onClick: () => save(false),
+								children: "Save only"
+							})]
+						})
+					]
+				})
+			}) }),
+			/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+				className: "space-y-3",
+				children: state.events.slice().sort((a, b) => b.date.localeCompare(a.date)).map((e) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Card, { children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(CardContent, {
+					className: "flex flex-wrap items-start justify-between gap-3 pt-5",
+					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+							className: "font-display text-lg font-semibold",
+							children: e.name
+						}),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
+							className: "text-sm text-muted-foreground",
+							children: [
+								formatLongDate(e.date),
+								e.endDate && e.endDate !== e.date ? ` – ${formatLongDate(e.endDate)}` : "",
+								e.startTime ? ` · ${e.startTime}${e.endTime ? `–${e.endTime}` : ""}` : "",
+								" · ",
+								e.location,
+								" · ",
+								e.hours,
+								" hrs",
+								" · ",
+								audienceLabel(e.audience),
+								photoCount.get(e.id) || photoCount.get(e.name) ? ` · ${photoCount.get(e.id) || photoCount.get(e.name)} gallery file(s)` : ""
+							]
+						}),
+						e.description ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+							className: "mt-1 text-sm",
+							children: e.description
+						}) : null,
+						(() => {
+							const p = participation.get(e.id);
+							return p ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+								className: "mt-2 flex flex-wrap gap-2 text-xs",
+								children: [
+									/* @__PURE__ */ (0, import_jsx_runtime.jsxs)(Badge, {
+										tone: "muted",
+										children: ["Assigned ", p.assigned]
+									}),
+									/* @__PURE__ */ (0, import_jsx_runtime.jsxs)(Badge, {
+										tone: "forest",
+										children: ["Will Attend ", p.will]
+									}),
+									/* @__PURE__ */ (0, import_jsx_runtime.jsxs)(Badge, {
+										tone: "danger",
+										children: ["Will Not Attend ", p.wont]
+									}),
+									/* @__PURE__ */ (0, import_jsx_runtime.jsxs)(Badge, {
+										tone: "saffron",
+										children: [
+											"No Response",
+											" ",
+											p.noResponse
+										]
+									})
+								]
+							}) : null;
+						})()
+					] }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+						className: "flex flex-wrap items-center gap-2",
+						children: [
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Badge, {
+								tone: e.status === "completed" ? "forest" : e.status === "upcoming" ? "saffron" : "muted",
+								children: e.status
+							}),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("select", {
+								className: "h-8 rounded-md border border-border bg-card px-2 text-xs",
+								value: e.status,
+								onChange: (ev) => {
+									const status = ev.target.value;
+									if (status === "completed" && e.status !== "completed") completeActivity(e.id, e.name);
+									else state.updateEvent(e.id, { status });
+								},
+								children: [
+									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", {
+										value: "upcoming",
+										children: "Upcoming"
+									}),
+									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", {
+										value: "completed",
+										children: "Completed"
+									}),
+									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", {
+										value: "cancelled",
+										children: "Cancelled"
+									})
+								]
+							}),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)(Button, {
+								size: "sm",
+								variant: "outline",
+								onClick: () => void completeActivity(e.id, e.name),
+								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Newspaper, {}), "Complete + press"]
+							}),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)(Button, {
+								size: "sm",
+								variant: "outline",
+								onClick: () => void completeActivityReports(useNssStore.getState(), e.id),
+								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(FileSpreadsheet, {}), "Yearly report"]
+							}),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)(Button, {
+								size: "sm",
+								variant: "outline",
+								onClick: () => void openEventQr(e.id),
+								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(QrCode, {}), "Event QR"]
+							}),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)(Button, {
+								size: "sm",
+								variant: "outline",
+								onClick: () => void openEventQr(e.id, true),
+								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(RefreshCw, {}), "Regenerate QR"]
+							}),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)(Button, {
+								size: "sm",
+								onClick: () => {
+									setBroadcast({
+										text: eventBroadcastText(e.name, formatLongDate(e.date), e.location, e.description),
+										audience: e.audience ?? "all"
+									});
+									window.setTimeout(() => document.getElementById("wa-all")?.scrollIntoView({ behavior: "smooth" }), 80);
+								},
+								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(MessageCircle, {}), "WhatsApp"]
+							}),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, {
+								size: "sm",
+								variant: "ghost",
+								onClick: () => state.deleteEvent(e.id),
+								children: "Delete"
+							})
+						]
+					})]
+				}) }, e.id))
+			}),
+			qrEventId && qrSvgMarkup ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Card, { children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(CardContent, {
+				className: "flex flex-col items-center gap-3 pt-5 text-center",
+				children: [
+					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+						className: "font-display text-lg font-semibold",
+						children: "Event Attendance QR"
+					}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+						className: "text-sm text-muted-foreground",
+						children: state.events.find((event) => event.id === qrEventId)?.name ?? "Event"
+					})] }),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+						className: "rounded-xl border border-border bg-white p-3",
+						dangerouslySetInnerHTML: { __html: qrSvgMarkup }
+					}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+						className: "max-w-md text-xs text-muted-foreground",
+						children: "Event-specific QR. Duplicate attendance for the same volunteer and event is prevented."
+					}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+						className: "flex flex-wrap justify-center gap-2",
+						children: [
+							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)(Button, {
+								size: "sm",
+								variant: "outline",
+								onClick: () => void openEventQr(qrEventId, true),
+								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(RefreshCw, {}), "Regenerate"]
+							}),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, {
+								size: "sm",
+								onClick: printEventQr,
+								children: "Print QR"
+							}),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, {
+								size: "sm",
+								variant: "ghost",
+								onClick: () => {
+									setQrEventId(null);
+									setQrSvgMarkup("");
+								},
+								children: "Close"
+							})
+						]
+					})
+				]
+			}) }) : null,
+			broadcast ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(WhatsAppSendPanel, {
+				title: `Send this event to ${audienceLabel(broadcast.audience).toLowerCase()} on WhatsApp`,
+				recipients: activeVolunteers(state),
+				message: broadcast.text,
+				audience: broadcast.audience
+			}, broadcast.text + broadcast.audience) : null
+		]
+	});
+}
+function escapeHtml(value) {
+	return value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll("\"", "&quot;").replaceAll("'", "&#039;");
+}
+//#endregion
+export { EventsPage as component };

@@ -1,0 +1,1 @@
+import{t as e}from"./jsx-runtime-B-hcVAMW.js";var t=e();function n({className:e=``}){return(0,t.jsxs)(`div`,{className:`tri-strip ${e}`,"aria-hidden":`true`,children:[(0,t.jsx)(`span`,{}),(0,t.jsx)(`span`,{}),(0,t.jsx)(`span`,{})]})}export{n as t};

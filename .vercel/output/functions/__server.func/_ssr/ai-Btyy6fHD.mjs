@@ -1,0 +1,192 @@
+import { i as __toESM } from "../_runtime.mjs";
+import { n as require_react } from "../_libs/@radix-ui/react-compose-refs+[...].mjs";
+import { C as require_jsx_runtime, y as Link } from "../_libs/@tanstack/react-router+[...].mjs";
+import { B as useNssStore, C as daysUntilBirthday, H as volunteerHours, R as todayIso, j as isBirthdayOn, l as activeVolunteers, z as totalServiceHours } from "./utils-BIiJ-s-U.mjs";
+import { i as CardTitle, n as CardContent, r as CardHeader, t as Card } from "./card-2ADCK2Ma.mjs";
+import { t as Badge } from "./badge-BMh2Hxac.mjs";
+import { t as Input } from "./input-CRT4sBU_.mjs";
+import { $ as BrainCircuit, G as CircleCheck, N as FileText, Q as Cake, p as Search, s as Sparkles, t as Users } from "../_libs/lucide-react.mjs";
+//#region node_modules/.nitro/vite/services/ssr/assets/ai-Btyy6fHD.js
+var import_react = /* @__PURE__ */ __toESM(require_react());
+var import_jsx_runtime = require_jsx_runtime();
+function SmartCommandPage() {
+	const state = useNssStore();
+	const [query, setQuery] = (0, import_react.useState)("");
+	const [answer, setAnswer] = (0, import_react.useState)("");
+	const today = todayIso();
+	const volunteers = activeVolunteers(state);
+	const suggestions = [
+		"show top volunteers",
+		"attendance below 75",
+		"today birthdays",
+		"upcoming events",
+		"service hours",
+		"certificate eligible volunteers"
+	];
+	function run(raw = query) {
+		const q = raw.trim().toLowerCase();
+		if (!q) return;
+		if (q.includes("birthday") || q.includes("જન્મદિવસ")) {
+			const rows = volunteers.filter((v) => isBirthdayOn(v.dob, today));
+			setAnswer(rows.length ? `Today: ${rows.map((v) => v.fullName).join(", ")}.` : "No volunteer birthday today.");
+			return;
+		}
+		if (q.includes("attendance") && (q.includes("75") || q.includes("low") || q.includes("ઓછી"))) {
+			const rows = volunteers.filter((v) => {
+				const a = state.attendance.filter((x) => x.volunteerId === v.id);
+				const p = a.filter((x) => x.present).length;
+				return a.length >= 1 && p / a.length < .75;
+			});
+			setAnswer(rows.length ? `${rows.length} volunteers are below 75% attendance: ${rows.slice(0, 12).map((v) => v.fullName).join(", ")}${rows.length > 12 ? "…" : ""}` : "No volunteer is currently below 75% attendance.");
+			return;
+		}
+		if (q.includes("top") || q.includes("best") || q.includes("active")) {
+			const rows = [...volunteers].sort((a, b) => volunteerHours(state, b.id) - volunteerHours(state, a.id)).slice(0, 10);
+			setAnswer(rows.length ? `Top volunteers: ${rows.map((v, i) => `${i + 1}. ${v.fullName} (${volunteerHours(state, v.id)} hrs)`).join(" · ")}` : "No volunteer data available.");
+			return;
+		}
+		if (q.includes("event")) {
+			const rows = state.events.filter((e) => e.status === "upcoming" || e.date >= today).sort((a, b) => a.date.localeCompare(b.date)).slice(0, 8);
+			setAnswer(rows.length ? `Upcoming: ${rows.map((e) => `${e.name} — ${e.date}`).join(" · ")}` : "No upcoming events found.");
+			return;
+		}
+		if (q.includes("hour")) {
+			setAnswer(`Total calculated NSS service hours: ${totalServiceHours(state)} hours.`);
+			return;
+		}
+		if (q.includes("certificate") || q.includes("eligible")) {
+			const eventIds = new Set(state.events.filter((e) => e.status === "completed").map((e) => e.id));
+			const presentIds = new Set(state.attendance.filter((a) => a.present && eventIds.has(a.eventId)).map((a) => a.volunteerId));
+			const rows = volunteers.filter((v) => presentIds.has(v.id));
+			setAnswer(`${rows.length} active volunteers have participated in at least one completed event and can be reviewed for certificates.`);
+			return;
+		}
+		setAnswer("Try: top volunteers, attendance below 75, today birthdays, upcoming events, service hours, or certificate eligible volunteers.");
+	}
+	const nextBirthday = (0, import_react.useMemo)(() => [...volunteers].sort((a, b) => daysUntilBirthday(a.dob, today) - daysUntilBirthday(b.dob, today)).slice(0, 3), [volunteers, today]);
+	return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+		className: "space-y-6",
+		children: [
+			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)(Card, {
+				className: "overflow-hidden border-primary/20 bg-gradient-to-br from-primary/5 via-card to-forest/5",
+				children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)(CardHeader, { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)(CardTitle, {
+					className: "flex items-center gap-2",
+					children: [
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)(BrainCircuit, { className: "size-6 text-primary" }),
+						" NSS Smart Command Center ",
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Badge, {
+							tone: "forest",
+							children: "Offline-ready"
+						})
+					]
+				}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+					className: "text-sm text-muted-foreground",
+					children: "Ask in simple English or Gujarati. This assistant analyses the portal data locally; no external AI key is required."
+				})] }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(CardContent, { children: [
+					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+						className: "flex gap-2",
+						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Input, {
+							value: query,
+							onChange: (e) => setQuery(e.target.value),
+							onKeyDown: (e) => {
+								if (e.key === "Enter") run();
+							},
+							placeholder: "Ask: attendance below 75…"
+						}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+							type: "button",
+							onClick: () => run(),
+							className: "inline-flex h-10 shrink-0 items-center gap-2 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground",
+							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Search, { className: "size-4" }), "Ask"]
+						})]
+					}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+						className: "mt-3 flex flex-wrap gap-2",
+						children: suggestions.map((x) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+							type: "button",
+							onClick: () => {
+								setQuery(x);
+								run(x);
+							},
+							className: "rounded-full border border-border bg-card px-3 py-1.5 text-xs hover:bg-muted",
+							children: x
+						}, x))
+					}),
+					answer ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+						className: "mt-4 rounded-xl border border-forest/20 bg-forest/5 p-4 text-sm leading-relaxed",
+						children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+							className: "flex items-start gap-2",
+							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Sparkles, { className: "mt-0.5 size-4 text-saffron" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { children: answer })]
+						})
+					}) : null
+				] })]
+			}),
+			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+				className: "grid gap-4 md:grid-cols-3",
+				children: [
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)(SmartCard, {
+						icon: Users,
+						title: "Volunteer intelligence",
+						text: `${volunteers.length} active volunteers tracked.`,
+						to: "/po/volunteers"
+					}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)(SmartCard, {
+						icon: CircleCheck,
+						title: "Attendance intelligence",
+						text: "Find low attendance and missing marks quickly.",
+						to: "/po/attendance"
+					}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)(SmartCard, {
+						icon: FileText,
+						title: "Report intelligence",
+						text: "Generate and export official reports from current data.",
+						to: "/po/reports"
+					})
+				]
+			}),
+			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)(Card, { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(CardHeader, { children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(CardTitle, {
+				className: "flex items-center gap-2",
+				children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Cake, { className: "size-5 text-saffron" }), " Birthday radar"]
+			}) }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)(CardContent, {
+				className: "grid gap-2 sm:grid-cols-3",
+				children: nextBirthday.map((v) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+					className: "rounded-xl border border-border p-3",
+					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+						className: "font-medium",
+						children: v.fullName
+					}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+						className: "text-xs text-muted-foreground",
+						children: daysUntilBirthday(v.dob, today) === 0 ? "Today 🎉" : `${daysUntilBirthday(v.dob, today)} days`
+					})]
+				}, v.id))
+			})] })
+		]
+	});
+}
+function SmartCard({ icon: Icon, title, text, to }) {
+	return /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Link, {
+		to,
+		children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Card, {
+			className: "h-full transition hover:-translate-y-0.5 hover:shadow-md",
+			children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(CardContent, {
+				className: "pt-5",
+				children: [
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Icon, { className: "size-6 text-primary" }),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+						className: "mt-3 font-display font-semibold",
+						children: title
+					}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+						className: "mt-1 text-sm text-muted-foreground",
+						children: text
+					}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
+						className: "mt-3 inline-flex items-center gap-1 text-xs font-semibold text-primary",
+						children: ["Open ", /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "→" })]
+					})
+				]
+			})
+		})
+	});
+}
+//#endregion
+export { SmartCommandPage as component };

@@ -1,0 +1,40 @@
+{
+  "url": "http://127.0.0.1:8081/",
+  "viewports": {
+    "desktop": {
+      "width": 1280,
+      "height": 800,
+      "status": 200,
+      "title": "NSS Smart Portal",
+      "hasCanvas": false,
+      "bodyTextLen": 1792,
+      "bodyTextHash": "0883ab4dc4b8d9cc3c41a2d7bbd8ec52374ecfc1481a5f22cc20ee4ab5bdf2d7",
+      "bodyTextPrefix": "S.D. ARTS & SHAH B.R. COMMERCE COLLEGE, MANSA WELCOME TO AVYANSH",
+      "horizontalOverflow": false,
+      "consoleErrors": [],
+      "pageErrors": [],
+      "screenshot": "/workspace/screenshots/app-builder-built.png"
+    },
+    "mobile": {
+      "width": 390,
+      "height": 844,
+      "status": 200,
+      "title": "NSS Smart Portal",
+      "hasCanvas": false,
+      "bodyTextLen": 85,
+      "bodyTextHash": "8cb4f037d3c1649c0a9dd4e311a44066bb532e2eb28d4b67721c2835595b8111",
+      "bodyTextPrefix": "NSS SMART PORTAL S.D. Arts & Shah B.R. Commerce College, Mansa L",
+      "horizontalOverflow": false,
+      "consoleErrors": [],
+      "pageErrors": [],
+      "screenshot": "/workspace/screenshots/app-builder-built-mobile.png"
+    }
+  },
+  "brandWarnings": [],
+  "authWarnings": [],
+  "verdictFile": "/workspace/screenshots/app-builder-built.json",
+  "divergesFromBaseline": true,
+  "baselineReasons": [
+    "mobile: body text collapsed (1792 -> 85 chars)"
+  ]
+}

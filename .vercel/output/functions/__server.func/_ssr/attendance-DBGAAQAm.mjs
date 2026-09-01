@@ -1,0 +1,720 @@
+import { i as __toESM } from "../_runtime.mjs";
+import { n as require_react } from "../_libs/@radix-ui/react-compose-refs+[...].mjs";
+import { C as require_jsx_runtime } from "../_libs/@tanstack/react-router+[...].mjs";
+import { B as useNssStore, D as formatLongDate, I as rsvpOf, R as todayIso, c as academicYear, f as attendanceOf, l as activeVolunteers } from "./utils-BIiJ-s-U.mjs";
+import { i as CardTitle, n as CardContent, r as CardHeader, t as Card } from "./card-2ADCK2Ma.mjs";
+import { G as CircleCheck, I as Download, W as CircleX, X as Camera, _ as Printer, g as QrCode, h as RefreshCw, o as Square, t as Users } from "../_libs/lucide-react.mjs";
+import { t as OfficialLetterhead } from "./official-letterhead-0CBv-cY2.mjs";
+import { _ as printAttendanceReport, f as eventColumnLabel, s as downloadAttendanceExcel } from "./reports-0LItQuD8.mjs";
+import { n as toast } from "../_libs/sonner.mjs";
+import { t as qrSvg } from "./qr-r2hriz89.mjs";
+import { g as Button } from "./router-Cdyjb-lJ.mjs";
+//#region node_modules/.nitro/vite/services/ssr/assets/attendance-DBGAAQAm.js
+var import_react = /* @__PURE__ */ __toESM(require_react());
+var import_jsx_runtime = require_jsx_runtime();
+function AttendancePage() {
+	const state = useNssStore();
+	const events = (0, import_react.useMemo)(() => [...state.events ?? []].sort((a, b) => b.date.localeCompare(a.date)), [state.events]);
+	const volunteers = (0, import_react.useMemo)(() => activeVolunteers(state), [state]);
+	const [eventId, setEventId] = (0, import_react.useState)(events[0]?.id ?? "");
+	const [month, setMonth] = (0, import_react.useState)(todayIso().slice(0, 7));
+	const [qrSvgMarkup, setQrSvgMarkup] = (0, import_react.useState)("");
+	const [qrToken, setQrToken] = (0, import_react.useState)("");
+	const [qrCreatedAt, setQrCreatedAt] = (0, import_react.useState)("");
+	const [scannerOpen, setScannerOpen] = (0, import_react.useState)(false);
+	const [scannerError, setScannerError] = (0, import_react.useState)("");
+	const [manualPayload, setManualPayload] = (0, import_react.useState)("");
+	const videoRef = (0, import_react.useRef)(null);
+	const streamRef = (0, import_react.useRef)(null);
+	const scanTimerRef = (0, import_react.useRef)(null);
+	const scanningRef = (0, import_react.useRef)(false);
+	const current = events.find((e) => e.id === eventId) ?? events[0];
+	(0, import_react.useEffect)(() => {
+		if (!events.length) {
+			if (eventId) setEventId("");
+			return;
+		}
+		if (!events.some((event) => event.id === eventId)) setEventId(events[0].id);
+	}, [events, eventId]);
+	const stopScanner = (0, import_react.useCallback)(() => {
+		scanningRef.current = false;
+		if (scanTimerRef.current !== null) {
+			window.clearTimeout(scanTimerRef.current);
+			scanTimerRef.current = null;
+		}
+		if (streamRef.current) {
+			streamRef.current.getTracks().forEach((track) => track.stop());
+			streamRef.current = null;
+		}
+		if (videoRef.current) videoRef.current.srcObject = null;
+		setScannerOpen(false);
+	}, []);
+	(0, import_react.useEffect)(() => {
+		return () => stopScanner();
+	}, [stopScanner]);
+	const generateEventQr = (0, import_react.useCallback)(async () => {
+		if (!current) {
+			toast.error("Please select an event first.");
+			return;
+		}
+		const timestamp = Date.now().toString(36);
+		const nonce = crypto.randomUUID();
+		const payload = [
+			"NSP_ATTENDANCE",
+			current.id,
+			timestamp,
+			nonce
+		].join("|");
+		try {
+			const svg = await qrSvg(payload, 260);
+			setQrSvgMarkup(svg);
+			setQrToken(payload);
+			setQrCreatedAt((/* @__PURE__ */ new Date()).toLocaleString());
+			state.addLog("Attendance QR generated", `Dynamic attendance QR generated for ${current.name}.`);
+			toast.success("Fresh event QR generated.");
+		} catch {
+			toast.error("Unable to generate QR.");
+		}
+	}, [current, state]);
+	const parseQrPayload = (0, import_react.useCallback)((raw) => {
+		const value = raw.trim();
+		if (!value) return null;
+		const parts = value.split("|");
+		if (parts[0] === "NSP_VOLUNTEER") {
+			const volunteerId = parts[1];
+			const payloadEventId = parts[2];
+			if (!volunteerId) return null;
+			return {
+				volunteerId,
+				eventId: payloadEventId || current?.id || ""
+			};
+		}
+		if (parts[0] === "NSP_ATTENDANCE") {
+			const payloadEventId = parts[1];
+			if (!payloadEventId) return null;
+			return {
+				volunteerId: "",
+				eventId: payloadEventId
+			};
+		}
+		const volunteer = volunteers.find((v) => v.id === value || v.volunteerId.toLowerCase() === value.toLowerCase());
+		if (volunteer) return {
+			volunteerId: volunteer.id,
+			eventId: current?.id ?? ""
+		};
+		return null;
+	}, [current, volunteers]);
+	const markPresent = (0, import_react.useCallback)((volunteerId, targetEventId) => {
+		const event = state.events.find((e) => e.id === targetEventId);
+		const volunteer = state.volunteers.find((v) => v.id === volunteerId || v.volunteerId === volunteerId);
+		if (!event) {
+			toast.error("Event not found.");
+			return false;
+		}
+		if (!volunteer) {
+			toast.error("Volunteer not found.");
+			return false;
+		}
+		if (attendanceOf(state, volunteer.id, event.id)?.present) {
+			toast.info(`${volunteer.fullName} is already marked Present.`);
+			return false;
+		}
+		state.setAttendance(volunteer.id, event.id, true);
+		state.addLog("QR Attendance", `${volunteer.fullName} marked Present for ${event.name}.`);
+		toast.success(`${volunteer.fullName} marked Present.`);
+		return true;
+	}, [state]);
+	const processPayload = (0, import_react.useCallback)((raw) => {
+		const result = parseQrPayload(raw);
+		if (!result) {
+			toast.error("Invalid NSP QR / Volunteer ID.");
+			return;
+		}
+		const targetEventId = result.eventId || current?.id || "";
+		if (!targetEventId) {
+			toast.error("No event selected.");
+			return;
+		}
+		if (!result.volunteerId) {
+			const event = state.events.find((e) => e.id === targetEventId);
+			if (!event) {
+				toast.error("QR belongs to an unknown event.");
+				return;
+			}
+			if (targetEventId !== current?.id) {
+				toast.error(`QR belongs to "${event.name}". Select that event first.`);
+				return;
+			}
+			toast.info("Event QR verified. Scan the volunteer QR or enter Volunteer ID.");
+			return;
+		}
+		const event = state.events.find((e) => e.id === targetEventId);
+		if (!event) {
+			toast.error("QR belongs to an unknown event.");
+			return;
+		}
+		if (current && event.id !== current.id) {
+			toast.error(`This QR belongs to "${event.name}".`);
+			return;
+		}
+		markPresent(result.volunteerId, targetEventId);
+	}, [
+		current,
+		markPresent,
+		parseQrPayload,
+		state.events
+	]);
+	const startScanner = (0, import_react.useCallback)(async () => {
+		if (!current) {
+			toast.error("Please select an event first.");
+			return;
+		}
+		setScannerError("");
+		const BarcodeDetectorCtor = window.BarcodeDetector;
+		if (!BarcodeDetectorCtor) {
+			setScannerError("આ browserમાં QR camera scanner ઉપલબ્ધ નથી. Chrome/Edgeમાં ખોલો અથવા નીચે QR payload / Volunteer ID manually નાખો.");
+			setScannerOpen(true);
+			return;
+		}
+		if (!navigator.mediaDevices?.getUserMedia) {
+			setScannerError("Camera access આ browserમાં ઉપલબ્ધ નથી.");
+			setScannerOpen(true);
+			return;
+		}
+		try {
+			const stream = await navigator.mediaDevices.getUserMedia({
+				video: { facingMode: { ideal: "environment" } },
+				audio: false
+			});
+			streamRef.current = stream;
+			setScannerOpen(true);
+			window.setTimeout(() => {
+				const video = videoRef.current;
+				if (!video) {
+					setScannerError("Camera preview could not start.");
+					return;
+				}
+				video.srcObject = stream;
+				video.play();
+				const detector = new BarcodeDetectorCtor({ formats: ["qr_code"] });
+				scanningRef.current = true;
+				const scan = async () => {
+					if (!scanningRef.current) return;
+					try {
+						if (video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
+							const raw = (await detector.detect(video))[0]?.rawValue?.trim();
+							if (raw) {
+								processPayload(raw);
+								stopScanner();
+								return;
+							}
+						}
+					} catch {}
+					scanTimerRef.current = window.setTimeout(scan, 450);
+				};
+				scan();
+			}, 100);
+		} catch (error) {
+			console.error(error);
+			setScannerError("Camera permission મળી નથી. Browser camera permission Allow કરો.");
+			setScannerOpen(true);
+		}
+	}, [
+		current,
+		processPayload,
+		stopScanner
+	]);
+	function submitManualPayload() {
+		if (!manualPayload.trim()) {
+			toast.error("Volunteer ID અથવા QR payload નાખો.");
+			return;
+		}
+		processPayload(manualPayload);
+		setManualPayload("");
+	}
+	const attendanceSummary = (0, import_react.useMemo)(() => {
+		if (!current) return {
+			present: 0,
+			absent: 0,
+			notMarked: volunteers.length,
+			willAttend: 0,
+			willNotAttend: 0,
+			noResponse: volunteers.length
+		};
+		const assigned = volunteers;
+		let present = 0;
+		let absent = 0;
+		let notMarked = 0;
+		let willAttend = 0;
+		let willNotAttend = 0;
+		let noResponse = 0;
+		for (const volunteer of assigned) {
+			const attendance = attendanceOf(state, volunteer.id, current.id);
+			if (!attendance) notMarked += 1;
+			else if (attendance.present) present += 1;
+			else absent += 1;
+			const rsvp = rsvpOf(state, volunteer.id, current.id);
+			if (!rsvp) noResponse += 1;
+			else if (rsvp.status === "will_attend") willAttend += 1;
+			else willNotAttend += 1;
+		}
+		return {
+			present,
+			absent,
+			notMarked,
+			willAttend,
+			willNotAttend,
+			noResponse
+		};
+	}, [
+		current,
+		state,
+		volunteers
+	]);
+	const attendancePercent = (0, import_react.useMemo)(() => {
+		const total = attendanceSummary.present + attendanceSummary.absent;
+		return total ? Math.round(attendanceSummary.present / total * 100) : 0;
+	}, [attendanceSummary]);
+	return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+		className: "space-y-6",
+		children: [
+			/* @__PURE__ */ (0, import_jsx_runtime.jsx)(OfficialLetterhead, {
+				title: "Attendance",
+				compact: true
+			}),
+			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+				className: "flex flex-wrap items-end justify-between gap-3",
+				children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("h2", {
+					className: "font-display text-xl font-semibold",
+					children: "Attendance"
+				}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+					className: "text-sm text-muted-foreground",
+					children: "Manual + QR attendance, event-wise records, RSVP comparison and Excel reporting."
+				})] }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+					className: "flex flex-wrap items-end gap-2",
+					children: [
+						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)(Button, {
+							onClick: () => downloadAttendanceExcel(state, { mode: "yearly" }),
+							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Download, {}), "Full yearly Excel"]
+						}),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", {
+							className: "space-y-1 text-xs text-muted-foreground",
+							children: ["Month", /* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
+								type: "month",
+								className: "flex h-10 rounded-md border border-border bg-card px-3 text-sm text-foreground",
+								value: month,
+								onChange: (e) => setMonth(e.target.value)
+							})]
+						}),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)(Button, {
+							variant: "outline",
+							onClick: () => downloadAttendanceExcel(state, {
+								mode: "monthly",
+								month
+							}),
+							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Download, {}), "Monthly Excel"]
+						}),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)(Button, {
+							variant: "outline",
+							onClick: () => void printAttendanceReport(state, { mode: "yearly" }),
+							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Printer, {}), "Print yearly"]
+						})
+					]
+				})]
+			}),
+			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)(Card, { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(CardHeader, { children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(CardTitle, {
+				className: "text-base",
+				children: "Attendance Event"
+			}) }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(CardContent, {
+				className: "space-y-4",
+				children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+					className: "flex flex-wrap items-end gap-3",
+					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", {
+						className: "space-y-1 text-sm",
+						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+							className: "text-muted-foreground",
+							children: "Event"
+						}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("select", {
+							className: "flex h-10 min-w-72 rounded-md border border-border bg-card px-3 text-sm",
+							value: current?.id ?? "",
+							onChange: (e) => setEventId(e.target.value),
+							children: events.map((event) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("option", {
+								value: event.id,
+								children: [
+									event.name,
+									" —",
+									" ",
+									formatLongDate(event.date)
+								]
+							}, event.id))
+						})]
+					}), current ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+						className: "rounded-lg border border-border bg-muted/40 px-4 py-2 text-sm",
+						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("b", { children: current.name }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
+							className: "text-muted-foreground",
+							children: [
+								" ",
+								"· ",
+								current.hours,
+								" service hours"
+							]
+						})]
+					}) : null]
+				}), current ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+					className: "grid gap-3 sm:grid-cols-2 lg:grid-cols-6",
+					children: [
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)(SummaryCard, {
+							icon: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(CircleCheck, {}),
+							title: "Present",
+							value: attendanceSummary.present
+						}),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)(SummaryCard, {
+							icon: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(CircleX, {}),
+							title: "Absent",
+							value: attendanceSummary.absent
+						}),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)(SummaryCard, {
+							icon: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Users, {}),
+							title: "Not Marked",
+							value: attendanceSummary.notMarked
+						}),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)(SummaryCard, {
+							icon: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(CircleCheck, {}),
+							title: "RSVP Yes",
+							value: attendanceSummary.willAttend
+						}),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)(SummaryCard, {
+							icon: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(CircleX, {}),
+							title: "RSVP No",
+							value: attendanceSummary.willNotAttend
+						}),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)(SummaryCard, {
+							icon: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Users, {}),
+							title: "Attendance %",
+							value: `${attendancePercent}%`
+						})
+					]
+				}) : null]
+			})] }),
+			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)(Card, { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(CardHeader, { children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(CardTitle, {
+				className: "flex items-center gap-2 text-base",
+				children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(QrCode, { className: "h-5 w-5" }), "Smart QR Attendance"]
+			}) }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(CardContent, {
+				className: "space-y-5",
+				children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+					className: "flex flex-wrap gap-2",
+					children: [
+						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)(Button, {
+							onClick: () => void generateEventQr(),
+							disabled: !current,
+							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(QrCode, {}), "Generate Fresh Event QR"]
+						}),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)(Button, {
+							variant: "outline",
+							onClick: () => {
+								if (!qrSvgMarkup) {
+									toast.info("પહેલા Event QR generate કરો.");
+									return;
+								}
+								generateEventQr();
+							},
+							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(RefreshCw, {}), "Refresh QR"]
+						}),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)(Button, {
+							variant: "forest",
+							onClick: () => void startScanner(),
+							disabled: !current,
+							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Camera, {}), "Scan Volunteer QR"]
+						})
+					]
+				}), qrSvgMarkup ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+					className: "grid gap-5 lg:grid-cols-[280px_1fr]",
+					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+						className: "flex flex-col items-center justify-center rounded-2xl border border-border bg-white p-4",
+						children: [
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+								className: "h-[260px] w-[260px]",
+								dangerouslySetInnerHTML: { __html: qrSvgMarkup }
+							}),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+								className: "mt-3 text-center text-xs text-slate-600",
+								children: current?.name
+							}),
+							qrCreatedAt ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
+								className: "text-center text-[11px] text-slate-500",
+								children: ["Generated: ", qrCreatedAt]
+							}) : null
+						]
+					}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+						className: "space-y-3",
+						children: [
+							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("h3", {
+								className: "font-semibold",
+								children: "Dynamic Event QR"
+							}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+								className: "text-sm text-muted-foreground",
+								children: "આ QR selected event માટે fresh attendance session payload ધરાવે છે."
+							})] }),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+								className: "rounded-xl border border-border bg-muted/40 p-3",
+								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+									className: "mb-1 text-xs font-medium text-muted-foreground",
+									children: "QR Payload"
+								}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("code", {
+									className: "block break-all text-xs",
+									children: qrToken
+								})]
+							}),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+								className: "text-xs text-muted-foreground",
+								children: "Volunteer QR scan થયા પછી volunteerને selected event માટે Present કરવામાં આવશે. Existing attendance record હોય તો duplicate entry નહીં બને."
+							})
+						]
+					})]
+				}) : /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+					className: "rounded-xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground",
+					children: [
+						"Event પસંદ કરીને",
+						" ",
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("b", { children: "Generate Fresh Event QR" }),
+						" દબાવો."
+					]
+				})]
+			})] }),
+			scannerOpen ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(Card, { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(CardHeader, { children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(CardTitle, {
+				className: "flex items-center justify-between gap-2 text-base",
+				children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
+					className: "flex items-center gap-2",
+					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Camera, { className: "h-5 w-5" }), "QR Camera Scanner"]
+				}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(Button, {
+					size: "sm",
+					variant: "danger",
+					onClick: stopScanner,
+					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Square, {}), "Stop"]
+				})]
+			}) }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(CardContent, {
+				className: "space-y-4",
+				children: [scannerError ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+					className: "rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm",
+					children: scannerError
+				}) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+					className: "overflow-hidden rounded-2xl border border-border bg-black",
+					children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("video", {
+						ref: videoRef,
+						className: "mx-auto aspect-video w-full max-w-2xl object-cover",
+						muted: true,
+						playsInline: true
+					})
+				}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+					className: "grid gap-2 sm:grid-cols-[1fr_auto]",
+					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
+						className: "h-10 rounded-md border border-border bg-card px-3 text-sm",
+						placeholder: "Volunteer ID અથવા QR payload",
+						value: manualPayload,
+						onChange: (e) => setManualPayload(e.target.value),
+						onKeyDown: (e) => {
+							if (e.key === "Enter") submitManualPayload();
+						}
+					}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, {
+						onClick: submitManualPayload,
+						children: "Mark Present"
+					})]
+				})]
+			})] }) : null,
+			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)(Card, { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(CardHeader, { children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(CardTitle, {
+				className: "text-base",
+				children: "Manual Attendance"
+			}) }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(CardContent, {
+				className: "space-y-4",
+				children: [current ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+					className: "flex flex-wrap gap-2",
+					children: [
+						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)(Button, {
+							size: "sm",
+							variant: "forest",
+							onClick: () => state.markAllAttendance(current.id, true),
+							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(CircleCheck, {}), "All present"]
+						}),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)(Button, {
+							size: "sm",
+							variant: "outline",
+							onClick: () => state.markAllAttendance(current.id, false),
+							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(CircleX, {}), "All absent"]
+						}),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, {
+							size: "sm",
+							onClick: () => {
+								state.addLog("Attendance saved", `Attendance saved for ${current.name}.`);
+								toast.success("Attendance saved successfully.");
+							},
+							children: "Save attendance"
+						})
+					]
+				}) : null, current ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+					className: "overflow-x-auto rounded-md border border-border",
+					children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("table", {
+						className: "w-full text-sm",
+						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("thead", {
+							className: "bg-muted",
+							children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tr", { children: [
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
+									className: "px-3 py-2 text-left",
+									children: "ID"
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
+									className: "px-3 py-2 text-left",
+									children: "Name"
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
+									className: "px-3 py-2 text-left",
+									children: "Unit"
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
+									className: "px-3 py-2 text-left",
+									children: "RSVP"
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
+									className: "px-3 py-2 text-left",
+									children: "Status"
+								})
+							] })
+						}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("tbody", { children: volunteers.map((v) => {
+							const rec = attendanceOf(state, v.id, current.id);
+							const rsvp = rsvpOf(state, v.id, current.id);
+							const present = rec?.present === true;
+							return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tr", {
+								className: "border-t border-border",
+								children: [
+									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+										className: "px-3 py-2",
+										children: v.volunteerId
+									}),
+									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+										className: "px-3 py-2",
+										children: v.fullName
+									}),
+									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+										className: "px-3 py-2",
+										children: v.unit
+									}),
+									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+										className: "px-3 py-2",
+										children: !rsvp ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+											className: "text-muted-foreground",
+											children: "No Response"
+										}) : rsvp.status === "will_attend" ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+											className: "font-medium",
+											children: "Will Attend"
+										}) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+											className: "font-medium",
+											children: "Will Not Attend"
+										})
+									}),
+									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+										className: "px-3 py-2",
+										children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+											className: "flex gap-2",
+											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, {
+												size: "sm",
+												variant: present && rec ? "forest" : "outline",
+												onClick: () => state.setAttendance(v.id, current.id, true),
+												children: "Present"
+											}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, {
+												size: "sm",
+												variant: rec && !present ? "danger" : "outline",
+												onClick: () => state.setAttendance(v.id, current.id, false),
+												children: "Absent"
+											})]
+										})
+									})
+								]
+							}, v.id);
+						}) })]
+					})
+				}) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+					className: "text-sm text-muted-foreground",
+					children: "No events available."
+				})]
+			})] }),
+			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)(Card, { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(CardHeader, { children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(CardTitle, {
+				className: "text-base",
+				children: [
+					"Event-wise sheet preview · Academic year",
+					" ",
+					academicYear()
+				]
+			}) }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)(CardContent, {
+				className: "overflow-x-auto p-0",
+				children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("table", {
+					className: "w-full min-w-[900px] text-left text-xs",
+					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("thead", {
+						className: "bg-primary text-primary-foreground",
+						children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tr", { children: [
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
+								className: "px-2 py-2",
+								children: "Sr."
+							}),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
+								className: "px-2 py-2",
+								children: "Volunteer ID"
+							}),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
+								className: "px-2 py-2",
+								children: "Volunteer Name"
+							}),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
+								className: "px-2 py-2",
+								children: "NSS Unit"
+							}),
+							events.map((e) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
+								className: "px-2 py-2",
+								children: eventColumnLabel(e)
+							}, e.id))
+						] })
+					}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("tbody", { children: volunteers.map((v, i) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tr", {
+						className: "border-t border-border",
+						children: [
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+								className: "px-2 py-1.5",
+								children: i + 1
+							}),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+								className: "px-2 py-1.5",
+								children: v.volunteerId
+							}),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+								className: "px-2 py-1.5",
+								children: v.fullName
+							}),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+								className: "px-2 py-1.5",
+								children: v.unit
+							}),
+							events.map((e) => {
+								const rec = attendanceOf(state, v.id, e.id);
+								return /* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+									className: "px-2 py-1.5",
+									children: rec ? rec.present ? "Present" : "Absent" : "—"
+								}, e.id);
+							})
+						]
+					}, v.id)) })]
+				})
+			})] })
+		]
+	});
+}
+function SummaryCard({ icon, title, value }) {
+	return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+		className: "rounded-xl border border-border bg-card p-3",
+		children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+			className: "flex items-center gap-2 text-xs text-muted-foreground",
+			children: [icon, title]
+		}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+			className: "mt-1 text-xl font-semibold",
+			children: value
+		})]
+	});
+}
+//#endregion
+export { AttendancePage as component };

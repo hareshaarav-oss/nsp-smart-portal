@@ -1,0 +1,1355 @@
+import { i as __toESM } from "../_runtime.mjs";
+import { n as require_react } from "../_libs/@radix-ui/react-compose-refs+[...].mjs";
+import { B as redirect, C as require_jsx_runtime, S as useRouter, _ as createFileRoute, d as HeadContent, g as lazyRouteComponent, h as Outlet, m as createRouter, u as Scripts, v as createRootRoute } from "../_libs/@tanstack/react-router+[...].mjs";
+import { n as persist, r as create } from "../_libs/zustand.mjs";
+import { t as cva } from "../_libs/class-variance-authority+clsx.mjs";
+import { B as useNssStore, L as titleFirstName, M as padId, N as parseDob, T as firstNameOf, n as COLLEGE_LOGO, o as STORAGE_SESSION, r as NSS_LOGO, v as cleanPersonName, w as digitsOnly, y as cn } from "./utils-BIiJ-s-U.mjs";
+import { I as Download, r as TriangleAlert } from "../_libs/lucide-react.mjs";
+import { t as Slot } from "../_libs/radix-ui__react-slot.mjs";
+import { t as Toaster } from "../_libs/sonner.mjs";
+import { a as string, i as object, n as literal, o as union, r as number, t as _enum } from "../_libs/zod.mjs";
+//#region node_modules/.nitro/vite/services/ssr/assets/button-HEpMk59d.js
+var import_jsx_runtime = require_jsx_runtime();
+var buttonVariants = cva("inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-[opacity,transform,background-color,color,border-color] duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 active:scale-[0.98]", {
+	variants: {
+		variant: {
+			default: "bg-primary text-primary-foreground hover:opacity-92",
+			secondary: "bg-secondary text-secondary-foreground hover:bg-secondary/80",
+			outline: "border border-border bg-card text-foreground hover:bg-muted",
+			ghost: "text-foreground hover:bg-muted",
+			saffron: "bg-saffron text-saffron-foreground hover:opacity-92",
+			forest: "bg-forest text-forest-foreground hover:opacity-92",
+			danger: "bg-danger text-danger-foreground hover:opacity-92"
+		},
+		size: {
+			default: "h-10 px-4",
+			sm: "h-8 rounded-sm px-3 text-xs",
+			lg: "h-12 rounded-lg px-5 text-base",
+			icon: "size-10"
+		}
+	},
+	defaultVariants: {
+		variant: "default",
+		size: "default"
+	}
+});
+function Button({ className, variant, size, asChild = false, ...props }) {
+	return /* @__PURE__ */ (0, import_jsx_runtime.jsx)(asChild ? Slot : "button", {
+		className: cn(buttonVariants({
+			variant,
+			size,
+			className
+		})),
+		...props
+	});
+}
+//#endregion
+//#region node_modules/.nitro/vite/services/ssr/assets/router-Cdyjb-lJ.js
+var import_react = /* @__PURE__ */ __toESM(require_react());
+var __defProp = Object.defineProperty;
+var __exportAll = (all, no_symbols) => {
+	let target = {};
+	for (var name in all) __defProp(target, name, {
+		get: all[name],
+		enumerable: true
+	});
+	if (!no_symbols) __defProp(target, Symbol.toStringTag, { value: "Module" });
+	return target;
+};
+function AppErrorComponent({ error }) {
+	return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("main", {
+		className: "flex min-h-screen flex-col items-center justify-center gap-3 px-6 text-center bg-zinc-50 text-zinc-900 dark:bg-zinc-950 dark:text-zinc-50",
+		children: [
+			/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+				className: "text-red-500",
+				"aria-hidden": "true",
+				children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(TriangleAlert, {
+					className: "size-10",
+					strokeWidth: 2
+				})
+			}),
+			/* @__PURE__ */ (0, import_jsx_runtime.jsx)("h1", {
+				className: "text-lg font-semibold",
+				children: "Something went wrong"
+			}),
+			/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+				className: "max-w-md text-sm break-words text-zinc-500 dark:text-zinc-400",
+				children: error.message || "An unexpected error occurred. Try reloading the page."
+			})
+		]
+	});
+}
+/**
+* App-wide client provider mounted once near the root (in `src/routes/__root.tsx`):
+*
+*   <AuthProvider><Outlet /></AuthProvider>
+*
+* Better Auth's React client (`@/lib/auth/client`) needs NO context provider —
+* its `useSession()` works standalone — so this is a passthrough today. It's
+* kept as the single, stable mount point for any future client-side providers
+* (e.g. a toast or theme provider) without churning the root shell.
+*/
+function AuthProvider({ children }) {
+	return /* @__PURE__ */ (0, import_jsx_runtime.jsx)(import_jsx_runtime.Fragment, { children });
+}
+function isGrokEmbedderOrigin(origin) {
+	try {
+		const url = new URL(origin);
+		if (url.protocol !== "https:" && url.protocol !== "http:") return false;
+		const host = url.hostname.toLowerCase();
+		if (host === "grok.com" || host.endsWith(".grok.com")) return true;
+		if (host === "localhost" || host === "127.0.0.1" || host === "[::1]") return true;
+		return false;
+	} catch {
+		return false;
+	}
+}
+function isSandboxPreviewGuestHost(hostname) {
+	const host = hostname.toLowerCase();
+	return host === "grok-sandbox.com" || host.endsWith(".grok-sandbox.com");
+}
+function isRemintPreviewPair(guestHost, parentHost) {
+	const guest = guestHost.toLowerCase();
+	const parent = parentHost.toLowerCase();
+	const i = guest.indexOf(".preview.");
+	if (i <= 0) return false;
+	const label = guest.slice(0, i);
+	const rest = guest.slice(i + 9);
+	if (label.includes(".") || !rest.includes(".")) return false;
+	return parent === rest || parent === `grok.${rest}`;
+}
+function resolveParentEmbedderOrigin(parentIsSelf, referrer, ancestorOrigin, guestHostname = "") {
+	if (parentIsSelf) return null;
+	for (const candidate of [referrer, ancestorOrigin ?? ""].filter(Boolean)) try {
+		const url = new URL(candidate.includes("://") ? candidate : `https://${candidate}`);
+		if (url.protocol !== "https:" && url.protocol !== "http:") continue;
+		if (isGrokEmbedderOrigin(url.origin)) return url.origin;
+		if (isSandboxPreviewGuestHost(guestHostname) || isRemintPreviewPair(guestHostname, url.hostname)) return url.origin;
+	} catch {}
+	return null;
+}
+/**
+* Guest side of the grok-web ↔ sandbox preview postMessage bridge.
+*
+* Activates only when this page is framed by an allowlisted Grok embedder.
+* Top-level runs (download/export, local `npm run dev`, deployed sites) noop.
+*/
+var PREVIEW_BRIDGE_CHANNEL = "grok-preview-bridge";
+var EnvelopeSchema = object({
+	channel: literal(PREVIEW_BRIDGE_CHANNEL),
+	version: number().int().positive(),
+	type: string().min(1)
+});
+var HelloSchema = EnvelopeSchema.extend({ type: literal("hello") });
+var NavigateSchema = EnvelopeSchema.extend({
+	type: literal("navigate"),
+	path: string().min(1)
+});
+var HistorySchema = EnvelopeSchema.extend({
+	type: literal("history"),
+	delta: union([literal(-1), literal(1)])
+});
+function isSafeBridgePath(path) {
+	if (!path.startsWith("/") || path.startsWith("//") || path.includes("\\")) return false;
+	try {
+		return new URL(path, "https://preview.invalid").origin === "https://preview.invalid";
+	} catch {
+		return false;
+	}
+}
+/**
+* Install host↔guest messaging. Returns a dispose function.
+* Noops (returns a no-op dispose) when not embedded under a Grok parent.
+*/
+function installPreviewHostBridge(options = {}) {
+	if (typeof window === "undefined") return () => {};
+	const ancestorOrigin = typeof location.ancestorOrigins !== "undefined" && location.ancestorOrigins.length > 0 ? location.ancestorOrigins[0] : null;
+	const parentOrigin = resolveParentEmbedderOrigin(window.parent === window, document.referrer, ancestorOrigin, window.location.hostname);
+	if (parentOrigin === null) return () => {};
+	const ROOT_STATE_KEY = "__grokPreviewBridgeRoot";
+	const originalPushState = window.history.pushState.bind(window.history);
+	const originalReplaceState = window.history.replaceState.bind(window.history);
+	const isAtHistoryRoot = () => {
+		const state = window.history.state;
+		return Boolean(state && typeof state === "object" && state[ROOT_STATE_KEY] === true);
+	};
+	try {
+		const current = window.history.state;
+		if (!(current !== null && typeof current === "object" && Object.prototype.hasOwnProperty.call(current, ROOT_STATE_KEY))) {
+			const isRoot = window.history.length <= 1;
+			originalReplaceState(current && typeof current === "object" ? {
+				...current,
+				[ROOT_STATE_KEY]: isRoot
+			} : { [ROOT_STATE_KEY]: isRoot }, "", window.location.href);
+		}
+	} catch {}
+	const post = (message) => {
+		window.parent.postMessage(message, parentOrigin);
+	};
+	const reportLocation = () => {
+		post({
+			channel: PREVIEW_BRIDGE_CHANNEL,
+			version: 1,
+			type: "location",
+			path: window.location.pathname || "/",
+			search: window.location.search,
+			hash: window.location.hash
+		});
+	};
+	const reportRoutes = () => {
+		const paths = options.getRoutePaths?.() ?? [];
+		post({
+			channel: PREVIEW_BRIDGE_CHANNEL,
+			version: 1,
+			type: "routes",
+			paths
+		});
+	};
+	const defaultNavigate = (path) => {
+		if (!isSafeBridgePath(path)) return;
+		try {
+			const url = new URL(path, window.location.origin);
+			if (url.origin !== window.location.origin) return;
+			const next = `${url.pathname}${url.search}${url.hash}`;
+			window.history.pushState(window.history.state, "", next);
+			window.dispatchEvent(new PopStateEvent("popstate", { state: window.history.state }));
+		} catch {}
+	};
+	const navigate = (path) => {
+		if (!isSafeBridgePath(path)) return;
+		if (options.navigate) {
+			options.navigate(path);
+			return;
+		}
+		defaultNavigate(path);
+	};
+	const announce = () => {
+		reportLocation();
+		reportRoutes();
+		post({
+			channel: PREVIEW_BRIDGE_CHANNEL,
+			version: 1,
+			type: "ready"
+		});
+	};
+	const onMessage = (event) => {
+		if (event.source !== window.parent) return;
+		if (event.origin !== parentOrigin) return;
+		const envelope = EnvelopeSchema.safeParse(event.data);
+		if (!envelope.success || envelope.data.version !== 1) return;
+		if (envelope.data.type === "hello") {
+			if (!HelloSchema.safeParse(event.data).success) return;
+			announce();
+			return;
+		}
+		if (envelope.data.type === "navigate") {
+			const parsed = NavigateSchema.safeParse(event.data);
+			if (!parsed.success) return;
+			navigate(parsed.data.path);
+			queueMicrotask(reportLocation);
+			return;
+		}
+		if (envelope.data.type === "history") {
+			const parsed = HistorySchema.safeParse(event.data);
+			if (!parsed.success) return;
+			if (parsed.data.delta === -1 && isAtHistoryRoot()) return;
+			window.history.go(parsed.data.delta);
+		}
+	};
+	const onPopState = () => {
+		reportLocation();
+	};
+	const onHashChange = () => {
+		reportLocation();
+	};
+	window.history.pushState = (data, unused, url) => {
+		const next = data && typeof data === "object" ? {
+			...data,
+			[ROOT_STATE_KEY]: false
+		} : data;
+		originalPushState(next, unused, url);
+		reportLocation();
+	};
+	window.history.replaceState = (data, unused, url) => {
+		const next = isAtHistoryRoot() ? {
+			...data && typeof data === "object" ? data : {},
+			[ROOT_STATE_KEY]: true
+		} : data;
+		originalReplaceState(next, unused, url);
+		reportLocation();
+	};
+	window.addEventListener("message", onMessage);
+	window.addEventListener("popstate", onPopState);
+	window.addEventListener("hashchange", onHashChange);
+	announce();
+	return () => {
+		window.removeEventListener("message", onMessage);
+		window.removeEventListener("popstate", onPopState);
+		window.removeEventListener("hashchange", onHashChange);
+		window.history.pushState = originalPushState;
+		window.history.replaceState = originalReplaceState;
+	};
+}
+/** Collect static path patterns from a TanStack route tree (best-effort). */
+function collectRoutePathsFromTree(routeTree) {
+	const paths = /* @__PURE__ */ new Set();
+	const walk = (node) => {
+		if (!node || typeof node !== "object") return;
+		const record = node;
+		const full = typeof record.fullPath === "string" ? record.fullPath : typeof record.path === "string" ? record.path : null;
+		if (full !== null && full !== "") paths.add(full.startsWith("/") ? full : `/${full}`);
+		else if (full === "") paths.add("/");
+		const children = record.children;
+		if (Array.isArray(children)) for (const child of children) walk(child);
+		else if (children && typeof children === "object") for (const child of Object.values(children)) walk(child);
+	};
+	walk(routeTree);
+	return [...paths];
+}
+/**
+* Mount once in `__root.tsx` so the Grok preview chrome can drive navigation
+* (and later receive registered routes). Noops when the app is not embedded.
+*/
+function PreviewHostBridge() {
+	const router = useRouter();
+	(0, import_react.useEffect)(() => {
+		return installPreviewHostBridge({
+			navigate: (path) => {
+				router.history.push(path);
+			},
+			getRoutePaths: () => collectRoutePathsFromTree(router.routeTree)
+		});
+	}, [router]);
+	return null;
+}
+var useSessionStore = create()(persist((set) => ({
+	session: null,
+	setSession: (session) => set({ session }),
+	hydrate: () => {
+		useSessionStore.persist.rehydrate();
+	}
+}), {
+	name: STORAGE_SESSION,
+	skipHydration: true
+}));
+function loginStaff(role, username, password, settings) {
+	const u = username.trim().toLowerCase();
+	const p = password.trim();
+	if (role === "po") {
+		if (u === settings.poUsername.toLowerCase() && p === settings.poPassword) return {
+			ok: true,
+			session: {
+				role: "po",
+				name: settings.poName
+			}
+		};
+		return {
+			ok: false,
+			error: "Invalid Programme Officer username or password."
+		};
+	}
+	if (u === settings.adminUsername.toLowerCase() && p === settings.adminPassword) return {
+		ok: true,
+		session: {
+			role: "admin",
+			name: settings.poName
+		}
+	};
+	return {
+		ok: false,
+		error: "Invalid admin username or password."
+	};
+}
+function digits$1(value) {
+	return digitsOnly(value);
+}
+function passwordMatches(v, pass) {
+	const passDigits = digits$1(pass);
+	return [v.loginPassword, v.mobile].filter(Boolean).some((expected) => {
+		const expectedDigits = digits$1(String(expected));
+		return pass === expected || passDigits.length > 0 && passDigits === expectedDigits || expectedDigits.length >= 10 && expectedDigits.endsWith(passDigits) && passDigits.length >= 10;
+	});
+}
+function toSession(v) {
+	return {
+		role: v.nssRole === "Leader" ? "leader" : "volunteer",
+		name: v.fullName,
+		volunteerId: v.id,
+		enrollment: v.enrollment,
+		mobile: v.mobile
+	};
+}
+function candidatesByUsername(username, volunteers) {
+	const key = username.trim();
+	const keyUpper = firstNameOf(key);
+	const keyLower = key.toLowerCase();
+	const keyDigits = digits$1(key);
+	const byFirst = volunteers.filter((s) => firstNameOf(s.fullName) === keyUpper);
+	if (byFirst.length) return byFirst;
+	return volunteers.filter((s) => {
+		const id = s.volunteerId.toLowerCase();
+		const enrollment = s.enrollment.toLowerCase();
+		const name = s.fullName.toLowerCase();
+		const phone = digits$1(s.mobile);
+		return enrollment === keyLower || id === keyLower || name === keyLower || keyDigits.length >= 8 && phone === keyDigits || keyDigits.length >= 8 && phone.endsWith(keyDigits);
+	});
+}
+function loginVolunteer(username, password, volunteers) {
+	const list = candidatesByUsername(username, volunteers);
+	if (!list.length) return {
+		ok: false,
+		error: "Username not found. Type your FIRST NAME in CAPITAL letters (example: MAHI). Use Forgot username if you need help."
+	};
+	const matched = list.filter((v) => passwordMatches(v, password));
+	if (matched.length === 1) return {
+		ok: true,
+		session: toSession(matched[0])
+	};
+	if (list.length > 1 && !matched.length) return {
+		ok: false,
+		error: "More than one volunteer shares this first name. Enter the registered mobile number as password."
+	};
+	if (!matched.length) return {
+		ok: false,
+		error: "Password is your registered mobile number (or the new password you set)."
+	};
+	return {
+		ok: true,
+		session: toSession(matched[0])
+	};
+}
+function loginWithMpin(username, mpin, volunteers) {
+	const list = candidatesByUsername(username, volunteers);
+	const pin = mpin.trim();
+	if (!/^\d{4}$/.test(pin)) return {
+		ok: false,
+		error: "MPIN must be 4 digits."
+	};
+	const v = list.find((s) => s.mpin === pin);
+	if (!v) return {
+		ok: false,
+		error: "MPIN does not match. Set MPIN from your student dashboard first."
+	};
+	return {
+		ok: true,
+		session: toSession(v)
+	};
+}
+function lookupUsernameByMobile(mobile, volunteers) {
+	const d = digits$1(mobile);
+	if (d.length < 10) return null;
+	const v = volunteers.find((s) => digits$1(s.mobile).slice(-10) === d.slice(-10));
+	if (!v) return null;
+	return {
+		firstName: firstNameOf(v.fullName),
+		fullName: v.fullName,
+		volunteerId: v.volunteerId
+	};
+}
+function resetPasswordToMobile(username, mobile, volunteers) {
+	const list = candidatesByUsername(username, volunteers);
+	const d = digits$1(mobile).slice(-10);
+	return list.find((s) => digits$1(s.mobile).slice(-10) === d) ?? null;
+}
+function findSessionVolunteer(volunteers, session) {
+	if (!session) return void 0;
+	const d = digits$1(session.mobile || "");
+	const key = (session.volunteerId || "").trim().toLowerCase();
+	const enrollment = (session.enrollment || "").trim().toLowerCase();
+	const name = (session.name || "").trim().toLowerCase();
+	const first = firstNameOf(session.name || "");
+	return volunteers.find((v) => v.id === session.volunteerId) || volunteers.find((v) => v.volunteerId.toLowerCase() === key) || volunteers.find((v) => enrollment && v.enrollment.toLowerCase() === enrollment) || volunteers.find((v) => d.length >= 10 && digits$1(v.mobile).slice(-10) === d.slice(-10)) || volunteers.find((v) => v.fullName.toLowerCase() === name) || volunteers.find((v) => first && firstNameOf(v.fullName) === first && d.length >= 10 && digits$1(v.mobile).slice(-10) === d.slice(-10));
+}
+function dashboardPath(session) {
+	if (!session) return "/login";
+	if (session.role === "po" || session.role === "admin") return "/po";
+	return "/volunteer";
+}
+function isOfficer(session) {
+	return session?.role === "po" || session?.role === "admin";
+}
+async function registerFingerprint(volunteer) {
+	if (!window.PublicKeyCredential) throw new Error("This device does not support fingerprint / Windows Hello.");
+	const cred = await navigator.credentials.create({ publicKey: {
+		challenge: crypto.getRandomValues(/* @__PURE__ */ new Uint8Array(32)),
+		rp: {
+			name: "NSS Smart Portal",
+			id: window.location.hostname
+		},
+		user: {
+			id: new TextEncoder().encode(volunteer.id).slice(0, 32),
+			name: firstNameOf(volunteer.fullName),
+			displayName: volunteer.fullName
+		},
+		pubKeyCredParams: [{
+			type: "public-key",
+			alg: -7
+		}, {
+			type: "public-key",
+			alg: -257
+		}],
+		authenticatorSelection: {
+			authenticatorAttachment: "platform",
+			userVerification: "required",
+			residentKey: "preferred"
+		},
+		timeout: 6e4
+	} });
+	if (!cred) throw new Error("Fingerprint was cancelled.");
+	return cred.id;
+}
+async function loginWithFingerprint(volunteers) {
+	if (!window.PublicKeyCredential) return {
+		ok: false,
+		error: "Fingerprint login is not available on this device."
+	};
+	const allow = volunteers.filter((v) => v.webauthnId).map((v) => {
+		const pad = v.webauthnId.replaceAll("-", "+").replaceAll("_", "/");
+		const bin = atob(pad + "===".slice((pad.length + 3) % 4));
+		const bytes = new Uint8Array(bin.length);
+		for (let i = 0; i < bin.length; i += 1) bytes[i] = bin.charCodeAt(i);
+		return {
+			type: "public-key",
+			id: bytes.buffer
+		};
+	});
+	try {
+		const cred = await navigator.credentials.get({ publicKey: {
+			challenge: crypto.getRandomValues(/* @__PURE__ */ new Uint8Array(32)),
+			timeout: 6e4,
+			userVerification: "required",
+			allowCredentials: allow.length ? allow : void 0
+		} });
+		if (!cred) return {
+			ok: false,
+			error: "Fingerprint was cancelled."
+		};
+		const v = volunteers.find((s) => s.webauthnId === cred.id);
+		if (!v) return {
+			ok: false,
+			error: "Fingerprint is not linked to a volunteer on this device."
+		};
+		return {
+			ok: true,
+			session: toSession(v)
+		};
+	} catch (error) {
+		return {
+			ok: false,
+			error: error instanceof Error ? error.message : "Fingerprint login failed."
+		};
+	}
+}
+function HydrateGate({ children }) {
+	const [ready, setReady] = (0, import_react.useState)(false);
+	const [status, setStatus] = (0, import_react.useState)("Loading the college NSS roll…");
+	(0, import_react.useEffect)(() => {
+		let cancelled = false;
+		const finish = () => {
+			if (!cancelled) setReady(true);
+		};
+		(async () => {
+			try {
+				await Promise.all([Promise.resolve(useNssStore.persist.rehydrate()), Promise.resolve(useSessionStore.persist.rehydrate())]);
+			} catch {}
+			async function applyResponse(res) {
+				if (!res.ok) return false;
+				const cloud = await res.json();
+				if (!cloud.ok) return false;
+				useNssStore.getState().applyCloud({
+					volunteers: Array.isArray(cloud.volunteers) ? cloud.volunteers : void 0,
+					events: Array.isArray(cloud.events) ? cloud.events : void 0,
+					attendance: Array.isArray(cloud.attendance) ? cloud.attendance : void 0,
+					notices: Array.isArray(cloud.notices) ? cloud.notices : void 0,
+					gallery: Array.isArray(cloud.gallery) ? cloud.gallery : void 0,
+					visitors: cloud.visitors,
+					alumniCount: cloud.alumniCount
+				});
+				return Array.isArray(cloud.volunteers) && cloud.volunteers.length >= 20;
+			}
+			setStatus("Connecting to NSS cloud…");
+			try {
+				if (await applyResponse(await fetch("/api/nss-cloud"))) setStatus("College roll loaded.");
+			} catch {
+				setStatus("Could not reach the college roll. Showing saved data.");
+			}
+			finish();
+			fetch("/api/nss-cloud?gallery=1").then(applyResponse).catch(() => void 0);
+		})();
+		const safety = window.setTimeout(finish, 12e3);
+		return () => {
+			cancelled = true;
+			window.clearTimeout(safety);
+		};
+	}, []);
+	if (!ready) return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+		className: "flex min-h-dvh flex-col items-center justify-center bg-navy px-6 text-paper",
+		children: [
+			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+				className: "flex items-center gap-5",
+				children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("img", {
+					src: COLLEGE_LOGO,
+					alt: "College emblem",
+					className: "size-16 object-contain"
+				}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("img", {
+					src: NSS_LOGO,
+					alt: "NSS emblem",
+					className: "size-16 object-contain"
+				})]
+			}),
+			/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+				className: "mt-6 text-center font-display text-lg tracking-[0.18em]",
+				children: "NSS SMART PORTAL"
+			}),
+			/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+				className: "mt-2 text-center text-sm text-paper/70",
+				children: "S.D. Arts & Shah B.R. Commerce College, Mansa"
+			}),
+			/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+				className: "mt-6 text-center text-xs tracking-[0.16em] text-paper/55",
+				children: status
+			})
+		]
+	});
+	return children;
+}
+var deferred = null;
+var listeners = /* @__PURE__ */ new Set();
+function emit() {
+	listeners.forEach((fn) => fn());
+}
+function subscribe(fn) {
+	listeners.add(fn);
+	return () => listeners.delete(fn);
+}
+function getSnapshot() {
+	return deferred;
+}
+function NspPwaRoot() {
+	(0, import_react.useEffect)(() => {
+		const swTimer = window.setTimeout(() => {
+			if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => void 0);
+		}, 2500);
+		const onPrompt = (event) => {
+			event.preventDefault();
+			deferred = event;
+			emit();
+		};
+		const onInstalled = () => {
+			deferred = null;
+			emit();
+		};
+		window.addEventListener("beforeinstallprompt", onPrompt);
+		window.addEventListener("appinstalled", onInstalled);
+		return () => {
+			window.clearTimeout(swTimer);
+			window.removeEventListener("beforeinstallprompt", onPrompt);
+			window.removeEventListener("appinstalled", onInstalled);
+		};
+	}, []);
+	return null;
+}
+function useInstallPrompt() {
+	return (0, import_react.useSyncExternalStore)(subscribe, getSnapshot, () => null);
+}
+function InstallNspButton() {
+	const prompt = useInstallPrompt();
+	const [standalone, setStandalone] = (0, import_react.useState)(false);
+	const [busy, setBusy] = (0, import_react.useState)(false);
+	(0, import_react.useEffect)(() => {
+		const media = window.matchMedia("(display-mode: standalone)");
+		const nav = window.navigator;
+		setStandalone(media.matches || nav.standalone === true);
+	}, []);
+	async function install() {
+		if (!prompt) return;
+		setBusy(true);
+		try {
+			await prompt.prompt();
+			await prompt.userChoice;
+		} finally {
+			setBusy(false);
+		}
+	}
+	if (standalone) return /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+		className: "rounded-md bg-forest/10 px-3 py-2 text-sm text-forest",
+		children: "NSP is installed on this device. Look for the NSS emblem on your home screen."
+	});
+	if (prompt) return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(Button, {
+		type: "button",
+		size: "lg",
+		className: "w-full",
+		onClick: () => void install(),
+		disabled: busy,
+		children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Download, {}), busy ? "Installing…" : "Install NSP — NSS logo"]
+	});
+	return /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+		className: "text-sm text-muted-foreground",
+		children: "Use the steps below for your phone. On Android Chrome, the install prompt appears when this page is opened from the live college link."
+	});
+}
+var styles_default = "/assets/styles-B9YL6ohE.css";
+var APP_NAME = "NSP";
+var Route$31 = createRootRoute({
+	head: () => ({
+		meta: [
+			{ charSet: "utf-8" },
+			{
+				name: "viewport",
+				content: "width=device-width, initial-scale=1"
+			},
+			{ title: APP_NAME },
+			{
+				name: "theme-color",
+				content: "#13294b"
+			},
+			{
+				name: "apple-mobile-web-app-title",
+				content: "NSP"
+			},
+			{
+				name: "application-name",
+				content: "NSP"
+			},
+			{
+				name: "description",
+				content: "NSS Smart Portal for S.D. Arts and Shah B.R. Commerce College, Mansa — volunteers, attendance, reports, and notices."
+			}
+		],
+		links: [
+			{
+				rel: "icon",
+				type: "image/png",
+				href: "/icon-192.png"
+			},
+			{
+				rel: "manifest",
+				href: "/manifest.webmanifest"
+			},
+			{
+				rel: "apple-touch-icon",
+				href: "/__grok/icon-180.png"
+			},
+			{
+				rel: "apple-touch-icon",
+				href: "/icon-180.png"
+			},
+			{
+				rel: "manifest",
+				href: "/__grok/manifest.webmanifest"
+			},
+			{
+				rel: "stylesheet",
+				href: styles_default
+			},
+			{
+				rel: "stylesheet",
+				href: "https://fonts.googleapis.com/css2?family=Dancing+Script:wght@600;700&family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Source+Sans+3:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Noto+Sans+Gujarati:wght@400;500;600;700&display=swap"
+			}
+		]
+	}),
+	component: () => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("html", {
+		lang: "en",
+		className: "antialiased",
+		suppressHydrationWarning: true,
+		children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("head", { children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(HeadContent, {}) }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("body", { children: [
+			/* @__PURE__ */ (0, import_jsx_runtime.jsx)(PreviewHostBridge, {}),
+			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)(AuthProvider, { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)(HydrateGate, { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(NspPwaRoot, {}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Outlet, {})] }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Toaster, {
+				position: "top-center",
+				richColors: true
+			})] }),
+			/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Scripts, {})
+		] })]
+	})
+});
+var $$splitComponentImporter$27 = () => import("./routes-BwR3Ji2Y.mjs");
+var Route$30 = createFileRoute("/")({ component: lazyRouteComponent($$splitComponentImporter$27, "component") });
+var Route$29 = createFileRoute("/admin")({ beforeLoad: () => {
+	throw redirect({ to: "/po" });
+} });
+var $$splitComponentImporter$26 = () => import("./admin-dashboard-DVT_Xp3D.mjs");
+var Route$28 = createFileRoute("/admin-dashboard")({ component: lazyRouteComponent($$splitComponentImporter$26, "component") });
+var $$splitComponentImporter$25 = () => import("./contact-Y5v5OfBa.mjs");
+var Route$27 = createFileRoute("/contact")({ component: lazyRouteComponent($$splitComponentImporter$25, "component") });
+var $$splitComponentImporter$24 = () => import("./gallery-DdTf9O-d.mjs");
+var Route$26 = createFileRoute("/gallery")({ component: lazyRouteComponent($$splitComponentImporter$24, "component") });
+var $$splitComponentImporter$23 = () => import("./install-Cgq4wwcD.mjs");
+var Route$25 = createFileRoute("/install")({ component: lazyRouteComponent($$splitComponentImporter$23, "component") });
+var $$splitComponentImporter$22 = () => import("./login-BCLAh-bn.mjs");
+var searchSchema = object({ role: _enum([
+	"volunteer",
+	"po",
+	"admin"
+]).optional() });
+var Route$24 = createFileRoute("/login")({
+	validateSearch: searchSchema,
+	component: lazyRouteComponent($$splitComponentImporter$22, "component")
+});
+var $$splitComponentImporter$21 = () => import("./po-DZJzHOp6.mjs");
+var Route$23 = createFileRoute("/po")({ component: lazyRouteComponent($$splitComponentImporter$21, "component") });
+var $$splitComponentImporter$20 = () => import("./register-Dz5WpHqT.mjs");
+var Route$22 = createFileRoute("/register")({ component: lazyRouteComponent($$splitComponentImporter$20, "component") });
+var $$splitComponentImporter$19 = () => import("./student-dashboard-DQU-kowi.mjs");
+var Route$21 = createFileRoute("/student-dashboard")({ component: lazyRouteComponent($$splitComponentImporter$19, "component") });
+var $$splitComponentImporter$18 = () => import("./student-register-DHD3wHQ2.mjs");
+var Route$20 = createFileRoute("/student-register")({ component: lazyRouteComponent($$splitComponentImporter$18, "component") });
+var $$splitComponentImporter$17 = () => import("./verify-9xWMLCov.mjs");
+var Route$19 = createFileRoute("/verify")({
+	validateSearch: (search) => ({ id: typeof search.id === "string" ? search.id : "" }),
+	component: lazyRouteComponent($$splitComponentImporter$17, "component")
+});
+var $$splitComponentImporter$16 = () => import("./volunteer-CEiH0dCr.mjs");
+var Route$18 = createFileRoute("/volunteer")({ component: lazyRouteComponent($$splitComponentImporter$16, "component") });
+var MAP = {
+	reports: "/po/reports",
+	attendance: "/po/attendance",
+	events: "/po/events",
+	notices: "/po/notices",
+	gallery: "/po/gallery",
+	certificates: "/po/certificates",
+	settings: "/po/settings",
+	students: "/po/volunteers",
+	yearly: "/po/reports",
+	press: "/po/notices",
+	alumni: "/po/volunteers",
+	birthdays: "/po/birthdays"
+};
+var Route$17 = createFileRoute("/admin/$")({ beforeLoad: ({ params }) => {
+	const key = (params._splat ?? "").split("/")[0] ?? "";
+	throw redirect({ to: MAP[key] ?? "/po" });
+} });
+var FIRESTORE_PROJECT_ID = process.env.NSS_FIRESTORE_PROJECT_ID?.trim() || "studio-8504026975-1fdbc";
+var FIRESTORE_BASE = process.env.NSS_FIRESTORE_BASE_URL?.trim() || `https://firestore.googleapis.com/v1/projects/${FIRESTORE_PROJECT_ID}/databases/(default)/documents`;
+function decodeValue(value) {
+	if (!value || typeof value !== "object") return void 0;
+	if ("stringValue" in value) return String(value.stringValue ?? "");
+	if ("integerValue" in value) return Number(value.integerValue);
+	if ("doubleValue" in value) return Number(value.doubleValue);
+	if ("booleanValue" in value) return Boolean(value.booleanValue);
+	if ("timestampValue" in value) return String(value.timestampValue ?? "");
+	if ("nullValue" in value) return null;
+	if ("arrayValue" in value) return (value.arrayValue?.values ?? []).map((item) => decodeValue(item));
+	if ("mapValue" in value) {
+		const fields = value.mapValue?.fields ?? {};
+		return Object.fromEntries(Object.entries(fields).map(([k, v]) => [k, decodeValue(v)]));
+	}
+}
+function decodeDoc(doc) {
+	const fields = doc.fields ?? {};
+	const row = { _id: String(doc.name ?? "").split("/").pop() ?? "" };
+	for (const [key, value] of Object.entries(fields)) row[key] = decodeValue(value);
+	return row;
+}
+var STUDENT_FIELDS = [
+	"fullName",
+	"firstName",
+	"middleName",
+	"surname",
+	"mobile",
+	"email",
+	"course",
+	"semester",
+	"nssRole",
+	"status",
+	"fatherName",
+	"dob",
+	"gender",
+	"bloodGroup",
+	"address",
+	"parentMobile",
+	"emergencyContact",
+	"abcId",
+	"myBharatId",
+	"enrollment",
+	"createdAt",
+	"updatedAt"
+];
+function collectionUrl(name, token) {
+	const params = new URLSearchParams({ pageSize: "300" });
+	if (token) params.set("pageToken", token);
+	if (name === "students") for (const field of STUDENT_FIELDS) params.append("mask.fieldPaths", field);
+	if (name === "events") for (const field of [
+		"eventName",
+		"title",
+		"date",
+		"startDate",
+		"location",
+		"hours",
+		"status",
+		"description",
+		"beneficiaries",
+		"category",
+		"coordinator",
+		"createdAt"
+	]) params.append("mask.fieldPaths", field);
+	if (name === "attendance") for (const field of [
+		"eventName",
+		"title",
+		"date",
+		"status",
+		"attendance",
+		"mobile",
+		"studentMobile",
+		"studentName",
+		"name"
+	]) params.append("mask.fieldPaths", field);
+	if (name === "gallery") for (const field of [
+		"title",
+		"eventName",
+		"createdAt",
+		"date",
+		"kind",
+		"type",
+		"image",
+		"src"
+	]) params.append("mask.fieldPaths", field);
+	return `${FIRESTORE_BASE}/${name}?${params.toString()}`;
+}
+async function listCollection(name) {
+	const docs = [];
+	let url = collectionUrl(name);
+	while (url) {
+		const res = await fetch(url);
+		if (!res.ok) break;
+		const json = await res.json();
+		for (const doc of json.documents ?? []) docs.push(decodeDoc(doc));
+		url = json.nextPageToken ? collectionUrl(name, json.nextPageToken) : "";
+	}
+	return docs;
+}
+async function getDocument(path) {
+	const res = await fetch(`${FIRESTORE_BASE}/${path}`);
+	if (!res.ok) return null;
+	return decodeDoc({
+		name: path,
+		fields: (await res.json()).fields
+	});
+}
+function text(value) {
+	return String(value ?? "").trim();
+}
+function digits(value) {
+	return text(value).replace(/\D/g, "");
+}
+function isoDate(value) {
+	return parseDob(text(value));
+}
+function isPresent(row) {
+	const raw = row.status ?? row.attendance ?? row.present;
+	if (raw === true || raw === 1) return true;
+	const s = text(raw).toLowerCase();
+	return s === "present" || s === "p" || s === "yes" || s === "true" || s === "haajar";
+}
+function normalizeCourse(value) {
+	const raw = text(value);
+	if (/બી\.?\s*કોમ|b\.?\s*com/i.test(raw)) return "B.Com.";
+	if (/બી\.?\s*એ|b\.?\s*a\b/i.test(raw)) return "B.A.";
+	if (/બી\.?\s*એસ|b\.?\s*sc/i.test(raw)) return "B.Sc.";
+	return raw || "B.Com.";
+}
+async function loadCollegeCloud(opts = {}) {
+	const [students, eventDocs, noticeDocs, attendanceDocs, galleryDocs, stats, visitorsDoc] = await Promise.all([
+		listCollection("students"),
+		listCollection("events"),
+		listCollection("notices"),
+		listCollection("attendance"),
+		opts.gallery === false ? Promise.resolve([]) : listCollection("gallery"),
+		getDocument("portalSettings/publicStats"),
+		getDocument("portalSettings/visitors")
+	]);
+	if (!students.length && !eventDocs.length && !noticeDocs.length) return null;
+	const volunteers = [...students.filter((s) => {
+		const status = text(s.status).toLowerCase();
+		return status !== "inactive" && status !== "deleted";
+	})].sort((a, b) => isoDate(a.createdAt).localeCompare(isoDate(b.createdAt)) || text(a.fullName).localeCompare(text(b.fullName), "en", { sensitivity: "base" })).map((s, index) => {
+		const n = index + 1;
+		const semester = text(s.semester) || "1";
+		const mobileDigits = digits(s.mobile) || digits(s._id);
+		const mobile = mobileDigits.length >= 10 ? mobileDigits.slice(-10) : text(s.mobile);
+		const role = /leader/i.test(text(s.nssRole)) ? "Leader" : "Volunteer";
+		const statusRaw = text(s.status).toLowerCase();
+		const roleRaw = text(s.nssRole).toLowerCase();
+		const isAlumni = statusRaw === "alumni" || roleRaw === "alumni";
+		const assembled = [
+			s.firstName,
+			s.middleName,
+			s.surname
+		].map(text).filter(Boolean).join(" ");
+		const fullName = titleFirstName(cleanPersonName(text(s.fullName) || assembled));
+		return {
+			id: text(s._id) || `vol-${n}`,
+			volunteerId: `NSS${padId(n)}`,
+			enrollment: text(s.enrollment) || `2026-${semester}-${padId(n)}`,
+			fullName,
+			mobile,
+			email: text(s.email),
+			course: normalizeCourse(s.course),
+			semester,
+			unit: index % 2 === 0 ? "Unit 1" : "Unit 2",
+			nssRole: role,
+			fatherName: text(s.fatherName),
+			dob: isoDate(s.dob),
+			gender: text(s.gender) === "Female" ? "Female" : text(s.gender) === "Male" ? "Male" : "",
+			bloodGroup: text(s.bloodGroup),
+			address: text(s.address),
+			parentMobile: text(s.parentMobile) || text(s.emergencyContact) || mobile,
+			emergencyContact: text(s.emergencyContact),
+			abcId: text(s.abcId),
+			myBharatId: text(s.myBharatId),
+			createdAt: isoDate(s.createdAt) || isoDate(s.updatedAt),
+			status: isAlumni ? "alumni" : "active"
+		};
+	});
+	const byMobile = /* @__PURE__ */ new Map();
+	const byName = /* @__PURE__ */ new Map();
+	for (const v of volunteers) {
+		const d = digits(v.mobile);
+		if (d) byMobile.set(d, v);
+		byName.set(v.fullName.toLowerCase(), v);
+	}
+	const events = eventDocs.map((e) => {
+		const name = text(e.eventName) || text(e.title) || "NSS Activity";
+		const date = isoDate(e.date) || isoDate(e.startDate);
+		const statusRaw = text(e.status).toLowerCase();
+		return {
+			id: text(e._id) || `evt-${name}-${date}`,
+			name,
+			date,
+			location: text(e.location) || "Mansa",
+			hours: Number(e.hours) > 0 ? Number(e.hours) : 4,
+			status: statusRaw === "upcoming" || statusRaw === "planning" ? "upcoming" : "completed",
+			description: text(e.description),
+			beneficiaries: Number(e.beneficiaries) > 0 ? Number(e.beneficiaries) : 0,
+			category: text(e.category),
+			coordinator: text(e.coordinator),
+			createdAt: isoDate(e.createdAt) || date
+		};
+	});
+	function ensureEvent(name, date) {
+		const key = name.trim().toLowerCase();
+		let event = events.find((e) => e.name.trim().toLowerCase() === key);
+		if (!event) {
+			event = {
+				id: `evt-${key.replace(/\s+/g, "-")}-${date || "undated"}`,
+				name,
+				date,
+				location: "Mansa",
+				hours: 4,
+				status: "completed",
+				description: "",
+				createdAt: date
+			};
+			events.push(event);
+		}
+		return event;
+	}
+	const attendance = [];
+	const seen = /* @__PURE__ */ new Set();
+	for (const row of attendanceDocs) {
+		const name = text(row.eventName) || text(row.title);
+		const date = isoDate(row.date);
+		if (!name) continue;
+		const event = ensureEvent(name, date);
+		const volunteer = byMobile.get(digits(row.studentMobile) || digits(row.mobile) || digits(row._id)) || byName.get(text(row.studentName || row.name).toLowerCase());
+		if (!volunteer) continue;
+		const key = `${volunteer.id}::${event.id}`;
+		if (seen.has(key)) continue;
+		seen.add(key);
+		attendance.push({
+			volunteerId: volunteer.id,
+			eventId: event.id,
+			present: isPresent(row)
+		});
+	}
+	const notices = noticeDocs.map((n) => {
+		const body = text(n.text) || text(n.body);
+		const title = text(n.title) || "Notice";
+		const leaders = /leader/i.test(`${title} ${body}`);
+		return {
+			id: text(n._id),
+			title,
+			body,
+			date: isoDate(n.date) || isoDate(n.createdAt),
+			audience: leaders ? "leaders" : "all",
+			createdAt: isoDate(n.createdAt) || isoDate(n.date)
+		};
+	});
+	const gallery = galleryDocs.map((g) => {
+		const eventName = text(g.eventName) || text(g.title) || "General";
+		const kind = /video/i.test(text(g.kind) || text(g.type)) ? "video" : "photo";
+		const src = text(g.image) || text(g.src);
+		return {
+			id: text(g._id),
+			src: src.length < 4e5 ? src : "",
+			caption: text(g.title) || eventName || "NSS activity",
+			date: isoDate(g.createdAt) || isoDate(g.date),
+			eventName,
+			folder: eventName,
+			kind
+		};
+	}).filter((g) => g.src).sort((a, b) => b.date.localeCompare(a.date));
+	const alumniCount = students.filter((s) => {
+		const status = text(s.status).toLowerCase();
+		const role = text(s.nssRole).toLowerCase();
+		return status === "alumni" || role === "alumni";
+	}).length;
+	return {
+		volunteers,
+		events,
+		attendance,
+		notices,
+		gallery,
+		visitors: Number(visitorsDoc?.count ?? 0),
+		alumniCount,
+		serviceHours: Number(stats?.serviceHours ?? 0)
+	};
+}
+var Route$16 = createFileRoute("/api/nss-cloud")({ server: { handlers: { GET: async ({ request }) => {
+	try {
+		const data = await loadCollegeCloud({ gallery: new URL(request.url).searchParams.get("gallery") === "1" });
+		if (!data) return Response.json({ ok: false }, { status: 404 });
+		return Response.json({
+			ok: true,
+			...data
+		});
+	} catch (error) {
+		const message = error instanceof Error ? error.message : "cloud load failed";
+		return Response.json({
+			ok: false,
+			error: message
+		}, { status: 500 });
+	}
+} } } });
+var $$splitComponentImporter$15 = () => import("./po-C58egHKD.mjs");
+var Route$15 = createFileRoute("/po/")({ component: lazyRouteComponent($$splitComponentImporter$15, "component") });
+var $$splitComponentImporter$14 = () => import("./ai-Btyy6fHD.mjs");
+var Route$14 = createFileRoute("/po/ai")({ component: lazyRouteComponent($$splitComponentImporter$14, "component") });
+var $$splitComponentImporter$13 = () => import("./alumni-CjJGl9tZ.mjs");
+var Route$13 = createFileRoute("/po/alumni")({ component: lazyRouteComponent($$splitComponentImporter$13, "component") });
+var $$splitComponentImporter$12 = () => import("./attendance-DBGAAQAm.mjs");
+var Route$12 = createFileRoute("/po/attendance")({ component: lazyRouteComponent($$splitComponentImporter$12, "component") });
+var $$splitComponentImporter$11 = () => import("./backup-BfT7lEyC.mjs");
+var Route$11 = createFileRoute("/po/backup")({ component: lazyRouteComponent($$splitComponentImporter$11, "component") });
+var $$splitComponentImporter$10 = () => import("./birthdays-784L295d.mjs");
+var Route$10 = createFileRoute("/po/birthdays")({ component: lazyRouteComponent($$splitComponentImporter$10, "component") });
+var $$splitComponentImporter$9 = () => import("./certificates-CwrzJyMe.mjs");
+var Route$9 = createFileRoute("/po/certificates")({ component: lazyRouteComponent($$splitComponentImporter$9, "component") });
+var $$splitComponentImporter$8 = () => import("./events-CEWj_uTN.mjs");
+var Route$8 = createFileRoute("/po/events")({ component: lazyRouteComponent($$splitComponentImporter$8, "component") });
+var $$splitComponentImporter$7 = () => import("./gallery-DHVFLkY7.mjs");
+var Route$7 = createFileRoute("/po/gallery")({ component: lazyRouteComponent($$splitComponentImporter$7, "component") });
+var $$splitComponentImporter$6 = () => import("./impact-CwRYFAMi.mjs");
+var Route$6 = createFileRoute("/po/impact")({ component: lazyRouteComponent($$splitComponentImporter$6, "component") });
+var $$splitComponentImporter$5 = () => import("./logs-Ccj-rBeo.mjs");
+var Route$5 = createFileRoute("/po/logs")({ component: lazyRouteComponent($$splitComponentImporter$5, "component") });
+var $$splitComponentImporter$4 = () => import("./notices-DdXBXMUr.mjs");
+var Route$4 = createFileRoute("/po/notices")({ component: lazyRouteComponent($$splitComponentImporter$4, "component") });
+var $$splitComponentImporter$3 = () => import("./press-Ctj5Sg6-.mjs");
+var Route$3 = createFileRoute("/po/press")({ component: lazyRouteComponent($$splitComponentImporter$3, "component") });
+var $$splitComponentImporter$2 = () => import("./reports-DTSSRFv6.mjs");
+var Route$2 = createFileRoute("/po/reports")({ component: lazyRouteComponent($$splitComponentImporter$2, "component") });
+var $$splitComponentImporter$1 = () => import("./settings-BdemjoKk.mjs");
+var Route$1 = createFileRoute("/po/settings")({ component: lazyRouteComponent($$splitComponentImporter$1, "component") });
+var $$splitComponentImporter = () => import("./volunteers-i5I0ISN5.mjs");
+var Route = createFileRoute("/po/volunteers")({ component: lazyRouteComponent($$splitComponentImporter, "component") });
+var IndexRoute = Route$30.update({
+	id: "/",
+	path: "/",
+	getParentRoute: () => Route$31
+});
+var AdminRoute = Route$29.update({
+	id: "/admin",
+	path: "/admin",
+	getParentRoute: () => Route$31
+});
+var AdminDashboardRoute = Route$28.update({
+	id: "/admin-dashboard",
+	path: "/admin-dashboard",
+	getParentRoute: () => Route$31
+});
+var ContactRoute = Route$27.update({
+	id: "/contact",
+	path: "/contact",
+	getParentRoute: () => Route$31
+});
+var GalleryRoute = Route$26.update({
+	id: "/gallery",
+	path: "/gallery",
+	getParentRoute: () => Route$31
+});
+var InstallRoute = Route$25.update({
+	id: "/install",
+	path: "/install",
+	getParentRoute: () => Route$31
+});
+var LoginRoute = Route$24.update({
+	id: "/login",
+	path: "/login",
+	getParentRoute: () => Route$31
+});
+var PoRoute = Route$23.update({
+	id: "/po",
+	path: "/po",
+	getParentRoute: () => Route$31
+});
+var RegisterRoute = Route$22.update({
+	id: "/register",
+	path: "/register",
+	getParentRoute: () => Route$31
+});
+var StudentDashboardRoute = Route$21.update({
+	id: "/student-dashboard",
+	path: "/student-dashboard",
+	getParentRoute: () => Route$31
+});
+var StudentRegisterRoute = Route$20.update({
+	id: "/student-register",
+	path: "/student-register",
+	getParentRoute: () => Route$31
+});
+var VerifyRoute = Route$19.update({
+	id: "/verify",
+	path: "/verify",
+	getParentRoute: () => Route$31
+});
+var VolunteerRoute = Route$18.update({
+	id: "/volunteer",
+	path: "/volunteer",
+	getParentRoute: () => Route$31
+});
+var AdminSplatRoute = Route$17.update({
+	id: "/$",
+	path: "/$",
+	getParentRoute: () => AdminRoute
+});
+var ApiNssCloudRoute = Route$16.update({
+	id: "/api/nss-cloud",
+	path: "/api/nss-cloud",
+	getParentRoute: () => Route$31
+});
+var PoIndexRoute = Route$15.update({
+	id: "/",
+	path: "/",
+	getParentRoute: () => PoRoute
+});
+var PoAiRoute = Route$14.update({
+	id: "/ai",
+	path: "/ai",
+	getParentRoute: () => PoRoute
+});
+var PoAlumniRoute = Route$13.update({
+	id: "/alumni",
+	path: "/alumni",
+	getParentRoute: () => PoRoute
+});
+var PoAttendanceRoute = Route$12.update({
+	id: "/attendance",
+	path: "/attendance",
+	getParentRoute: () => PoRoute
+});
+var PoBackupRoute = Route$11.update({
+	id: "/backup",
+	path: "/backup",
+	getParentRoute: () => PoRoute
+});
+var PoBirthdaysRoute = Route$10.update({
+	id: "/birthdays",
+	path: "/birthdays",
+	getParentRoute: () => PoRoute
+});
+var PoCertificatesRoute = Route$9.update({
+	id: "/certificates",
+	path: "/certificates",
+	getParentRoute: () => PoRoute
+});
+var PoEventsRoute = Route$8.update({
+	id: "/events",
+	path: "/events",
+	getParentRoute: () => PoRoute
+});
+var PoGalleryRoute = Route$7.update({
+	id: "/gallery",
+	path: "/gallery",
+	getParentRoute: () => PoRoute
+});
+var PoImpactRoute = Route$6.update({
+	id: "/impact",
+	path: "/impact",
+	getParentRoute: () => PoRoute
+});
+var PoLogsRoute = Route$5.update({
+	id: "/logs",
+	path: "/logs",
+	getParentRoute: () => PoRoute
+});
+var PoNoticesRoute = Route$4.update({
+	id: "/notices",
+	path: "/notices",
+	getParentRoute: () => PoRoute
+});
+var PoPressRoute = Route$3.update({
+	id: "/press",
+	path: "/press",
+	getParentRoute: () => PoRoute
+});
+var PoReportsRoute = Route$2.update({
+	id: "/reports",
+	path: "/reports",
+	getParentRoute: () => PoRoute
+});
+var PoSettingsRoute = Route$1.update({
+	id: "/settings",
+	path: "/settings",
+	getParentRoute: () => PoRoute
+});
+var PoVolunteersRoute = Route.update({
+	id: "/volunteers",
+	path: "/volunteers",
+	getParentRoute: () => PoRoute
+});
+var AdminRouteChildren = { AdminSplatRoute };
+var AdminRouteWithChildren = AdminRoute._addFileChildren(AdminRouteChildren);
+var PoRouteChildren = {
+	PoAiRoute,
+	PoAlumniRoute,
+	PoAttendanceRoute,
+	PoBackupRoute,
+	PoBirthdaysRoute,
+	PoCertificatesRoute,
+	PoEventsRoute,
+	PoGalleryRoute,
+	PoImpactRoute,
+	PoLogsRoute,
+	PoNoticesRoute,
+	PoPressRoute,
+	PoReportsRoute,
+	PoSettingsRoute,
+	PoVolunteersRoute,
+	PoIndexRoute
+};
+var rootRouteChildren = {
+	IndexRoute,
+	AdminRoute: AdminRouteWithChildren,
+	AdminDashboardRoute,
+	ContactRoute,
+	GalleryRoute,
+	InstallRoute,
+	LoginRoute,
+	PoRoute: PoRoute._addFileChildren(PoRouteChildren),
+	RegisterRoute,
+	StudentDashboardRoute,
+	StudentRegisterRoute,
+	VerifyRoute,
+	VolunteerRoute,
+	ApiNssCloudRoute
+};
+var routeTree = Route$31._addFileChildren(rootRouteChildren)._addFileTypes();
+var router_exports = /* @__PURE__ */ __exportAll({ getRouter: () => getRouter });
+function getRouter() {
+	return createRouter({
+		routeTree,
+		defaultErrorComponent: AppErrorComponent
+	});
+}
+//#endregion
+export { dashboardPath as a, loginStaff as c, loginWithMpin as d, lookupUsernameByMobile as f, Button as g, useSessionStore as h, InstallNspButton as i, loginVolunteer as l, resetPasswordToMobile as m, Route$19 as n, findSessionVolunteer as o, registerFingerprint as p, Route$24 as r, isOfficer as s, router_exports as t, loginWithFingerprint as u };

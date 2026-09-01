@@ -1,0 +1,348 @@
+import { i as __toESM } from "../_runtime.mjs";
+import { n as require_react } from "../_libs/@radix-ui/react-compose-refs+[...].mjs";
+import { C as require_jsx_runtime, y as Link } from "../_libs/@tanstack/react-router+[...].mjs";
+import { B as useNssStore, m as blobToDataUrl, x as compressPassport } from "./utils-BIiJ-s-U.mjs";
+import { i as CardTitle, n as CardContent, r as CardHeader, t as Card } from "./card-2ADCK2Ma.mjs";
+import { t as Input } from "./input-CRT4sBU_.mjs";
+import { n as toast } from "../_libs/sonner.mjs";
+import { g as Button } from "./router-Cdyjb-lJ.mjs";
+import { t as AppShell } from "./shell-DsfHbM4s.mjs";
+import { t as Label } from "./label-Bl0lQyM7.mjs";
+//#region node_modules/.nitro/vite/services/ssr/assets/register-Dz5WpHqT.js
+var import_react = /* @__PURE__ */ __toESM(require_react());
+var import_jsx_runtime = require_jsx_runtime();
+function RegisterPage() {
+	const addVolunteer = useNssStore((s) => s.addVolunteer);
+	const addLog = useNssStore((s) => s.addLog);
+	const [done, setDone] = (0, import_react.useState)(null);
+	const [photoUrl, setPhotoUrl] = (0, import_react.useState)("");
+	const [form, setForm] = (0, import_react.useState)({
+		fullName: "",
+		mobile: "",
+		aadhaarNumber: "",
+		email: "",
+		course: "B.A.",
+		semester: "1",
+		unit: "Unit 1",
+		nssRole: "Volunteer",
+		fatherName: "",
+		dob: "",
+		gender: "",
+		bloodGroup: "",
+		address: "",
+		parentMobile: "",
+		abcId: "",
+		myBharatId: "",
+		emergencyContact: ""
+	});
+	function set(key, value) {
+		setForm((f) => ({
+			...f,
+			[key]: value
+		}));
+	}
+	async function onPhoto(file) {
+		if (!file) return;
+		try {
+			const { blob } = await compressPassport(file);
+			setPhotoUrl(await blobToDataUrl(blob));
+		} catch {
+			toast.error("Could not read that photograph. Try a JPG or PNG.");
+		}
+	}
+	function onSubmit(e) {
+		e.preventDefault();
+		if (!/^\d{10}$/.test(form.mobile.trim())) {
+			toast.error("Enter a 10-digit mobile number.");
+			return;
+		}
+		const v = addVolunteer({
+			...form,
+			photoUrl
+		});
+		addLog("Student registration", `Registered ${v.fullName} (${v.enrollment}).`);
+		setDone({
+			name: v.fullName,
+			id: v.volunteerId,
+			mobile: v.mobile,
+			enrollment: v.enrollment
+		});
+		toast.success("Registration saved.");
+	}
+	return /* @__PURE__ */ (0, import_jsx_runtime.jsx)(AppShell, {
+		eyebrow: "NSS STUDENT REGISTRATION",
+		children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+			className: "mx-auto max-w-3xl space-y-4 px-4 pb-16",
+			children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(Card, { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(CardHeader, { children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(CardTitle, { children: "Student registration form" }) }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)(CardContent, { children: done ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+				className: "space-y-3 text-center",
+				children: [
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+						className: "font-display text-2xl font-semibold text-forest",
+						children: "Registration successful"
+					}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
+						className: "text-muted-foreground",
+						children: [done.name, " is now on the NSS roll."]
+					}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+						className: "rounded-lg border border-border bg-muted/60 px-4 py-3 text-left text-sm",
+						children: [
+							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", { children: [
+								"Username (first name in CAPITAL):",
+								" ",
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: done.name.trim().split(/\s+/)[0]?.toUpperCase() })
+							] }),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", { children: ["Password: registered mobile ", /* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: done.mobile })] }),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", { children: [
+								"Volunteer ID: ",
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: done.id }),
+								" · Enrollment: ",
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: done.enrollment })
+							] })
+						]
+					}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+						className: "flex justify-center gap-2",
+						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, {
+							asChild: true,
+							children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Link, {
+								to: "/login",
+								children: "Go to student login"
+							})
+						}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, {
+							variant: "outline",
+							onClick: () => {
+								setDone(null);
+								setPhotoUrl("");
+							},
+							children: "Register another"
+						})]
+					})
+				]
+			}) : /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("form", {
+				className: "grid gap-4 sm:grid-cols-2",
+				onSubmit,
+				children: [
+					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+						className: "sm:col-span-2 flex flex-col items-center gap-2 rounded-lg border border-border bg-muted/40 p-4",
+						children: [
+							photoUrl ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("img", {
+								src: photoUrl,
+								alt: "Preview",
+								className: "h-28 w-24 rounded-md object-cover ring-2 ring-forest"
+							}) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+								className: "flex h-28 w-24 items-center justify-center rounded-md bg-navy text-xs text-paper",
+								children: "Photo"
+							}),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Label, { children: "Passport photograph (auto-compressed)" }),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
+								type: "file",
+								accept: "image/*",
+								className: "text-sm",
+								onChange: (e) => void onPhoto(e.target.files?.[0])
+							})
+						]
+					}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Field, {
+						label: "Full name",
+						className: "sm:col-span-2",
+						children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Input, {
+							required: true,
+							value: form.fullName,
+							onChange: (e) => set("fullName", e.target.value)
+						})
+					}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Field, {
+						label: "Mobile (this is the password)",
+						children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Input, {
+							required: true,
+							inputMode: "numeric",
+							value: form.mobile,
+							onChange: (e) => set("mobile", e.target.value)
+						})
+					}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Field, {
+						label: "Aadhaar number",
+						children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Input, {
+							inputMode: "numeric",
+							maxLength: 12,
+							value: form.aadhaarNumber,
+							onChange: (e) => set("aadhaarNumber", e.target.value.replace(/\D/g, "").slice(0, 12))
+						})
+					}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Field, {
+						label: "Email",
+						children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Input, {
+							type: "email",
+							required: true,
+							value: form.email,
+							onChange: (e) => set("email", e.target.value)
+						})
+					}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Field, {
+						label: "Course",
+						children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("select", {
+							className: "h-10 w-full rounded-md border border-border bg-card px-3 text-sm",
+							value: form.course,
+							onChange: (e) => set("course", e.target.value),
+							children: [
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", { children: "B.A." }),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", { children: "B.Com." }),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", { children: "B.Sc." })
+							]
+						})
+					}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Field, {
+						label: "Semester",
+						children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("select", {
+							className: "h-10 w-full rounded-md border border-border bg-card px-3 text-sm",
+							value: form.semester,
+							onChange: (e) => set("semester", e.target.value),
+							children: [
+								"1",
+								"2",
+								"3",
+								"4",
+								"5",
+								"6"
+							].map((s) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("option", {
+								value: s,
+								children: ["Semester ", s]
+							}, s))
+						})
+					}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Field, {
+						label: "NSS unit",
+						children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("select", {
+							className: "h-10 w-full rounded-md border border-border bg-card px-3 text-sm",
+							value: form.unit,
+							onChange: (e) => set("unit", e.target.value),
+							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", { children: "Unit 1" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", { children: "Unit 2" })]
+						})
+					}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Field, {
+						label: "Role",
+						children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("select", {
+							className: "h-10 w-full rounded-md border border-border bg-card px-3 text-sm",
+							value: form.nssRole,
+							onChange: (e) => set("nssRole", e.target.value),
+							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", { children: "Volunteer" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", { children: "Leader" })]
+						})
+					}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Field, {
+						label: "Date of birth",
+						children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Input, {
+							type: "date",
+							value: form.dob,
+							onChange: (e) => set("dob", e.target.value)
+						})
+					}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Field, {
+						label: "Gender",
+						children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("select", {
+							className: "h-10 w-full rounded-md border border-border bg-card px-3 text-sm",
+							value: form.gender,
+							onChange: (e) => set("gender", e.target.value),
+							children: [
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", {
+									value: "",
+									children: "Select"
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", { children: "Male" }),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", { children: "Female" }),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", { children: "Other" })
+							]
+						})
+					}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Field, {
+						label: "Father / guardian",
+						children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Input, {
+							value: form.fatherName,
+							onChange: (e) => set("fatherName", e.target.value)
+						})
+					}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Field, {
+						label: "Blood group",
+						children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("select", {
+							className: "h-10 w-full rounded-md border border-border bg-card px-3 text-sm",
+							value: form.bloodGroup,
+							onChange: (e) => set("bloodGroup", e.target.value),
+							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", {
+								value: "",
+								children: "Select"
+							}), [
+								"A+",
+								"A-",
+								"B+",
+								"B-",
+								"AB+",
+								"AB-",
+								"O+",
+								"O-"
+							].map((g) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", { children: g }, g))]
+						})
+					}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Field, {
+						label: "ABC ID",
+						children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Input, {
+							value: form.abcId,
+							onChange: (e) => set("abcId", e.target.value)
+						})
+					}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Field, {
+						label: "MY Bharat ID",
+						children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Input, {
+							value: form.myBharatId,
+							onChange: (e) => set("myBharatId", e.target.value)
+						})
+					}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Field, {
+						label: "Parent mobile",
+						children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Input, {
+							value: form.parentMobile,
+							onChange: (e) => set("parentMobile", e.target.value)
+						})
+					}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Field, {
+						label: "Emergency contact",
+						children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Input, {
+							value: form.emergencyContact,
+							onChange: (e) => set("emergencyContact", e.target.value)
+						})
+					}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Field, {
+						label: "Address",
+						className: "sm:col-span-2",
+						children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Input, {
+							value: form.address,
+							onChange: (e) => set("address", e.target.value)
+						})
+					}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+						className: "sm:col-span-2 flex gap-2",
+						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, {
+							type: "submit",
+							children: "Submit registration"
+						}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, {
+							type: "button",
+							variant: "outline",
+							asChild: true,
+							children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Link, {
+								to: "/",
+								children: "Cancel"
+							})
+						})]
+					})
+				]
+			}) })] })
+		})
+	});
+}
+function Field({ label, children, className }) {
+	return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+		className: `space-y-1.5 ${className ?? ""}`,
+		children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Label, { children: label }), children]
+	});
+}
+//#endregion
+export { RegisterPage as component };

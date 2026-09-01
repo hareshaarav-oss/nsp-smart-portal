@@ -1,0 +1,1 @@
+import{t as e}from"./jsx-runtime-B-hcVAMW.js";import{t}from"./utils-Bqh-9L_H.js";var n=e();function r({className:e,...r}){return(0,n.jsx)(`textarea`,{className:t(`flex min-h-24 w-full rounded-md border border-border bg-card px-3 py-2 text-sm text-foreground outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring`,e),...r})}export{r as t};

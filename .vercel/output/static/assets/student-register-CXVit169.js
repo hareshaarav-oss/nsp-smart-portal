@@ -1,0 +1,1 @@
+import{t as e}from"./jsx-runtime-B-hcVAMW.js";import{t}from"./useNavigate-Co_V3MLd.js";var n=e(),r=()=>(0,n.jsx)(t,{to:`/register`});export{r as component};
