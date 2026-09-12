@@ -5,7 +5,7 @@ import { Award, Printer, Send } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { htmlForCertificate, htmlForCertificates, openCertificateDocument } from "@/lib/nss/certificates";
+import { htmlForCertificate, htmlForCertificates, openPreparedCertificate } from "@/lib/nss/certificates";
 import { formatLongDate } from "@/lib/nss/format";
 import { certificateOf, presentVolunteers, useNssStore } from "@/lib/nss/store";
 
@@ -83,7 +83,8 @@ function CertificatesPage() {
       toast.error("Generate certificates before printing.");
       return;
     }
-    openCertificateDocument(await htmlForCertificates(rows, state.settings));
+    const opened = await openPreparedCertificate(() => htmlForCertificates(rows, state.settings));
+    if (!opened) toast.message("Popup was blocked. The certificate file was downloaded instead.");
   }
 
   return (
@@ -199,8 +200,8 @@ function CertificatesPage() {
                           size="sm"
                           variant="ghost"
                           onClick={() =>
-                            void htmlForCertificate(cert, v, event, state.settings).then(
-                              openCertificateDocument,
+                            void openPreparedCertificate(() =>
+                              htmlForCertificate(cert, v, event, state.settings),
                             )
                           }
                         >

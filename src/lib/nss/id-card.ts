@@ -1,6 +1,6 @@
 import { academicYear } from "./format";
 import { idCardName } from "./format";
-import { logoDataUrls, openHtmlDocument } from "./print";
+import { logoDataUrls, openHtmlDocumentWhenReady } from "./print";
 import { qrSvg } from "./qr";
 import type { PortalSettings, Volunteer } from "./types";
 
@@ -139,6 +139,5 @@ export async function htmlForIdCard(volunteer: Volunteer, settings: PortalSettin
 }
 
 export async function openIdCard(volunteer: Volunteer, settings: PortalSettings) {
-  const html = await htmlForIdCard(volunteer, settings);
-  openHtmlDocument(html);
+  return openHtmlDocumentWhenReady(() => htmlForIdCard(volunteer, settings));
 }

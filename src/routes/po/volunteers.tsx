@@ -13,7 +13,7 @@ import { openIdCard } from "@/lib/nss/id-card";
 import { blobToDataUrl, compressPassport } from "@/lib/nss/media";
 import { downloadVolunteerExcel } from "@/lib/nss/reports";
 import { qrSvg } from "@/lib/nss/qr";
-import { htmlForCertificate, openCertificateDocument } from "@/lib/nss/certificates";
+import { htmlForCertificate, openPreparedCertificate } from "@/lib/nss/certificates";
 import {
   activeVolunteers,
   attendanceOf,
@@ -426,7 +426,9 @@ function SmartRecord({ volunteerId, onClose }: { volunteerId: string; onClose: (
                             type="button"
                             className="text-forest underline"
                             onClick={() =>
-                              void htmlForCertificate(cert, v, e, state.settings).then(openCertificateDocument)
+                              void openPreparedCertificate(() =>
+                                htmlForCertificate(cert, v, e, state.settings),
+                              )
                             }
                           >
                             View

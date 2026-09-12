@@ -1,5 +1,5 @@
 import { academicYear, formatLongDate, todayIso } from "./format";
-import { logoDataUrls, openHtmlDocument } from "./print";
+import { logoDataUrls, openHtmlDocumentWhenReady } from "./print";
 import { eventPhotoDataUrls } from "./reports";
 import { presentVolunteers } from "./store";
 import type { NssEvent, PortalSettings, PortalState, Volunteer } from "./types";
@@ -81,6 +81,7 @@ export async function openGujaratiPress(opts: {
   body: string;
   photos?: string[];
 }) {
+  return openHtmlDocumentWhenReady(async () => {
   const logos = await logoDataUrls();
   const photos = (opts.photos ?? (await eventPhotoDataUrls(opts.state, opts.event.id))).slice(0, 12);
   const present = presentVolunteers(opts.state, opts.event.id);
@@ -111,7 +112,8 @@ ${remainingPhotos ? `<div class="more-photos">${remainingPhotos}</div>` : ""}
 <div class="annexure"><h3>કાર્યક્રમમાં ભાગ લેનાર NSS સ્વયંસેવકો · કુલ ${present.length}</h3>${list ? `<ol>${list}</ol>` : `<p>હાજરી નોંધાઈ નથી.</p>`}</div>
 <footer>— NSS એકમ, એસ.ડી. આર્ટ્સ એન્ડ શાહ બી.આર. કોમર્સ કોલેજ, માણસા —</footer>
 </article><p class="no-print"><button class="print" onclick="window.print()">Print / Save PDF</button></p></div></body></html>`;
-  openHtmlDocument(html);
+  return html;
+  });
 }
 
 export async function openNaacReport(opts: {
@@ -120,6 +122,7 @@ export async function openNaacReport(opts: {
   body: string;
   photos?: string[];
 }) {
+  return openHtmlDocumentWhenReady(async () => {
   const logos = await logoDataUrls();
   const photos = opts.photos ?? (await eventPhotoDataUrls(opts.state, opts.event.id));
   const present = presentVolunteers(opts.state, opts.event.id);
@@ -189,5 +192,6 @@ export async function openNaacReport(opts: {
   </div>
 </body>
 </html>`;
-  openHtmlDocument(html);
+  return html;
+  });
 }

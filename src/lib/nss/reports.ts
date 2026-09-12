@@ -2,7 +2,7 @@ import * as XLSX from "xlsx";
 import { SLOGAN_EN, SLOGAN_GU } from "./constants";
 import { academicYear, byFullName, formatLongDate, formatShortDate, parseDob, todayIso } from "./format";
 import { blobToDataUrl, getMedia } from "./media";
-import { logoDataUrls, openHtmlDocument } from "./print";
+import { logoDataUrls, openHtmlDocumentWhenReady } from "./print";
 import {
   activeVolunteers,
   alumniVolunteers,
@@ -378,6 +378,7 @@ export async function printOfficialReport(opts: {
   intro?: string[];
   photos?: string[];
 }) {
+  return openHtmlDocumentWhenReady(async () => {
   const logos = await logoDataUrls();
   const size = opts.landscape ? "A4 landscape" : "A4 portrait";
   const introHtml = (opts.intro ?? [])
@@ -459,7 +460,8 @@ export async function printOfficialReport(opts: {
   </div>
 </body>
 </html>`;
-  openHtmlDocument(html);
+  return html;
+  });
 }
 
 export async function printAttendanceReport(state: PortalState, scope: AttendanceScope = { mode: "all" }) {

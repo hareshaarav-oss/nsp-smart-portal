@@ -7,14 +7,9 @@ import {
   STORAGE_SESSION,
 } from "./constants";
 import { createSeedState } from "./seed";
-import {
-  academicYear,
-  byFullName,
-  padId,
-  parseDob,
-  titleFirstName,
-} from "./format";
+import { academicYear, byFullName, padId, parseDob, titleFirstName } from "./format";
 import { deleteMedia } from "./media";
+import { certificateSerial } from "./certificates";
 import type {
   AttendanceRecord,
   GalleryItem,
@@ -724,6 +719,14 @@ export const useNssStore =
                     return {
                       ...row,
 
+                      volunteerId:
+                        prev?.volunteerId ||
+                        row.volunteerId,
+
+                      enrollment:
+                        prev?.enrollment ||
+                        row.enrollment,
+
                       fullName:
                         titleFirstName(
                           row.fullName ||
@@ -861,6 +864,31 @@ export const useNssStore =
               dedupeEvents([
                 ...cloud.events,
                 ...localExtra,
+              ]);
+          }
+
+          if (
+            Array.isArray(
+              cloud.attendance,
+            ) &&
+            cloud.attendance.length
+          ) {
+            const seedishNow =
+              looksLikeSeed(
+                current.volunteers,
+              );
+
+            const localAttendance =
+              next.attendance ??
+              (seedishNow
+                ? []
+                : current.attendance ??
+                  []);
+
+            next.attendance =
+              dedupeAttendance([
+                ...cloud.attendance,
+                ...localAttendance,
               ]);
           }
 
@@ -2219,19 +2247,43 @@ export const useNssStore =
                   !have.has(id),
               )
               .map(
-                (volunteerId) => ({
-                  id:
-                    `crt-${eventId}-${volunteerId}`,
+                (volunteerId) => {
+                  const volunteer =
+                    get().volunteers.find(
+                      (v) =>
+                        v.id ===
+                        volunteerId,
+                    );
 
-                  volunteerId,
+                  const event =
+                    get().events.find(
+                      (e) =>
+                        e.id ===
+                        eventId,
+                    );
 
-                  eventId,
+                  return {
+                    id: `crt-${eventId}-${volunteerId}`,
 
-                  generatedAt:
-                    now,
+                    volunteerId,
 
-                  sentAt: null,
-                }),
+                    eventId,
+
+                    generatedAt: now,
+
+                    sentAt: null,
+
+                    certificateId:
+                      volunteer && event
+                        ? certificateSerial(
+                            volunteer,
+                            event,
+                          )
+                        : undefined,
+
+                    printReady: true,
+                  };
+                },
               );
 
           if (added.length) {

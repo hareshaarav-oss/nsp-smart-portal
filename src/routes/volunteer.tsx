@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { htmlForCertificate, openCertificateDocument } from "@/lib/nss/certificates";
+import { htmlForCertificate, openPreparedCertificate } from "@/lib/nss/certificates";
 import { daysUntilBirthday, formatLongDate, idCardName, isBirthdayOn, parseDob, todayIso } from "@/lib/nss/format";
 import { openIdCard } from "@/lib/nss/id-card";
 import { blobToDataUrl, compressPassport } from "@/lib/nss/media";
@@ -359,7 +359,7 @@ function VolunteerDash() {
                     size="sm"
                     variant="outline"
                     onClick={() =>
-                      void htmlForCertificate(cert, me, event, settings).then(openCertificateDocument)
+                      void openPreparedCertificate(() => htmlForCertificate(cert, me, event, settings))
                     }
                   >
                     View / Print
