@@ -100,19 +100,19 @@ const CERT_CSS = `
 @page { size: A4 landscape; margin: 0; }
 * { box-sizing: border-box; }
 html, body { margin: 0; padding: 0; background: #e8eef6; }
-body { font-family: "Cormorant Garamond", Georgia, serif; color: #171717; }
-.wrap { width: 100%; padding: 16px 12px 28px; overflow-x: auto; }
+body { font-family: "Cormorant Garamond", Georgia, serif; color: #171717; -webkit-text-size-adjust: 100%; }
+.wrap { width: 100%; padding: 10px 8px 24px; }
 #print-root { width: 100%; }
 .sheet {
   position: relative;
-  width: 297mm;
+  width: min(100%, 297mm);
   max-width: 297mm;
   aspect-ratio: 3 / 2;
   margin: 0 auto 18px;
   overflow: hidden;
   page-break-after: always;
   background: #fff;
-  container-type: size;
+  container-type: inline-size;
 }
 .sheet:last-of-type { page-break-after: auto; margin-bottom: 0; }
 .sheet img.bg {
@@ -121,28 +121,29 @@ body { font-family: "Cormorant Garamond", Georgia, serif; color: #171717; }
 }
 .text-layer { position: absolute; inset: 0; z-index: 3; pointer-events: none; }
 .name {
-  position: absolute; left: 9%; top: 35.8%; width: 82%; height: 7.8%;
+  position: absolute; left: 8%; top: 35.3%; width: 84%; height: 8.4%;
   margin: 0; display: flex; align-items: center; justify-content: center;
   text-align: center;
   font-family: "Dancing Script", cursive;
   font-style: normal; font-weight: 700; color: #b11619;
-  line-height: 1.05; letter-spacing: 0.02em;
+  font-size: 52px; font-size: var(--name-size, 5.35cqw);
+  line-height: 1.02; letter-spacing: 0.01em;
   white-space: nowrap;
   overflow: visible;
   font-variant: normal; text-transform: none; font-synthesis: none;
 }
 .copy {
-  position: absolute; left: 13%; top: 47.8%; width: 74%; height: 16.2%;
+  position: absolute; left: 11%; top: 46.6%; width: 78%; height: 18.8%;
   margin: 0; text-align: center; font-style: italic;
-  font-size: 15px;
-  line-height: 1.48; color: #1a1a1a; font-weight: 500;
+  font-size: 20px; font-size: 1.95cqw;
+  line-height: 1.38; color: #1a1a1a; font-weight: 500;
   overflow: visible;
 }
-.copy strong { font-style: italic; font-weight: 800; color: #0c572f; }
+.copy strong { font-style: italic; font-weight: 700; color: #1a1a1a; }
 .cert-id, .date {
-  position: absolute; top: 86.55%;
+  position: absolute; top: 86.35%;
   font-family: "Noto Sans", sans-serif;
-  font-size: 13px; font-weight: 600; color: #1a1a1a;
+  font-size: 13px; font-size: 1.18cqw; font-weight: 600; color: #1a1a1a;
   line-height: 1.2; letter-spacing: 0.02em;
   white-space: nowrap;
 }
@@ -163,19 +164,24 @@ body { font-family: "Cormorant Garamond", Georgia, serif; color: #171717; }
 @media print {
   html, body { background: #fff !important; }
   .wrap { padding: 0; overflow: visible; }
-  .sheet { box-shadow: none !important; margin: 0 auto; }
+  .sheet {
+    width: 297mm !important;
+    max-width: 297mm !important;
+    box-shadow: none !important;
+    margin: 0 auto;
+  }
   .no-print { display: none !important; }
 }
 `;
 
 function nameFontSize(name: string) {
   const n = name.length;
-  if (n > 42) return "26px";
-  if (n > 36) return "32px";
-  if (n > 28) return "38px";
-  if (n > 22) return "44px";
-  if (n > 16) return "50px";
-  return "54px";
+  if (n > 42) return "2.7cqw";
+  if (n > 36) return "3.3cqw";
+  if (n > 28) return "4.0cqw";
+  if (n > 22) return "4.6cqw";
+  if (n > 16) return "5.0cqw";
+  return "5.35cqw";
 }
 
 function verifyHref(serial: string) {
@@ -207,7 +213,7 @@ function certificateSheet(opts: {
   return `<div class="sheet">
     <img class="bg" src="${opts.assets.template}" alt="" />
     <div class="text-layer">
-      <p class="name" style="font-size:${nameFontSize(name)}">${name}</p>
+      <p class="name" style="--name-size:${nameFontSize(name)}">${name}</p>
       <p class="copy">
         for actively participating with exemplary dedication in the <strong>${eventName}</strong>
         organised by the National Service Scheme Unit of <strong>${college.toUpperCase()}</strong>
@@ -226,7 +232,7 @@ function wrapCertificateDocument(title: string, sheets: string) {
 <html>
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=1200, user-scalable=yes" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5, user-scalable=yes" />
   <title>${escapeHtml(title)}</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -247,7 +253,7 @@ function wrapCertificateDocument(title: string, sheets: string) {
 
 async function loadSheetAssets(settings: PortalSettings): Promise<SheetAssets> {
   void settings;
-  const bundled = "/images/certificate-template.jpg?v=20260912e";
+  const bundled = "/images/certificate-template.jpg?v=20260912f";
   const template = await toDataUrl(bundled);
   return { template: template || bundled };
 }
