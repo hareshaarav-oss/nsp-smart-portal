@@ -40,11 +40,11 @@ body { font-family: "Cormorant Garamond", Georgia, serif; color: #171717; }
   position: absolute; inset: 0; width: 100%; height: 100%;
   object-fit: fill; z-index: 0; display: block;
 }
-.mask { position: absolute; background: rgba(255,255,255,.988); border-radius: 3px; z-index: 2; }
-.mask-name { left: 18%; top: 34.5%; width: 64%; height: 12.2%; }
-.mask-copy { left: 14%; top: 46.0%; width: 72%; height: 21.5%; }
-.mask-id { left: 21%; bottom: 8.1%; width: 24%; height: 5.2%; }
-.mask-date { right: 21%; bottom: 8.1%; width: 24%; height: 5.2%; }
+.mask { position: absolute; background: #fcfaf1; z-index: 2; }
+.mask-name { left: 18%; top: 34.5%; width: 64%; height: 12.2%; border-radius: 3px; }
+.mask-copy { left: 14%; top: 46.0%; width: 72%; height: 21.5%; border-radius: 3px; }
+.mask-id { left: 14.5%; top: 84.0%; width: 29.5%; height: 5.6%; }
+.mask-date { left: 56.0%; top: 84.0%; width: 29.5%; height: 5.6%; }
 .text-layer { position: absolute; inset: 0; z-index: 3; }
 .name {
   position: absolute; left: 10%; top: 35.2%; width: 80%;
@@ -76,12 +76,16 @@ body { font-family: "Cormorant Garamond", Georgia, serif; color: #171717; }
   background: transparent;
 }
 .cert-id {
-  position: absolute; left: 22%; bottom: 9.4%; width: 22%;
-  text-align: center; font-family: "Noto Sans", sans-serif; font-size: clamp(8px, .88vw, 13px); color: #111;
+  position: absolute; left: 14.5%; top: 84.7%; width: 29.5%;
+  text-align: center; font-family: "Noto Sans", sans-serif;
+  font-size: clamp(9px, 1.02vw, 15px); font-weight: 600; color: #1a1a1a;
+  line-height: 1.2; letter-spacing: 0.01em;
 }
 .date {
-  position: absolute; right: 22%; bottom: 9.4%; width: 22%;
-  text-align: center; font-family: "Noto Sans", sans-serif; font-size: clamp(8px, .88vw, 13px); color: #111;
+  position: absolute; left: 56.0%; top: 84.7%; width: 29.5%;
+  text-align: center; font-family: "Noto Sans", sans-serif;
+  font-size: clamp(9px, 1.02vw, 15px); font-weight: 600; color: #1a1a1a;
+  line-height: 1.2; letter-spacing: 0.01em;
 }
 .qr {
   position: absolute; left: 50%; bottom: 7.6%; transform: translateX(-50%);
