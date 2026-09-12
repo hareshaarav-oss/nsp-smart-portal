@@ -112,16 +112,18 @@ body { font-family: "Cormorant Garamond", Georgia, serif; color: #171717; }
   overflow: hidden;
   page-break-after: always;
   background: #fff;
+  container-type: size;
 }
 .sheet:last-of-type { page-break-after: auto; margin-bottom: 0; }
 .sheet img.bg {
   position: absolute; inset: 0; width: 100%; height: 100%;
   object-fit: fill; z-index: 0; display: block;
 }
-.name-plate {
-  position: absolute; left: 13%; top: 33.8%; width: 74%; height: 11.2%;
-  background: #fefdf8; z-index: 2;
-}
+.plate { position: absolute; background: #fcfcf8; z-index: 2; }
+.name-plate { left: 12%; top: 33.6%; width: 76%; height: 11.6%; }
+.copy-plate { left: 11%; top: 45.4%; width: 78%; height: 21.4%; }
+.id-plate { left: 8%; top: 84.8%; width: 36%; height: 5.2%; }
+.date-plate { left: 56%; top: 84.8%; width: 36%; height: 5.2%; }
 .text-layer { position: absolute; inset: 0; z-index: 3; }
 .name {
   position: absolute; left: 10%; top: 35.2%; width: 80%;
@@ -133,9 +135,10 @@ body { font-family: "Cormorant Garamond", Georgia, serif; color: #171717; }
   font-variant: normal; text-transform: none; font-synthesis: none;
 }
 .copy {
-  position: absolute; left: 15%; top: 46.8%; width: 70%;
-  margin: 0; text-align: center; font-style: italic; font-size: clamp(12px, 1.55vw, 23px);
-  line-height: 1.48; color: #111; font-weight: 500;
+  position: absolute; left: 14%; top: 47.0%; width: 72%;
+  margin: 0; text-align: center; font-style: italic;
+  font-size: 12px; font-size: 1.95cqw;
+  line-height: 1.42; color: #111; font-weight: 500;
 }
 .copy strong { font-style: italic; font-weight: 800; color: #0c572f; }
 .po-sign, .principal-sign {
@@ -150,15 +153,15 @@ body { font-family: "Cormorant Garamond", Georgia, serif; color: #171717; }
   background: transparent;
 }
 .cert-id {
-  position: absolute; left: 10%; top: 85.65%; width: 35%;
+  position: absolute; left: 8%; top: 86.15%; width: 36%;
   text-align: center; font-family: "Noto Sans", sans-serif;
-  font-size: clamp(11px, 1.15vw, 17px); font-weight: 600; color: #1a1a1a;
+  font-size: 11px; font-size: 1.42cqw; font-weight: 600; color: #1a1a1a;
   line-height: 1.2; letter-spacing: 0.02em;
 }
 .date {
-  position: absolute; left: 55%; top: 85.65%; width: 35%;
+  position: absolute; left: 56%; top: 86.15%; width: 36%;
   text-align: center; font-family: "Noto Sans", sans-serif;
-  font-size: clamp(11px, 1.15vw, 17px); font-weight: 600; color: #1a1a1a;
+  font-size: 11px; font-size: 1.42cqw; font-weight: 600; color: #1a1a1a;
   line-height: 1.2; letter-spacing: 0.01em;
 }
 .qr {
@@ -183,10 +186,10 @@ body { font-family: "Cormorant Garamond", Georgia, serif; color: #171717; }
 
 function nameFontSize(name: string) {
   const n = name.length;
-  if (n > 36) return "clamp(28px, 3.4vw, 52px)";
-  if (n > 28) return "clamp(34px, 4.2vw, 62px)";
-  if (n > 22) return "clamp(40px, 4.8vw, 70px)";
-  return "clamp(44px, 5.4vw, 78px)";
+  if (n > 36) return "4.2cqw";
+  if (n > 28) return "5.0cqw";
+  if (n > 22) return "5.6cqw";
+  return "6.2cqw";
 }
 
 function verifyHref(serial: string) {
@@ -225,7 +228,10 @@ function certificateSheet(opts: {
 
   return `<div class="sheet">
     <img class="bg" src="${opts.assets.template}" alt="" />
-    <div class="name-plate"></div>
+    <div class="plate name-plate"></div>
+    <div class="plate copy-plate"></div>
+    <div class="plate id-plate"></div>
+    <div class="plate date-plate"></div>
     <div class="text-layer">
       <p class="name" style="font-size:${nameFontSize(name)}">${name}</p>
       <p class="copy">
@@ -267,11 +273,9 @@ function wrapCertificateDocument(title: string, sheets: string) {
 }
 
 async function loadSheetAssets(settings: PortalSettings): Promise<SheetAssets> {
-  const bundled = "/images/certificate-template.jpg?v=20260912c";
-  const custom = String(settings.certificateTemplateUrl || "").trim();
-  const templateSrc = custom && !custom.includes("certificate-template.jpg") ? custom : bundled;
+  const bundled = "/images/certificate-template.jpg?v=20260912d";
   const [template, poSignature, principalSignature] = await Promise.all([
-    toDataUrl(templateSrc),
+    toDataUrl(bundled),
     toDataUrl(settings.poSignature),
     toDataUrl(settings.principalSignature),
   ]);
