@@ -1,4 +1,4 @@
-import { academicYear, certDisplayName, formatLongDate } from "./format";
+import { academicYear, certDisplayName, formatLongDate, parseDob } from "./format";
 import { openHtmlDocument, openHtmlDocumentWhenReady, toDataUrl } from "./print";
 import { qrSvg } from "./qr";
 import type { AttendanceRecord, IssuedCertificate, NssEvent, PortalSettings, Volunteer } from "./types";
@@ -12,10 +12,24 @@ function escapeHtml(s: string) {
     .replaceAll("'", "&#39;");
 }
 
+function eventCodeOf(event: NssEvent) {
+  return event.id.replace(/^evt-/, "").slice(0, 8).toUpperCase();
+}
+
 export function certificateSerial(volunteer: Volunteer, event: NssEvent) {
-  const year = academicYear(event.date).replace("-", "");
-  const eventCode = event.id.replace(/^evt-/, "").slice(0, 8).toUpperCase();
-  return `NSS/${year}/${volunteer.volunteerId}/${eventCode}`;
+  const eventCode = eventCodeOf(event);
+  return `NSS/${academicYear(event.date)}/${volunteer.volunteerId}/${eventCode}`;
+}
+
+export function certificateSerials(volunteer: Volunteer, event: NssEvent) {
+  const year = academicYear(event.date);
+  const eventCode = eventCodeOf(event);
+  const id = volunteer.volunteerId;
+  return [`NSS/${year}/${id}/${eventCode}`, `NSS/${year.replace("-", "")}/${id}/${eventCode}`];
+}
+
+function certDateIso(event: NssEvent, fallback?: string) {
+  return parseDob(event.date) || parseDob(fallback || "") || String(event.date || fallback || "").slice(0, 10);
 }
 
 const CERT_CSS = `
@@ -40,11 +54,6 @@ body { font-family: "Cormorant Garamond", Georgia, serif; color: #171717; }
   position: absolute; inset: 0; width: 100%; height: 100%;
   object-fit: fill; z-index: 0; display: block;
 }
-.mask { position: absolute; background: #fcfaf1; z-index: 2; }
-.mask-name { left: 18%; top: 34.5%; width: 64%; height: 12.2%; border-radius: 3px; }
-.mask-copy { left: 14%; top: 46.0%; width: 72%; height: 21.5%; border-radius: 3px; }
-.mask-id { left: 14.5%; top: 84.0%; width: 29.5%; height: 5.6%; }
-.mask-date { left: 56.0%; top: 84.0%; width: 29.5%; height: 5.6%; }
 .text-layer { position: absolute; inset: 0; z-index: 3; }
 .name {
   position: absolute; left: 10%; top: 35.2%; width: 80%;
@@ -55,11 +64,8 @@ body { font-family: "Cormorant Garamond", Georgia, serif; color: #171717; }
   white-space: nowrap; overflow: hidden;
   font-variant: normal; text-transform: none; font-synthesis: none;
 }
-.name-line {
-  position: absolute; left: 20.6%; top: 45.1%; width: 58.8%; height: 1px; background: #b58a2d;
-}
 .copy {
-  position: absolute; left: 15%; top: 46.6%; width: 70%;
+  position: absolute; left: 15%; top: 46.8%; width: 70%;
   margin: 0; text-align: center; font-style: italic; font-size: clamp(12px, 1.55vw, 23px);
   line-height: 1.48; color: #111; font-weight: 500;
 }
@@ -76,15 +82,15 @@ body { font-family: "Cormorant Garamond", Georgia, serif; color: #171717; }
   background: transparent;
 }
 .cert-id {
-  position: absolute; left: 14.5%; top: 84.7%; width: 29.5%;
+  position: absolute; left: 10%; top: 85.65%; width: 35%;
   text-align: center; font-family: "Noto Sans", sans-serif;
-  font-size: clamp(9px, 1.02vw, 15px); font-weight: 600; color: #1a1a1a;
+  font-size: clamp(10px, 1.08vw, 16px); font-weight: 600; color: #1a1a1a;
   line-height: 1.2; letter-spacing: 0.01em;
 }
 .date {
-  position: absolute; left: 56.0%; top: 84.7%; width: 29.5%;
+  position: absolute; left: 55%; top: 85.65%; width: 35%;
   text-align: center; font-family: "Noto Sans", sans-serif;
-  font-size: clamp(9px, 1.02vw, 15px); font-weight: 600; color: #1a1a1a;
+  font-size: clamp(10px, 1.08vw, 16px); font-weight: 600; color: #1a1a1a;
   line-height: 1.2; letter-spacing: 0.01em;
 }
 .qr {
@@ -138,7 +144,7 @@ function certificateSheet(opts: {
   const name = escapeHtml(certDisplayName(opts.volunteer.fullName));
   const eventName = escapeHtml(opts.event.name.toUpperCase());
   const serial = escapeHtml(certificateSerial(opts.volunteer, opts.event));
-  const issued = escapeHtml(formatLongDate(opts.issuedOn.slice(0, 10)));
+  const issued = escapeHtml(formatLongDate(opts.issuedOn));
   const year = escapeHtml(academicYear(opts.event.date));
   // Keep the approved template's PO / Principal block (Haresh + T.J. Vyas).
   // Only a transparent uploaded signature image may sit on the script — never a white box.
@@ -152,13 +158,8 @@ function certificateSheet(opts: {
 
   return `<div class="sheet">
     <img class="bg" src="${opts.assets.template}" alt="" />
-    <div class="mask mask-name"></div>
-    <div class="mask mask-copy"></div>
-    <div class="mask mask-id"></div>
-    <div class="mask mask-date"></div>
     <div class="text-layer">
       <p class="name" style="font-size:${nameFontSize(name)}">${name}</p>
-      <span class="name-line"></span>
       <p class="copy">
         for actively participating with exemplary dedication in the <strong>${eventName}</strong> organised by the<br/>
         National Service Scheme Unit of <strong>${college.toUpperCase()}</strong><br/>
@@ -198,14 +199,16 @@ function wrapCertificateDocument(title: string, sheets: string) {
 }
 
 async function loadSheetAssets(settings: PortalSettings): Promise<SheetAssets> {
-  const templateSrc = settings.certificateTemplateUrl || "/images/certificate-template.jpg";
+  const bundled = "/images/certificate-template.jpg?v=20260912b";
+  const custom = String(settings.certificateTemplateUrl || "").trim();
+  const templateSrc = custom && !custom.includes("certificate-template.jpg") ? custom : bundled;
   const [template, poSignature, principalSignature] = await Promise.all([
     toDataUrl(templateSrc),
     toDataUrl(settings.poSignature),
     toDataUrl(settings.principalSignature),
   ]);
   return {
-    template: template || "/images/certificate-template.jpg",
+    template: template || bundled,
     poSignature,
     principalSignature,
   };
@@ -251,7 +254,7 @@ export async function htmlForCertificate(
       volunteer,
       event,
       settings,
-      issuedOn: event.date || cert.sentAt || cert.generatedAt,
+      issuedOn: certDateIso(event, cert.sentAt || cert.generatedAt),
       assets,
       qr,
     }),
@@ -270,7 +273,7 @@ export async function htmlForCertificates(
           volunteer: row.volunteer,
           event: row.event,
           settings,
-          issuedOn: row.event.date || row.cert.sentAt || row.cert.generatedAt,
+          issuedOn: certDateIso(row.event, row.cert.sentAt || row.cert.generatedAt),
           assets,
           qr: await qrFor(row.volunteer, row.event, settings),
         }),
@@ -295,6 +298,11 @@ export type CertificateLookup = {
   cert?: IssuedCertificate;
 };
 
+function serialMatches(volunteer: Volunteer, event: NssEvent, query: string) {
+  const q = query.trim().toLowerCase();
+  return certificateSerials(volunteer, event).some((serial) => serial.toLowerCase() === q);
+}
+
 export function resolveCertificate(
   state: {
     volunteers: Volunteer[];
@@ -317,21 +325,20 @@ export function resolveCertificate(
     const event = events.find((e) => e.id === cert.eventId);
     if (!volunteer || !event) continue;
     const serial = cert.certificateId || certificateSerial(volunteer, event);
-    if (cert.id.toLowerCase() === q || serial.toLowerCase() === q) {
-      return { volunteer, event, serial, cert };
+    if (cert.id.toLowerCase() === q || serial.toLowerCase() === q || serialMatches(volunteer, event, q)) {
+      return { volunteer, event, serial: certificateSerial(volunteer, event), cert };
     }
   }
 
   for (const volunteer of volunteers) {
     for (const event of events) {
-      const serial = certificateSerial(volunteer, event);
-      if (serial.toLowerCase() !== q) continue;
+      if (!serialMatches(volunteer, event, q)) continue;
       const issued = certificates.find((c) => c.volunteerId === volunteer.id && c.eventId === event.id);
       const present = attendance.some(
         (row) => row.volunteerId === volunteer.id && row.eventId === event.id && row.present,
       );
       if (!issued && !present) continue;
-      return { volunteer, event, serial, cert: issued };
+      return { volunteer, event, serial: certificateSerial(volunteer, event), cert: issued };
     }
   }
 
