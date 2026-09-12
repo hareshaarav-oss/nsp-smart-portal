@@ -54,7 +54,7 @@ function VerifyPage() {
                 className="h-11 flex-1 rounded-md border border-border bg-card px-3 text-sm"
                 value={id}
                 onChange={(e) => setId(e.target.value)}
-                placeholder="NSS/2026-27/NSS001/..."
+                placeholder="NSS/2026/001"
                 aria-label="Certificate ID"
               />
               <Button type="submit">

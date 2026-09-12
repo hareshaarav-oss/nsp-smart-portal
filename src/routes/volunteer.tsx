@@ -352,7 +352,7 @@ function VolunteerDash() {
                   <div>
                     <p className="font-medium">{event.name}</p>
                     <p className="text-xs text-muted-foreground">
-                      {formatLongDate(event.date)} · {event.hours} hrs · {event.location}
+                      {formatLongDate(event.date)} · {cert.certificateId || "Certificate"} · {event.hours} hrs · {event.location}
                     </p>
                   </div>
                   <Button

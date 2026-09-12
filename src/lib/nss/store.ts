@@ -9,7 +9,7 @@ import {
 import { createSeedState } from "./seed";
 import { academicYear, byFullName, padId, parseDob, titleFirstName } from "./format";
 import { deleteMedia } from "./media";
-import { certificateSerial } from "./certificates";
+import { assignSequentialIds, certificateYear, formatCertificateSerial, nextCertificateSeq } from "./certificates";
 import type {
   AttendanceRecord,
   GalleryItem,
@@ -572,6 +572,25 @@ function mergePortalState(
       ),
     );
 
+  const events = dedupeEvents(
+    asArray<NssEvent>(
+      p.events,
+      current.events,
+    ),
+  );
+
+  const certificates = seed
+    ? []
+    : assignSequentialIds(
+        dedupeCertificates(
+          asArray<IssuedCertificate>(
+            p.certificates,
+            [],
+          ),
+        ),
+        events,
+      );
+
   return {
     ...current,
 
@@ -587,12 +606,7 @@ function mergePortalState(
           })),
         ),
 
-    events: dedupeEvents(
-      asArray<NssEvent>(
-        p.events,
-        current.events,
-      ),
-    ),
+    events,
 
     attendance: seed
       ? []
@@ -616,15 +630,7 @@ function mergePortalState(
 
     gallery,
 
-    certificates: seed
-      ? []
-      : dedupeCertificates(
-          asArray<IssuedCertificate>(
-            p.certificates,
-            [],
-          ),
-        ),
-
+    certificates,
     pressReports: seed
       ? []
       : dedupePressReports(
@@ -1960,7 +1966,14 @@ export const useNssStore =
               Array.isArray(
                 data.certificates,
               )
-                ? data.certificates
+                ? assignSequentialIds(
+                    data.certificates,
+                    Array.isArray(
+                      data.events,
+                    )
+                      ? data.events
+                      : current.events,
+                  )
                 : current.certificates,
 
             pressReports:
@@ -2218,84 +2231,76 @@ export const useNssStore =
           eventId,
           volunteerIds,
         ) => {
+          const events =
+            get().events ?? [];
           const existing =
-            get().certificates ??
-            [];
-
-          const have =
-            new Set(
-              existing
-                .filter(
-                  (c) =>
-                    c.eventId ===
-                    eventId,
-                )
-                .map(
-                  (c) =>
-                    c.volunteerId,
-                ),
+            assignSequentialIds(
+              get().certificates ??
+                [],
+              events,
             );
-
-          const now =
-            new Date()
-              .toISOString();
-
-          const added:
-            IssuedCertificate[] =
-            volunteerIds
+          const have = new Set(
+            existing
               .filter(
-                (id) =>
-                  !have.has(id),
+                (c) =>
+                  c.eventId ===
+                  eventId,
               )
               .map(
-                (volunteerId) => {
-                  const volunteer =
-                    get().volunteers.find(
-                      (v) =>
-                        v.id ===
-                        volunteerId,
-                    );
-
-                  const event =
-                    get().events.find(
-                      (e) =>
-                        e.id ===
-                        eventId,
-                    );
-
-                  return {
-                    id: `crt-${eventId}-${volunteerId}`,
-
-                    volunteerId,
-
-                    eventId,
-
-                    generatedAt: now,
-
-                    sentAt: null,
-
-                    certificateId:
-                      volunteer && event
-                        ? certificateSerial(
-                            volunteer,
-                            event,
-                          )
-                        : undefined,
-
-                    printReady: true,
-                  };
-                },
-              );
-
-          if (added.length) {
-            set({
-              certificates: [
-                ...existing,
-                ...added,
-              ],
-            });
-          }
-
+                (c) => c.volunteerId,
+              ),
+          );
+          const now =
+            new Date().toISOString();
+          const event = events.find(
+            (e) => e.id === eventId,
+          );
+          const year = event
+            ? certificateYear(event)
+            : "2026";
+          let seq =
+            nextCertificateSeq(
+              existing,
+            );
+          const added: IssuedCertificate[] =
+            volunteerIds
+              .filter(
+                (id) => !have.has(id),
+              )
+              .map((id) =>
+                get().volunteers.find(
+                  (v) => v.id === id,
+                ),
+              )
+              .filter(
+                (v): v is Volunteer =>
+                  Boolean(v),
+              )
+              .sort(byFullName)
+              .map((volunteer) => {
+                const certificateId =
+                  formatCertificateSerial(
+                    year,
+                    seq,
+                  );
+                seq += 1;
+                return {
+                  id: `crt-${eventId}-${volunteer.id}`,
+                  volunteerId:
+                    volunteer.id,
+                  eventId,
+                  generatedAt: now,
+                  sentAt: null,
+                  certificateId,
+                  printReady: true,
+                };
+              });
+          set({
+            certificates: [
+              ...existing,
+              ...added,
+            ],
+          });
           return added;
         },
 

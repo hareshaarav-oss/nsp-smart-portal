@@ -425,16 +425,20 @@ function SmartRecord({ volunteerId, onClose }: { volunteerId: string; onClose: (
                           <button
                             type="button"
                             className="text-forest underline"
-                            onClick={() =>
+                            onClick={() => {
+                              state.generateCertificates(e.id, [v.id]);
+                              const issued = useNssStore
+                                .getState()
+                                .certificates.find((c) => c.volunteerId === v.id && c.eventId === e.id);
                               void openPreparedCertificate(() =>
                                 htmlForCertificate(
-                                  preparedCertificate(v, e, cert),
+                                  preparedCertificate(v, e, issued),
                                   v,
                                   e,
                                   state.settings,
                                 ),
-                              )
-                            }
+                              );
+                            }}
                           >
                             View
                           </button>

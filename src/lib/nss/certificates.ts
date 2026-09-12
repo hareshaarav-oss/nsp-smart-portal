@@ -16,16 +16,80 @@ function eventCodeOf(event: NssEvent) {
   return event.id.replace(/^evt-/, "").slice(0, 8).toUpperCase();
 }
 
-export function certificateSerial(volunteer: Volunteer, event: NssEvent) {
-  const eventCode = eventCodeOf(event);
-  return `NSS/${academicYear(event.date)}/${volunteer.volunteerId}/${eventCode}`;
+export function certificateYear(event: NssEvent) {
+  const iso = parseDob(event.date) || String(event.date || "");
+  const y = iso.slice(0, 4);
+  return /^\d{4}$/.test(y) ? y : "2026";
 }
 
-export function certificateSerials(volunteer: Volunteer, event: NssEvent) {
+export function parseCertificateSeq(serial?: string | null) {
+  const m = String(serial ?? "")
+    .trim()
+    .match(/^NSS\/(\d{4})\/(\d{1,6})$/i);
+  if (!m) return null;
+  const n = Number(m[2]);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+export function formatCertificateSerial(year: string | number, seq: number) {
+  return `NSS/${year}/${String(seq).padStart(3, "0")}`;
+}
+
+/** Next running number. Continues across events — 1–50 then 51. */
+export function nextCertificateSeq(certs: IssuedCertificate[]) {
+  let max = 0;
+  for (const cert of certs) {
+    const n = parseCertificateSeq(cert.certificateId);
+    if (n != null && n > max) max = n;
+  }
+  if (max > 0) return max + 1;
+  return (certs?.length ?? 0) + 1;
+}
+
+export function assignSequentialIds(certs: IssuedCertificate[], events: NssEvent[]) {
+  if (!certs.length) return certs;
+  const byEvent = new Map(events.map((event) => [event.id, event]));
+  const rows = certs.map((cert, index) => ({
+    cert,
+    index,
+    n: parseCertificateSeq(cert.certificateId),
+  }));
+  let next = 1;
+  for (const row of rows) {
+    if (row.n != null) next = Math.max(next, row.n + 1);
+  }
+  const missing = rows
+    .filter((row) => row.n == null)
+    .sort((a, b) => a.cert.generatedAt.localeCompare(b.cert.generatedAt) || a.index - b.index);
+  if (!missing.length) return certs;
+  const out = certs.slice();
+  for (const row of missing) {
+    const event = byEvent.get(row.cert.eventId);
+    const year = event ? certificateYear(event) : String(row.cert.generatedAt || "2026").slice(0, 4);
+    out[row.index] = { ...row.cert, certificateId: formatCertificateSerial(year || "2026", next) };
+    next += 1;
+  }
+  return out;
+}
+
+export function serialOf(cert: IssuedCertificate, event: NssEvent) {
+  return cert.certificateId || formatCertificateSerial(certificateYear(event), 1);
+}
+
+export function legacyCertificateSerials(volunteer: Volunteer, event: NssEvent) {
   const year = academicYear(event.date);
   const eventCode = eventCodeOf(event);
   const id = volunteer.volunteerId;
-  return [`NSS/${year}/${id}/${eventCode}`, `NSS/${year.replace("-", "")}/${id}/${eventCode}`];
+  return [
+    `NSS/${year}/${id}/${eventCode}`,
+    `NSS/${year.replace("-", "")}/${id}/${eventCode}`,
+    `NSS/${certificateYear(event)}/${id}`,
+  ];
+}
+
+/** @deprecated Prefer stored sequential IDs. Kept so old QR codes still verify. */
+export function certificateSerial(volunteer: Volunteer, event: NssEvent) {
+  return legacyCertificateSerials(volunteer, event)[0];
 }
 
 function certDateIso(event: NssEvent, fallback?: string) {
@@ -53,6 +117,10 @@ body { font-family: "Cormorant Garamond", Georgia, serif; color: #171717; }
 .sheet img.bg {
   position: absolute; inset: 0; width: 100%; height: 100%;
   object-fit: fill; z-index: 0; display: block;
+}
+.name-plate {
+  position: absolute; left: 13%; top: 33.8%; width: 74%; height: 11.2%;
+  background: #fefdf8; z-index: 2;
 }
 .text-layer { position: absolute; inset: 0; z-index: 3; }
 .name {
@@ -84,13 +152,13 @@ body { font-family: "Cormorant Garamond", Georgia, serif; color: #171717; }
 .cert-id {
   position: absolute; left: 10%; top: 85.65%; width: 35%;
   text-align: center; font-family: "Noto Sans", sans-serif;
-  font-size: clamp(10px, 1.08vw, 16px); font-weight: 600; color: #1a1a1a;
-  line-height: 1.2; letter-spacing: 0.01em;
+  font-size: clamp(11px, 1.15vw, 17px); font-weight: 600; color: #1a1a1a;
+  line-height: 1.2; letter-spacing: 0.02em;
 }
 .date {
   position: absolute; left: 55%; top: 85.65%; width: 35%;
   text-align: center; font-family: "Noto Sans", sans-serif;
-  font-size: clamp(10px, 1.08vw, 16px); font-weight: 600; color: #1a1a1a;
+  font-size: clamp(11px, 1.15vw, 17px); font-weight: 600; color: #1a1a1a;
   line-height: 1.2; letter-spacing: 0.01em;
 }
 .qr {
@@ -137,17 +205,16 @@ function certificateSheet(opts: {
   event: NssEvent;
   settings: PortalSettings;
   issuedOn: string;
+  serial: string;
   assets: SheetAssets;
   qr?: string;
 }) {
   const college = escapeHtml(opts.settings.collegeName);
   const name = escapeHtml(certDisplayName(opts.volunteer.fullName));
   const eventName = escapeHtml(opts.event.name.toUpperCase());
-  const serial = escapeHtml(certificateSerial(opts.volunteer, opts.event));
+  const serial = escapeHtml(opts.serial);
   const issued = escapeHtml(formatLongDate(opts.issuedOn));
   const year = escapeHtml(academicYear(opts.event.date));
-  // Keep the approved template's PO / Principal block (Haresh + T.J. Vyas).
-  // Only a transparent uploaded signature image may sit on the script — never a white box.
   const poSign = opts.assets.poSignature
     ? `<div class="po-sign"><img src="${opts.assets.poSignature}" alt="" /></div>`
     : "";
@@ -158,6 +225,7 @@ function certificateSheet(opts: {
 
   return `<div class="sheet">
     <img class="bg" src="${opts.assets.template}" alt="" />
+    <div class="name-plate"></div>
     <div class="text-layer">
       <p class="name" style="font-size:${nameFontSize(name)}">${name}</p>
       <p class="copy">
@@ -199,7 +267,7 @@ function wrapCertificateDocument(title: string, sheets: string) {
 }
 
 async function loadSheetAssets(settings: PortalSettings): Promise<SheetAssets> {
-  const bundled = "/images/certificate-template.jpg?v=20260912b";
+  const bundled = "/images/certificate-template.jpg?v=20260912c";
   const custom = String(settings.certificateTemplateUrl || "").trim();
   const templateSrc = custom && !custom.includes("certificate-template.jpg") ? custom : bundled;
   const [template, poSignature, principalSignature] = await Promise.all([
@@ -214,10 +282,10 @@ async function loadSheetAssets(settings: PortalSettings): Promise<SheetAssets> {
   };
 }
 
-async function qrFor(volunteer: Volunteer, event: NssEvent, settings: PortalSettings) {
+async function qrFor(serial: string, settings: PortalSettings) {
   if (settings.certificateQrEnabled === false) return "";
   try {
-    return await qrSvg(verifyHref(certificateSerial(volunteer, event)), 96);
+    return await qrSvg(verifyHref(serial), 96);
   } catch {
     return "";
   }
@@ -235,7 +303,6 @@ export function preparedCertificate(
       eventId: event.id,
       generatedAt: event.date || new Date().toISOString(),
       sentAt: null,
-      certificateId: certificateSerial(volunteer, event),
       printReady: true,
     }
   );
@@ -247,7 +314,8 @@ export async function htmlForCertificate(
   event: NssEvent,
   settings: PortalSettings,
 ) {
-  const [assets, qr] = await Promise.all([loadSheetAssets(settings), qrFor(volunteer, event, settings)]);
+  const serial = serialOf(cert, event);
+  const [assets, qr] = await Promise.all([loadSheetAssets(settings), qrFor(serial, settings)]);
   return wrapCertificateDocument(
     `NSS Certificate — ${volunteer.fullName}`,
     certificateSheet({
@@ -255,6 +323,7 @@ export async function htmlForCertificate(
       event,
       settings,
       issuedOn: certDateIso(event, cert.sentAt || cert.generatedAt),
+      serial,
       assets,
       qr,
     }),
@@ -268,16 +337,18 @@ export async function htmlForCertificates(
   const assets = await loadSheetAssets(settings);
   const sheets = (
     await Promise.all(
-      rows.map(async (row) =>
-        certificateSheet({
+      rows.map(async (row) => {
+        const serial = serialOf(row.cert, row.event);
+        return certificateSheet({
           volunteer: row.volunteer,
           event: row.event,
           settings,
           issuedOn: certDateIso(row.event, row.cert.sentAt || row.cert.generatedAt),
+          serial,
           assets,
-          qr: await qrFor(row.volunteer, row.event, settings),
-        }),
-      ),
+          qr: await qrFor(serial, settings),
+        });
+      }),
     )
   ).join("");
   return wrapCertificateDocument("NSS Certificates", sheets);
@@ -297,11 +368,6 @@ export type CertificateLookup = {
   serial: string;
   cert?: IssuedCertificate;
 };
-
-function serialMatches(volunteer: Volunteer, event: NssEvent, query: string) {
-  const q = query.trim().toLowerCase();
-  return certificateSerials(volunteer, event).some((serial) => serial.toLowerCase() === q);
-}
 
 export function resolveCertificate(
   state: {
@@ -324,21 +390,27 @@ export function resolveCertificate(
     const volunteer = volunteers.find((v) => v.id === cert.volunteerId);
     const event = events.find((e) => e.id === cert.eventId);
     if (!volunteer || !event) continue;
-    const serial = cert.certificateId || certificateSerial(volunteer, event);
-    if (cert.id.toLowerCase() === q || serial.toLowerCase() === q || serialMatches(volunteer, event, q)) {
-      return { volunteer, event, serial: certificateSerial(volunteer, event), cert };
+    const serial = serialOf(cert, event);
+    const aliases = legacyCertificateSerials(volunteer, event);
+    if (
+      cert.id.toLowerCase() === q ||
+      serial.toLowerCase() === q ||
+      aliases.some((alias) => alias.toLowerCase() === q)
+    ) {
+      return { volunteer, event, serial, cert };
     }
   }
 
   for (const volunteer of volunteers) {
     for (const event of events) {
-      if (!serialMatches(volunteer, event, q)) continue;
+      const aliases = legacyCertificateSerials(volunteer, event);
+      if (!aliases.some((alias) => alias.toLowerCase() === q)) continue;
       const issued = certificates.find((c) => c.volunteerId === volunteer.id && c.eventId === event.id);
       const present = attendance.some(
         (row) => row.volunteerId === volunteer.id && row.eventId === event.id && row.present,
       );
       if (!issued && !present) continue;
-      return { volunteer, event, serial: certificateSerial(volunteer, event), cert: issued };
+      return { volunteer, event, serial: issued ? serialOf(issued, event) : aliases[0], cert: issued };
     }
   }
 

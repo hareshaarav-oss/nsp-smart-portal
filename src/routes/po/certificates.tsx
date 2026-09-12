@@ -6,14 +6,13 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
-  htmlForCertificate,
   htmlForCertificates,
   openPreparedCertificate,
   preparedCertificate,
 } from "@/lib/nss/certificates";
 import { formatLongDate } from "@/lib/nss/format";
 import { certificateOf, presentVolunteers, useNssStore } from "@/lib/nss/store";
-import type { IssuedCertificate, NssEvent, Volunteer } from "@/lib/nss/types";
+import type { NssEvent, Volunteer } from "@/lib/nss/types";
 
 export const Route = createFileRoute("/po/certificates")({ component: CertificatesPage });
 
@@ -121,36 +120,25 @@ function CertificatesPage() {
     toast.success(`Sent ${n} certificate${n === 1 ? "" : "s"} to volunteer dashboards.`);
   }
 
-  async function printRows(rows: Array<{ cert: IssuedCertificate; volunteer: Volunteer; event: NssEvent }>) {
+  async function printRows(ids: string[]) {
     if (!event) return;
-    if (rows.length === 0) {
+    if (ids.length === 0) {
       toast.error("Select at least one present volunteer.");
       return;
     }
-    state.generateCertificates(
-      event.id,
-      rows.map((row) => row.volunteer.id),
-    );
+    state.generateCertificates(event.id, ids);
+    const rows = rowsFor(ids);
     const opened = await openPreparedCertificate(() => htmlForCertificates(rows, state.settings));
     if (!opened) toast.message("Popup was blocked. The certificate file was downloaded instead.");
   }
 
   async function printSelected() {
-    await printRows(rowsFor(selectedIds));
+    await printRows(selectedIds);
   }
 
   async function viewOne(volunteer: Volunteer) {
     if (!event) return;
-    const rows = rowsFor([volunteer.id]);
-    if (rows.length === 1) {
-      state.generateCertificates(event.id, [volunteer.id]);
-      const opened = await openPreparedCertificate(() =>
-        htmlForCertificate(rows[0].cert, volunteer, event, state.settings),
-      );
-      if (!opened) toast.message("Popup was blocked. The certificate file was downloaded instead.");
-      return;
-    }
-    await printRows(rows);
+    await printRows([volunteer.id]);
   }
 
   return (
@@ -158,9 +146,9 @@ function CertificatesPage() {
       <div>
         <h2 className="font-display text-xl font-semibold">Certificates</h2>
         <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-          Volunteers marked present load automatically. View / Print opens the approved NSS certificate
-          with name, Certificate ID and QR. Generate and Send puts the same certificate on the volunteer
-          dashboard.
+          Volunteers marked present load automatically. Certificate numbers run as NSS/2026/001,
+          NSS/2026/002… and continue across events (if one event used 1–50, the next starts at 51).
+          View / Print uses the approved NSS certificate. Generate and Send puts it on the volunteer dashboard.
         </p>
       </div>
 
@@ -229,6 +217,7 @@ function CertificatesPage() {
                 <th className="px-3 py-2 font-medium"> </th>
                 <th className="px-3 py-2 font-medium">Volunteer ID</th>
                 <th className="px-3 py-2 font-medium">Name (NSS roll)</th>
+                <th className="px-3 py-2 font-medium">Certificate ID</th>
                 <th className="px-3 py-2 font-medium">Unit</th>
                 <th className="px-3 py-2 font-medium">Status</th>
                 <th className="px-3 py-2 font-medium"> </th>
@@ -251,6 +240,7 @@ function CertificatesPage() {
                     </td>
                     <td className="px-3 py-2 tabular-nums">{v.volunteerId}</td>
                     <td className="px-3 py-2 font-medium">{v.fullName}</td>
+                    <td className="px-3 py-2 font-mono text-xs">{cert?.certificateId || "—"}</td>
                     <td className="px-3 py-2">{v.unit}</td>
                     <td className="px-3 py-2">
                       {cert?.sentAt ? (
