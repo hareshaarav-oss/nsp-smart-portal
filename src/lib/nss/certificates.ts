@@ -43,8 +43,6 @@ body { font-family: "Cormorant Garamond", Georgia, serif; color: #171717; }
 .mask { position: absolute; background: rgba(255,255,255,.988); border-radius: 3px; z-index: 2; }
 .mask-name { left: 18%; top: 34.5%; width: 64%; height: 12.2%; }
 .mask-copy { left: 14%; top: 46.0%; width: 72%; height: 21.5%; }
-.mask-po { left: 5.5%; top: 70.0%; width: 25%; height: 14.8%; }
-.mask-principal { right: 5.5%; top: 70.0%; width: 25%; height: 14.8%; }
 .mask-id { left: 21%; bottom: 8.1%; width: 24%; height: 5.2%; }
 .mask-date { right: 21%; bottom: 8.1%; width: 24%; height: 5.2%; }
 .text-layer { position: absolute; inset: 0; z-index: 3; }
@@ -64,17 +62,16 @@ body { font-family: "Cormorant Garamond", Georgia, serif; color: #171717; }
 }
 .copy strong { font-style: italic; font-weight: 800; color: #0c572f; }
 .po-sign, .principal-sign {
-  position: absolute; top: 70.6%; width: 22%; text-align: center;
-  font-family: "Noto Sans", sans-serif;
+  position: absolute; top: 70.4%; width: 22%; text-align: center;
+  pointer-events: none;
 }
 .po-sign { left: 7.2%; }
 .principal-sign { right: 7.2%; }
-.signature {
-  font-family: "Dancing Script", cursive; font-size: clamp(22px, 2.4vw, 38px);
-  color: #1746a2; line-height: 1; margin-bottom: 8px;
+.po-sign img, .principal-sign img {
+  max-height: 46px; max-width: 150px; object-fit: contain;
+  display: block; margin: 0 auto;
+  background: transparent;
 }
-.who { font-size: clamp(10px, 1.05vw, 16px); font-weight: 700; color: #173a87; }
-.role { margin-top: 3px; font-size: clamp(9px, .95vw, 14px); color: #111; }
 .cert-id {
   position: absolute; left: 22%; bottom: 9.4%; width: 22%;
   text-align: center; font-family: "Noto Sans", sans-serif; font-size: clamp(8px, .88vw, 13px); color: #111;
@@ -102,20 +99,6 @@ body { font-family: "Cormorant Garamond", Georgia, serif; color: #171717; }
   .no-print { display: none !important; }
 }
 `;
-
-function signatureShortName(fullName: string, fallback: string) {
-  const clean = fullName.replace(/^dr\.\s*/i, "").trim();
-  if (!clean) return fallback;
-  const first = clean.split(/\s+/)[0];
-  return first || fallback;
-}
-
-function principalSignature(fullName: string) {
-  const parts = fullName.replace(/^dr\.\s*/i, "").trim().split(/\s+/).filter(Boolean);
-  if (!parts.length) return "T.J.Vyas";
-  if (parts.length === 1) return parts[0];
-  return `${parts[0][0]}.${parts[parts.length - 1]}`;
-}
 
 function nameFontSize(name: string) {
   const n = name.length;
@@ -147,27 +130,23 @@ function certificateSheet(opts: {
   const college = escapeHtml(opts.settings.collegeName);
   const name = escapeHtml(certDisplayName(opts.volunteer.fullName));
   const eventName = escapeHtml(opts.event.name.toUpperCase());
-  const po = escapeHtml(opts.settings.poName);
-  const principal = escapeHtml(opts.settings.principalName);
   const serial = escapeHtml(certificateSerial(opts.volunteer, opts.event));
   const issued = escapeHtml(formatLongDate(opts.issuedOn.slice(0, 10)));
   const year = escapeHtml(academicYear(opts.event.date));
-  const poSignature = escapeHtml(signatureShortName(opts.settings.poName, "Haresh"));
-  const principalSignatureText = escapeHtml(principalSignature(opts.settings.principalName));
-  const poSignatureImage = opts.assets.poSignature
-    ? `<img src="${opts.assets.poSignature}" alt="Programme Officer signature" style="max-height:42px;max-width:140px;object-fit:contain;display:block;margin:0 auto 8px;" />`
-    : `<div class="signature">${poSignature}</div>`;
-  const principalSignatureImage = opts.assets.principalSignature
-    ? `<img src="${opts.assets.principalSignature}" alt="Principal signature" style="max-height:42px;max-width:140px;object-fit:contain;display:block;margin:0 auto 8px;" />`
-    : `<div class="signature">${principalSignatureText}</div>`;
+  // Keep the approved template's PO / Principal block (Haresh + T.J. Vyas).
+  // Only a transparent uploaded signature image may sit on the script — never a white box.
+  const poSign = opts.assets.poSignature
+    ? `<div class="po-sign"><img src="${opts.assets.poSignature}" alt="" /></div>`
+    : "";
+  const principalSign = opts.assets.principalSignature
+    ? `<div class="principal-sign"><img src="${opts.assets.principalSignature}" alt="" /></div>`
+    : "";
   const qrBlock = opts.qr ? `<div class="qr" title="Scan to verify">${opts.qr}</div>` : "";
 
   return `<div class="sheet">
     <img class="bg" src="${opts.assets.template}" alt="" />
     <div class="mask mask-name"></div>
     <div class="mask mask-copy"></div>
-    <div class="mask mask-po"></div>
-    <div class="mask mask-principal"></div>
     <div class="mask mask-id"></div>
     <div class="mask mask-date"></div>
     <div class="text-layer">
@@ -179,16 +158,8 @@ function certificateSheet(opts: {
         during the academic year <strong>${year}</strong>. We highly appreciate their sincere efforts, active involvement<br/>
         and valuable contribution towards community service and nation-building.
       </p>
-      <div class="po-sign">
-        ${poSignatureImage}
-        <div class="who">${po}</div>
-        <div class="role">NSS Program Officer</div>
-      </div>
-      <div class="principal-sign">
-        ${principalSignatureImage}
-        <div class="who">${principal}</div>
-        <div class="role">Principal</div>
-      </div>
+      ${poSign}
+      ${principalSign}
       <div class="cert-id">Certificate ID : ${serial}</div>
       <div class="date">Date : ${issued}</div>
       ${qrBlock}
