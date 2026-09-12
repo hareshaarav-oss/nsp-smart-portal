@@ -57,14 +57,19 @@ export function firstNameOf(fullName: string) {
   return first.toLocaleUpperCase("en-IN");
 }
 
+/** Certificate name: one Dancing Script style — Anjali Amrutbhai Raval */
 export function certDisplayName(fullName: string) {
-  const parts = cleanPersonName(fullName).split(/\s+/).filter(Boolean);
+  const parts = cleanPersonName(fullName)
+    .split(/\s+/)
+    .filter(Boolean);
   if (!parts.length) return "";
-  const rest = parts.slice(1).map((part) => {
-    if (/^[A-Z]\.?$/i.test(part)) return part.toUpperCase();
-    return part.charAt(0).toUpperCase() + part.slice(1).toLowerCase();
-  });
-  return [parts[0].toLocaleUpperCase("en-IN"), ...rest].join(" ");
+  return parts
+    .map((part) => {
+      if (/^[A-Z]\.?$/i.test(part)) return part.toUpperCase();
+      const lower = part.toLocaleLowerCase("en-IN");
+      return lower.charAt(0).toLocaleUpperCase("en-IN") + lower.slice(1);
+    })
+    .join(" ");
 }
 
 export function idCardName(fullName: string) {

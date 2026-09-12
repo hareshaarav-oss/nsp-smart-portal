@@ -47,10 +47,13 @@ body { font-family: "Cormorant Garamond", Georgia, serif; color: #171717; }
 .mask-date { right: 21%; bottom: 8.1%; width: 24%; height: 5.2%; }
 .text-layer { position: absolute; inset: 0; z-index: 3; }
 .name {
-  position: absolute; left: 12%; top: 35.6%; width: 76%;
-  margin: 0; text-align: center; font-family: "Dancing Script", cursive;
-  line-height: 1.08; font-weight: 700; color: #b11619;
+  position: absolute; left: 10%; top: 35.2%; width: 80%;
+  margin: 0; text-align: center;
+  font-family: "Dancing Script", cursive;
+  font-style: normal; font-weight: 700; color: #b11619;
+  line-height: 1.12; letter-spacing: 0.02em;
   white-space: nowrap; overflow: hidden;
+  font-variant: normal; text-transform: none; font-synthesis: none;
 }
 .name-line {
   position: absolute; left: 20.6%; top: 45.1%; width: 58.8%; height: 1px; background: #b58a2d;
@@ -102,10 +105,10 @@ body { font-family: "Cormorant Garamond", Georgia, serif; color: #171717; }
 
 function nameFontSize(name: string) {
   const n = name.length;
-  if (n > 34) return "clamp(20px, 2.6vw, 40px)";
-  if (n > 28) return "clamp(24px, 3.2vw, 50px)";
-  if (n > 22) return "clamp(28px, 3.8vw, 58px)";
-  return "clamp(34px, 4.4vw, 67px)";
+  if (n > 36) return "clamp(28px, 3.4vw, 52px)";
+  if (n > 28) return "clamp(34px, 4.2vw, 62px)";
+  if (n > 22) return "clamp(40px, 4.8vw, 70px)";
+  return "clamp(44px, 5.4vw, 78px)";
 }
 
 function verifyHref(serial: string) {
