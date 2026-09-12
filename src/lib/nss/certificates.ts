@@ -101,13 +101,13 @@ const CERT_CSS = `
 * { box-sizing: border-box; }
 html, body { margin: 0; padding: 0; background: #e8eef6; }
 body { font-family: "Cormorant Garamond", Georgia, serif; color: #171717; }
-.wrap { width: 100%; padding: 16px 12px 28px; }
+.wrap { width: 100%; padding: 16px 12px 28px; overflow-x: auto; }
 #print-root { width: 100%; }
 .sheet {
   position: relative;
-  width: 100%;
-  aspect-ratio: 3 / 2;
+  width: 297mm;
   max-width: 297mm;
+  aspect-ratio: 3 / 2;
   margin: 0 auto 18px;
   overflow: hidden;
   page-break-after: always;
@@ -119,54 +119,38 @@ body { font-family: "Cormorant Garamond", Georgia, serif; color: #171717; }
   position: absolute; inset: 0; width: 100%; height: 100%;
   object-fit: fill; z-index: 0; display: block;
 }
-.plate { position: absolute; background: #fcfcf8; z-index: 2; }
-.name-plate { left: 12%; top: 33.6%; width: 76%; height: 11.6%; }
-.copy-plate { left: 11%; top: 45.4%; width: 78%; height: 21.4%; }
-.id-plate { left: 8%; top: 84.8%; width: 36%; height: 5.2%; }
-.date-plate { left: 56%; top: 84.8%; width: 36%; height: 5.2%; }
-.text-layer { position: absolute; inset: 0; z-index: 3; }
+.text-layer { position: absolute; inset: 0; z-index: 3; pointer-events: none; }
 .name {
-  position: absolute; left: 10%; top: 35.2%; width: 80%;
-  margin: 0; text-align: center;
+  position: absolute; left: 9%; top: 35.8%; width: 82%; height: 7.8%;
+  margin: 0; display: flex; align-items: center; justify-content: center;
+  text-align: center;
   font-family: "Dancing Script", cursive;
   font-style: normal; font-weight: 700; color: #b11619;
-  line-height: 1.12; letter-spacing: 0.02em;
-  white-space: nowrap; overflow: hidden;
+  line-height: 1.05; letter-spacing: 0.02em;
+  white-space: nowrap;
+  overflow: visible;
   font-variant: normal; text-transform: none; font-synthesis: none;
 }
 .copy {
-  position: absolute; left: 14%; top: 47.0%; width: 72%;
+  position: absolute; left: 13%; top: 47.8%; width: 74%; height: 16.2%;
   margin: 0; text-align: center; font-style: italic;
-  font-size: 12px; font-size: 1.95cqw;
-  line-height: 1.42; color: #111; font-weight: 500;
+  font-size: 15px;
+  line-height: 1.48; color: #1a1a1a; font-weight: 500;
+  overflow: visible;
 }
 .copy strong { font-style: italic; font-weight: 800; color: #0c572f; }
-.po-sign, .principal-sign {
-  position: absolute; top: 70.4%; width: 22%; text-align: center;
-  pointer-events: none;
-}
-.po-sign { left: 7.2%; }
-.principal-sign { right: 7.2%; }
-.po-sign img, .principal-sign img {
-  max-height: 46px; max-width: 150px; object-fit: contain;
-  display: block; margin: 0 auto;
-  background: transparent;
-}
-.cert-id {
-  position: absolute; left: 8%; top: 86.15%; width: 36%;
-  text-align: center; font-family: "Noto Sans", sans-serif;
-  font-size: 11px; font-size: 1.42cqw; font-weight: 600; color: #1a1a1a;
+.cert-id, .date {
+  position: absolute; top: 86.55%;
+  font-family: "Noto Sans", sans-serif;
+  font-size: 13px; font-weight: 600; color: #1a1a1a;
   line-height: 1.2; letter-spacing: 0.02em;
+  white-space: nowrap;
 }
-.date {
-  position: absolute; left: 56%; top: 86.15%; width: 36%;
-  text-align: center; font-family: "Noto Sans", sans-serif;
-  font-size: 11px; font-size: 1.42cqw; font-weight: 600; color: #1a1a1a;
-  line-height: 1.2; letter-spacing: 0.01em;
-}
+.cert-id { left: 7%; width: 38%; text-align: center; }
+.date { left: 55%; width: 38%; text-align: center; }
 .qr {
-  position: absolute; left: 50%; bottom: 7.6%; transform: translateX(-50%);
-  width: 8.2%; background: #fff; padding: 2px; border-radius: 4px; z-index: 4;
+  position: absolute; left: 50%; top: 75.4%; transform: translateX(-50%);
+  width: 5.4%; background: #fff; padding: 3px; border-radius: 3px; z-index: 4;
 }
 .qr svg { width: 100%; height: auto; display: block; }
 .no-print { text-align: center; margin: 12px 0 0; }
@@ -178,18 +162,20 @@ body { font-family: "Cormorant Garamond", Georgia, serif; color: #171717; }
 }
 @media print {
   html, body { background: #fff !important; }
-  .wrap { padding: 0; }
-  .sheet { box-shadow: none !important; max-width: none; width: 297mm; height: 210mm; aspect-ratio: auto; margin: 0; }
+  .wrap { padding: 0; overflow: visible; }
+  .sheet { box-shadow: none !important; margin: 0 auto; }
   .no-print { display: none !important; }
 }
 `;
 
 function nameFontSize(name: string) {
   const n = name.length;
-  if (n > 36) return "4.2cqw";
-  if (n > 28) return "5.0cqw";
-  if (n > 22) return "5.6cqw";
-  return "6.2cqw";
+  if (n > 42) return "26px";
+  if (n > 36) return "32px";
+  if (n > 28) return "38px";
+  if (n > 22) return "44px";
+  if (n > 16) return "50px";
+  return "54px";
 }
 
 function verifyHref(serial: string) {
@@ -199,8 +185,6 @@ function verifyHref(serial: string) {
 
 type SheetAssets = {
   template: string;
-  poSignature: string;
-  principalSignature: string;
 };
 
 function certificateSheet(opts: {
@@ -214,34 +198,22 @@ function certificateSheet(opts: {
 }) {
   const college = escapeHtml(opts.settings.collegeName);
   const name = escapeHtml(certDisplayName(opts.volunteer.fullName));
-  const eventName = escapeHtml(opts.event.name.toUpperCase());
+  const eventName = escapeHtml(opts.event.name);
   const serial = escapeHtml(opts.serial);
   const issued = escapeHtml(formatLongDate(opts.issuedOn));
   const year = escapeHtml(academicYear(opts.event.date));
-  const poSign = opts.assets.poSignature
-    ? `<div class="po-sign"><img src="${opts.assets.poSignature}" alt="" /></div>`
-    : "";
-  const principalSign = opts.assets.principalSignature
-    ? `<div class="principal-sign"><img src="${opts.assets.principalSignature}" alt="" /></div>`
-    : "";
   const qrBlock = opts.qr ? `<div class="qr" title="Scan to verify">${opts.qr}</div>` : "";
 
   return `<div class="sheet">
     <img class="bg" src="${opts.assets.template}" alt="" />
-    <div class="plate name-plate"></div>
-    <div class="plate copy-plate"></div>
-    <div class="plate id-plate"></div>
-    <div class="plate date-plate"></div>
     <div class="text-layer">
       <p class="name" style="font-size:${nameFontSize(name)}">${name}</p>
       <p class="copy">
-        for actively participating with exemplary dedication in the <strong>${eventName}</strong> organised by the<br/>
-        National Service Scheme Unit of <strong>${college.toUpperCase()}</strong><br/>
-        during the academic year <strong>${year}</strong>. We highly appreciate their sincere efforts, active involvement<br/>
-        and valuable contribution towards community service and nation-building.
+        for actively participating with exemplary dedication in the <strong>${eventName}</strong>
+        organised by the National Service Scheme Unit of <strong>${college.toUpperCase()}</strong>
+        during the academic year <strong>${year}</strong>. We highly appreciate their sincere efforts,
+        active involvement and valuable contribution towards community service and nation-building.
       </p>
-      ${poSign}
-      ${principalSign}
       <div class="cert-id">Certificate ID : ${serial}</div>
       <div class="date">Date : ${issued}</div>
       ${qrBlock}
@@ -254,6 +226,7 @@ function wrapCertificateDocument(title: string, sheets: string) {
 <html>
 <head>
   <meta charset="utf-8" />
+  <meta name="viewport" content="width=1200, user-scalable=yes" />
   <title>${escapeHtml(title)}</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -273,17 +246,10 @@ function wrapCertificateDocument(title: string, sheets: string) {
 }
 
 async function loadSheetAssets(settings: PortalSettings): Promise<SheetAssets> {
-  const bundled = "/images/certificate-template.jpg?v=20260912d";
-  const [template, poSignature, principalSignature] = await Promise.all([
-    toDataUrl(bundled),
-    toDataUrl(settings.poSignature),
-    toDataUrl(settings.principalSignature),
-  ]);
-  return {
-    template: template || bundled,
-    poSignature,
-    principalSignature,
-  };
+  void settings;
+  const bundled = "/images/certificate-template.jpg?v=20260912e";
+  const template = await toDataUrl(bundled);
+  return { template: template || bundled };
 }
 
 async function qrFor(serial: string, settings: PortalSettings) {
