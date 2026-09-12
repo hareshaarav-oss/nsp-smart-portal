@@ -130,6 +130,15 @@ export function padId(n: number) {
   return String(n).padStart(3, "0");
 }
 
+const GUJARATI_DIGITS = "૦૧૨૩૪૫૬૭૮૯";
+
+export function latinDigits(value: string) {
+  return String(value ?? "").replace(/[૦-૯]/g, (ch) => {
+    const i = GUJARATI_DIGITS.indexOf(ch);
+    return i >= 0 ? String(i) : ch;
+  });
+}
+
 export function academicYear(iso = todayIso()) {
   const [y, m] = iso.split("-").map(Number);
   const start = (m ?? 1) >= 6 ? y : y - 1;

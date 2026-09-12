@@ -13,7 +13,7 @@ import { openIdCard } from "@/lib/nss/id-card";
 import { blobToDataUrl, compressPassport } from "@/lib/nss/media";
 import { downloadVolunteerExcel } from "@/lib/nss/reports";
 import { qrSvg } from "@/lib/nss/qr";
-import { htmlForCertificate, openPreparedCertificate } from "@/lib/nss/certificates";
+import { htmlForCertificate, openPreparedCertificate, preparedCertificate } from "@/lib/nss/certificates";
 import {
   activeVolunteers,
   attendanceOf,
@@ -421,13 +421,18 @@ function SmartRecord({ volunteerId, onClose }: { volunteerId: string; onClose: (
                         {att ? (att.present ? "Present" : "Absent") : e.status === "upcoming" ? "Upcoming" : "—"}
                       </td>
                       <td className="px-2 py-1.5">
-                        {cert ? (
+                        {att?.present ? (
                           <button
                             type="button"
                             className="text-forest underline"
                             onClick={() =>
                               void openPreparedCertificate(() =>
-                                htmlForCertificate(cert, v, e, state.settings),
+                                htmlForCertificate(
+                                  preparedCertificate(v, e, cert),
+                                  v,
+                                  e,
+                                  state.settings,
+                                ),
                               )
                             }
                           >

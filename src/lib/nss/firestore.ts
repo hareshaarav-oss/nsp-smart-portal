@@ -1,4 +1,4 @@
-import { cleanPersonName, padId, parseDob, titleFirstName } from "./format";
+import { cleanPersonName, latinDigits, padId, parseDob, titleFirstName } from "./format";
 import type {
   AttendanceRecord,
   GalleryItem,
@@ -122,7 +122,13 @@ function text(value: unknown) {
 }
 
 export function digits(value: unknown) {
-  return text(value).replace(/\D/g, "");
+  return latinDigits(text(value)).replace(/\D/g, "");
+}
+
+function mobileKey(value: unknown) {
+  const d = digits(value);
+  if (d.length >= 10) return d.slice(-10);
+  return d;
 }
 
 function isoDate(value: unknown) {
@@ -175,9 +181,9 @@ export async function loadCollegeCloud(opts: { gallery?: boolean } = {}): Promis
 
   const volunteers: Volunteer[] = sorted.map((s, index) => {
     const n = index + 1;
-    const semester = text(s.semester) || "1";
-    const mobileDigits = digits(s.mobile) || digits(s._id);
-    const mobile = mobileDigits.length >= 10 ? mobileDigits.slice(-10) : text(s.mobile);
+    const semester = latinDigits(text(s.semester) || "1");
+    const mobileDigits = mobileKey(s.mobile) || mobileKey(s._id);
+    const mobile = mobileDigits.length >= 10 ? mobileDigits : latinDigits(text(s.mobile));
     const role = /leader/i.test(text(s.nssRole)) ? "Leader" : "Volunteer";
     const statusRaw = text(s.status).toLowerCase();
     const roleRaw = text(s.nssRole).toLowerCase();
@@ -187,7 +193,7 @@ export async function loadCollegeCloud(opts: { gallery?: boolean } = {}): Promis
     return {
       id: text(s._id) || `vol-${n}`,
       volunteerId: `NSS${padId(n)}`,
-      enrollment: text(s.enrollment) || `2026-${semester}-${padId(n)}`,
+      enrollment: latinDigits(text(s.enrollment)) || `2026-${semester}-${padId(n)}`,
       fullName,
       mobile,
       email: text(s.email),
@@ -212,9 +218,12 @@ export async function loadCollegeCloud(opts: { gallery?: boolean } = {}): Promis
   const byMobile = new Map<string, Volunteer>();
   const byName = new Map<string, Volunteer>();
   for (const v of volunteers) {
-    const d = digits(v.mobile);
+    const d = mobileKey(v.mobile) || mobileKey(v.id);
     if (d) byMobile.set(d, v);
-    byName.set(v.fullName.toLowerCase(), v);
+    const nameKey = v.fullName.toLowerCase();
+    if (nameKey) byName.set(nameKey, v);
+    const compact = nameKey.replace(/[^a-z]/g, "");
+    if (compact) byName.set(compact, v);
   }
 
   const events: NssEvent[] = eventDocs.map((e) => {
@@ -263,8 +272,9 @@ export async function loadCollegeCloud(opts: { gallery?: boolean } = {}): Promis
     if (!name) continue;
     const event = ensureEvent(name, date);
     const volunteer =
-      byMobile.get(digits(row.studentMobile) || digits(row.mobile) || digits(row._id)) ||
-      byName.get(text(row.studentName || row.name).toLowerCase());
+      byMobile.get(mobileKey(row.studentMobile) || mobileKey(row.mobile) || mobileKey(row._id)) ||
+      byName.get(text(row.studentName || row.name).toLowerCase()) ||
+      byName.get(text(row.studentName || row.name).toLowerCase().replace(/[^a-z]/g, ""));
     if (!volunteer) continue;
     const key = `${volunteer.id}::${event.id}`;
     if (seen.has(key)) continue;

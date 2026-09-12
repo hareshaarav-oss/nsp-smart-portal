@@ -242,6 +242,24 @@ async function qrFor(volunteer: Volunteer, event: NssEvent, settings: PortalSett
   }
 }
 
+export function preparedCertificate(
+  volunteer: Volunteer,
+  event: NssEvent,
+  existing?: IssuedCertificate,
+): IssuedCertificate {
+  return (
+    existing ?? {
+      id: `crt-${event.id}-${volunteer.id}`,
+      volunteerId: volunteer.id,
+      eventId: event.id,
+      generatedAt: event.date || new Date().toISOString(),
+      sentAt: null,
+      certificateId: certificateSerial(volunteer, event),
+      printReady: true,
+    }
+  );
+}
+
 export async function htmlForCertificate(
   cert: IssuedCertificate,
   volunteer: Volunteer,
@@ -255,7 +273,7 @@ export async function htmlForCertificate(
       volunteer,
       event,
       settings,
-      issuedOn: cert.sentAt ?? cert.generatedAt,
+      issuedOn: event.date || cert.sentAt || cert.generatedAt,
       assets,
       qr,
     }),
@@ -274,7 +292,7 @@ export async function htmlForCertificates(
           volunteer: row.volunteer,
           event: row.event,
           settings,
-          issuedOn: row.cert.sentAt ?? row.cert.generatedAt,
+          issuedOn: row.event.date || row.cert.sentAt || row.cert.generatedAt,
           assets,
           qr: await qrFor(row.volunteer, row.event, settings),
         }),

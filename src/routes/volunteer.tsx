@@ -77,7 +77,7 @@ function VolunteerDash() {
       if (e.audience === "girls" && me.gender !== "Female") return false;
       if (e.audience === "boys" && me.gender !== "Male") return false;
       if (e.audience === "leaders" && me.nssRole !== "Leader") return false;
-      return e.status === "upcoming" || e.date >= todayIso();
+      return e.date >= todayIso();
     })
     .sort((a, b) => a.date.localeCompare(b.date))
     .slice(0, 8);

@@ -67,7 +67,7 @@ function Home() {
         .filter((event) => {
           const status = event.status.toLowerCase();
           if (status === "completed" || status === "cancelled") return false;
-          return status === "upcoming" || status === "planning" || event.date >= today;
+          return event.date >= today;
         })
         .sort((a, b) => a.date.localeCompare(b.date)),
     [events, today],

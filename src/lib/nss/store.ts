@@ -720,8 +720,9 @@ export const useNssStore =
                       ...row,
 
                       volunteerId:
+                        row.volunteerId ||
                         prev?.volunteerId ||
-                        row.volunteerId,
+                        "",
 
                       enrollment:
                         prev?.enrollment ||
@@ -2495,47 +2496,88 @@ export function totalServiceHours(
   );
 }
 
+function personKeys(id: string, mobile?: string) {
+  const keys = new Set<string>();
+  const add = (value: string | undefined) => {
+    const raw = String(value ?? "").trim();
+    if (raw) keys.add(raw);
+    const d = digits(raw);
+    if (d.length >= 8) keys.add(d);
+    if (d.length >= 10) keys.add(d.slice(-10));
+  };
+  add(id);
+  add(mobile);
+  return keys;
+}
+
+function attendanceMatchesVolunteer(
+  row: AttendanceRecord,
+  volunteer: Volunteer,
+) {
+  const keys = personKeys(
+    volunteer.id,
+    volunteer.mobile,
+  );
+  personKeys(volunteer.volunteerId).forEach(
+    (key) => keys.add(key),
+  );
+  return [...personKeys(row.volunteerId)].some(
+    (key) => keys.has(key),
+  );
+}
+
 export function attendanceOf(
   state: PortalState,
   volunteerId: string,
   eventId: string,
 ) {
+  const volunteer =
+    (state.volunteers ?? []).find(
+      (row) =>
+        row.id === volunteerId ||
+        row.volunteerId === volunteerId,
+    );
+
   return (
     state.attendance ?? []
-  ).find(
-    (a) =>
-      a.volunteerId ===
-        volunteerId &&
-      a.eventId === eventId,
-  );
+  ).find((a) => {
+    if (a.eventId !== eventId) {
+      return false;
+    }
+    if (a.volunteerId === volunteerId) {
+      return true;
+    }
+    return volunteer
+      ? attendanceMatchesVolunteer(
+          a,
+          volunteer,
+        )
+      : false;
+  });
 }
 
 export function presentVolunteers(
   state: PortalState,
   eventId: string,
 ) {
-  const ids =
-    new Set(
-      (
-        state.attendance ?? []
-      )
-        .filter(
-          (a) =>
-            a.eventId ===
-              eventId &&
-            a.present,
-        )
-        .map(
-          (a) =>
-            a.volunteerId,
-        ),
-    );
+  const present = (
+    state.attendance ?? []
+  ).filter(
+    (a) =>
+      a.eventId === eventId &&
+      a.present,
+  );
 
   return [
     ...(state.volunteers ?? []),
   ]
     .filter((v) =>
-      ids.has(v.id),
+      present.some((row) =>
+        attendanceMatchesVolunteer(
+          row,
+          v,
+        ),
+      ),
     )
     .sort(
       (a, b) =>

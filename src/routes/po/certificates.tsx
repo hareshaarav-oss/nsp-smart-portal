@@ -1,15 +1,35 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Award, Printer, Send } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { htmlForCertificate, htmlForCertificates, openPreparedCertificate } from "@/lib/nss/certificates";
+import {
+  htmlForCertificate,
+  htmlForCertificates,
+  openPreparedCertificate,
+  preparedCertificate,
+} from "@/lib/nss/certificates";
 import { formatLongDate } from "@/lib/nss/format";
 import { certificateOf, presentVolunteers, useNssStore } from "@/lib/nss/store";
+import type { IssuedCertificate, NssEvent, Volunteer } from "@/lib/nss/types";
 
 export const Route = createFileRoute("/po/certificates")({ component: CertificatesPage });
+
+function bestEventId(
+  events: NssEvent[],
+  presentCounts: Record<string, number>,
+) {
+  const ranked = [...events].sort((a, b) => {
+    const diff = (presentCounts[b.id] ?? 0) - (presentCounts[a.id] ?? 0);
+    if (diff) return diff;
+    const completed = Number(b.status === "completed") - Number(a.status === "completed");
+    if (completed) return completed;
+    return b.date.localeCompare(a.date);
+  });
+  return ranked[0]?.id ?? "";
+}
 
 function CertificatesPage() {
   const state = useNssStore();
@@ -17,12 +37,25 @@ function CertificatesPage() {
     () => [...state.events].sort((a, b) => b.date.localeCompare(a.date)),
     [state.events],
   );
-  const defaultEvent =
-    events.find((e) => e.status === "completed")?.id ?? events[0]?.id ?? "";
-  const [eventId, setEventId] = useState(defaultEvent);
+  const presentCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const event of events) {
+      counts[event.id] = presentVolunteers(state, event.id).length;
+    }
+    return counts;
+  }, [events, state]);
+  const [eventId, setEventId] = useState(() => bestEventId(events, presentCounts));
   const event = events.find((e) => e.id === eventId) ?? events[0];
   const present = event ? presentVolunteers(state, event.id) : [];
   const [picked, setPicked] = useState<Record<string, boolean>>({});
+
+  useEffect(() => {
+    if (!events.length) return;
+    const currentCount = eventId ? presentCounts[eventId] ?? 0 : 0;
+    if (currentCount > 0) return;
+    const nextId = bestEventId(events, presentCounts);
+    if (nextId && nextId !== eventId) setEventId(nextId);
+  }, [events, presentCounts, eventId]);
 
   const selectedIds = present.filter((v) => picked[v.id] !== false).map((v) => v.id);
 
@@ -36,6 +69,18 @@ function CertificatesPage() {
       next[v.id] = on;
     });
     setPicked(next);
+  }
+
+  function rowsFor(ids: string[]) {
+    if (!event) return [];
+    const latest = useNssStore.getState();
+    return present
+      .filter((v) => ids.includes(v.id))
+      .map((v) => ({
+        cert: preparedCertificate(v, event, certificateOf(latest, v.id, event.id)),
+        volunteer: v,
+        event,
+      }));
   }
 
   function generate() {
@@ -59,32 +104,53 @@ function CertificatesPage() {
 
   function send() {
     if (!event) return;
-    const ids = state.certificates
-      .filter((c) => c.eventId === event.id && !c.sentAt && selectedIds.includes(c.volunteerId))
+    if (selectedIds.length === 0) {
+      toast.error("Select at least one present volunteer.");
+      return;
+    }
+    state.generateCertificates(event.id, selectedIds);
+    const ids = useNssStore
+      .getState()
+      .certificates.filter((c) => c.eventId === event.id && !c.sentAt && selectedIds.includes(c.volunteerId))
       .map((c) => c.id);
     if (ids.length === 0) {
-      toast.error("Generate first, then send. Only generated certificates go to dashboards.");
+      toast.message("Selected certificates are already on volunteer dashboards.");
       return;
     }
     const n = state.sendCertificates(ids);
     toast.success(`Sent ${n} certificate${n === 1 ? "" : "s"} to volunteer dashboards.`);
   }
 
-  async function printSelected() {
+  async function printRows(rows: Array<{ cert: IssuedCertificate; volunteer: Volunteer; event: NssEvent }>) {
     if (!event) return;
-    const rows = present
-      .filter((v) => selectedIds.includes(v.id))
-      .map((v) => {
-        const cert = certificateOf(state, v.id, event.id);
-        return cert ? { cert, volunteer: v, event } : null;
-      })
-      .filter((row): row is NonNullable<typeof row> => Boolean(row));
     if (rows.length === 0) {
-      toast.error("Generate certificates before printing.");
+      toast.error("Select at least one present volunteer.");
       return;
     }
+    state.generateCertificates(
+      event.id,
+      rows.map((row) => row.volunteer.id),
+    );
     const opened = await openPreparedCertificate(() => htmlForCertificates(rows, state.settings));
     if (!opened) toast.message("Popup was blocked. The certificate file was downloaded instead.");
+  }
+
+  async function printSelected() {
+    await printRows(rowsFor(selectedIds));
+  }
+
+  async function viewOne(volunteer: Volunteer) {
+    if (!event) return;
+    const rows = rowsFor([volunteer.id]);
+    if (rows.length === 1) {
+      state.generateCertificates(event.id, [volunteer.id]);
+      const opened = await openPreparedCertificate(() =>
+        htmlForCertificate(rows[0].cert, volunteer, event, state.settings),
+      );
+      if (!opened) toast.message("Popup was blocked. The certificate file was downloaded instead.");
+      return;
+    }
+    await printRows(rows);
   }
 
   return (
@@ -92,9 +158,9 @@ function CertificatesPage() {
       <div>
         <h2 className="font-display text-xl font-semibold">Certificates</h2>
         <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-          Select an event. Volunteers marked present load automatically. Generate, then send — each
-          certificate appears on that registered volunteer's dashboard. The same student cannot receive
-          a second certificate for the same event.
+          Volunteers marked present load automatically. View / Print opens the approved NSS certificate
+          with name, Certificate ID and QR. Generate and Send puts the same certificate on the volunteer
+          dashboard.
         </p>
       </div>
 
@@ -112,7 +178,8 @@ function CertificatesPage() {
             >
               {events.map((e) => (
                 <option key={e.id} value={e.id}>
-                  {e.name} — {formatLongDate(e.date)} ({e.status})
+                  {e.name} — {formatLongDate(e.date)} ({e.status}
+                  {presentCounts[e.id] ? `, ${presentCounts[e.id]} present` : ""})
                 </option>
               ))}
             </select>
@@ -191,20 +258,12 @@ function CertificatesPage() {
                       ) : cert ? (
                         <Badge tone="saffron">Generated</Badge>
                       ) : (
-                        <Badge tone="muted">Not generated</Badge>
+                        <Badge tone="muted">Ready to print</Badge>
                       )}
                     </td>
                     <td className="px-3 py-2">
-                      {cert && event ? (
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() =>
-                            void openPreparedCertificate(() =>
-                              htmlForCertificate(cert, v, event, state.settings),
-                            )
-                          }
-                        >
+                      {event ? (
+                        <Button size="sm" variant="ghost" onClick={() => void viewOne(v)}>
                           View
                         </Button>
                       ) : null}
