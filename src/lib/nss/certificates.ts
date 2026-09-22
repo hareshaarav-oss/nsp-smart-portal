@@ -1,394 +1,770 @@
-import { academicYear, certDisplayName, formatLongDate, parseDob } from "./format";
-import { openHtmlDocument, openHtmlDocumentWhenReady, toDataUrl } from "./print";
-import { qrSvg } from "./qr";
-import type { AttendanceRecord, IssuedCertificate, NssEvent, PortalSettings, Volunteer } from "./types";
+﻿import {
+  academicYear,
+  certDisplayName,
+  formatLongDate,
+} from "./format";
 
-function escapeHtml(s: string) {
-  return s
-    .replaceAll("&", "&" + "amp;")
-    .replaceAll("<", "&" + "lt;")
-    .replaceAll(">", "&" + "gt;")
-    .replaceAll('"', "&" + "quot;")
+import { openHtmlDocument } from "./print";
+
+import type {
+  IssuedCertificate,
+  NssEvent,
+  PortalSettings,
+  Volunteer,
+} from "./types";
+
+/**
+ * Escape HTML special characters.
+ */
+function escapeHtml(value: string) {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
     .replaceAll("'", "&#39;");
 }
 
-function eventCodeOf(event: NssEvent) {
-  return event.id.replace(/^evt-/, "").slice(0, 8).toUpperCase();
-}
-
-export function certificateYear(event: NssEvent) {
-  const iso = parseDob(event.date) || String(event.date || "");
-  const y = iso.slice(0, 4);
-  return /^\d{4}$/.test(y) ? y : "2026";
-}
-
-export function parseCertificateSeq(serial?: string | null) {
-  const m = String(serial ?? "")
-    .trim()
-    .match(/^NSS\/(\d{4})\/(\d{1,6})$/i);
-  if (!m) return null;
-  const n = Number(m[2]);
-  return Number.isFinite(n) && n > 0 ? n : null;
-}
-
-export function formatCertificateSerial(year: string | number, seq: number) {
-  return `NSS/${year}/${String(seq).padStart(3, "0")}`;
-}
-
-/** Next running number. Continues across events — 1–50 then 51. */
-export function nextCertificateSeq(certs: IssuedCertificate[]) {
-  let max = 0;
-  for (const cert of certs) {
-    const n = parseCertificateSeq(cert.certificateId);
-    if (n != null && n > max) max = n;
+/**
+ * Certificate ID.
+ *
+ * Primary source is the ID already assigned by the store:
+ * NSS/2026-27/0001
+ *
+ * The event-based fallback is kept only for older certificates
+ * that were created before certificateId was added.
+ */
+export function certificateSerial(
+  cert: IssuedCertificate,
+  event: NssEvent,
+  certificateNumber = 1,
+) {
+  if (cert.certificateId?.trim()) {
+    return cert.certificateId.trim();
   }
-  if (max > 0) return max + 1;
-  return (certs?.length ?? 0) + 1;
-}
 
-export function assignSequentialIds(certs: IssuedCertificate[], events: NssEvent[]) {
-  if (!certs.length) return certs;
-  const byEvent = new Map(events.map((event) => [event.id, event]));
-  const rows = certs.map((cert, index) => ({
-    cert,
-    index,
-    n: parseCertificateSeq(cert.certificateId),
-  }));
-  let next = 1;
-  for (const row of rows) {
-    if (row.n != null) next = Math.max(next, row.n + 1);
-  }
-  const missing = rows
-    .filter((row) => row.n == null)
-    .sort((a, b) => a.cert.generatedAt.localeCompare(b.cert.generatedAt) || a.index - b.index);
-  if (!missing.length) return certs;
-  const out = certs.slice();
-  for (const row of missing) {
-    const event = byEvent.get(row.cert.eventId);
-    const year = event ? certificateYear(event) : String(row.cert.generatedAt || "2026").slice(0, 4);
-    out[row.index] = { ...row.cert, certificateId: formatCertificateSerial(year || "2026", next) };
-    next += 1;
-  }
-  return out;
-}
-
-export function serialOf(cert: IssuedCertificate, event: NssEvent) {
-  return cert.certificateId || formatCertificateSerial(certificateYear(event), 1);
-}
-
-export function legacyCertificateSerials(volunteer: Volunteer, event: NssEvent) {
   const year = academicYear(event.date);
-  const eventCode = eventCodeOf(event);
-  const id = volunteer.volunteerId;
-  return [
-    `NSS/${year}/${id}/${eventCode}`,
-    `NSS/${year.replace("-", "")}/${id}/${eventCode}`,
-    `NSS/${certificateYear(event)}/${id}`,
-  ];
-}
-
-/** @deprecated Prefer stored sequential IDs. Kept so old QR codes still verify. */
-export function certificateSerial(volunteer: Volunteer, event: NssEvent) {
-  return legacyCertificateSerials(volunteer, event)[0];
-}
-
-function certDateIso(event: NssEvent, fallback?: string) {
-  return parseDob(event.date) || parseDob(fallback || "") || String(event.date || fallback || "").slice(0, 10);
+  return `NSS/${year}/${String(certificateNumber).padStart(4, "0")}`;
 }
 
 const CERT_CSS = `
-@page { size: A4 landscape; margin: 0; }
-* { box-sizing: border-box; }
-html, body { margin: 0; padding: 0; background: #e8eef6; }
-body { font-family: "Cormorant Garamond", Georgia, serif; color: #171717; -webkit-text-size-adjust: 100%; }
-.wrap { width: 100%; padding: 10px 8px 24px; }
-#print-root { width: 100%; }
+@page {
+  size: A4 landscape;
+  margin: 0;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  background: #fff;
+}
+
+body {
+  font-family: "Cormorant Garamond", Georgia, serif;
+  color: #171717;
+}
+
+.wrap,
+#print-root {
+  width: 100%;
+}
+
 .sheet {
   position: relative;
-  width: min(100%, 297mm);
+  width: 100%;
   max-width: 297mm;
-  aspect-ratio: 3 / 2;
-  margin: 0 auto 18px;
+  aspect-ratio: 1536 / 1024;
+  margin: 0 auto;
   overflow: hidden;
-  page-break-after: always;
   background: #fff;
-  container-type: inline-size;
+  page-break-after: always;
 }
-.sheet:last-of-type { page-break-after: auto; margin-bottom: 0; }
-.sheet img.bg {
-  position: absolute; inset: 0; width: 100%; height: 100%;
-  object-fit: fill; z-index: 0; display: block;
+
+.sheet:last-child {
+  page-break-after: auto;
 }
-.text-layer { position: absolute; inset: 0; z-index: 3; pointer-events: none; }
+
+/*
+ * The supplied JPG is the fixed certificate artwork.
+ * It is rendered as an actual IMG rather than a CSS background,
+ * so it also works correctly inside the Blob URL used by print.ts.
+ */
+.certificate-bg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: fill;
+  z-index: 0;
+}
+
+/*
+ * Masks cover ONLY old/sample dynamic text printed in the JPG.
+ * Fixed artwork, borders, logos, flag, heading and other artwork
+ * remain untouched.
+ */
+.mask {
+  position: absolute;
+  background: #fff;
+  z-index: 2;
+  border-radius: 2px;
+}
+
+.mask-name {
+  left: 19%;
+  top: 33.5%;
+  width: 62%;
+  height: 12.5%;
+}
+
+.mask-copy {
+  left: 13%;
+  top: 46%;
+  width: 74%;
+  height: 22.5%;
+}
+
+.mask-po {
+  left: 4.5%;
+  top: 68%;
+  width: 29%;
+  height: 18%;
+}
+
+.mask-principal {
+  right: 4.5%;
+  top: 68%;
+  width: 29%;
+  height: 18%;
+}
+
+.mask-id {
+  left: 18%;
+  bottom: 6.2%;
+  width: 28%;
+  height: 8%;
+}
+
+.mask-date {
+  right: 18%;
+  bottom: 6.2%;
+  width: 28%;
+  height: 8%;
+}
+
+.text-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+}
+
 .name {
-  position: absolute; left: 8%; top: 35.3%; width: 84%; height: 8.4%;
-  margin: 0; display: flex; align-items: center; justify-content: center;
+  position: absolute;
+  left: 20%;
+  top: 35.0%;
+  width: 60%;
+  margin: 0;
   text-align: center;
   font-family: "Dancing Script", cursive;
-  font-style: normal; font-weight: 700; color: #b11619;
-  font-size: 52px; font-size: var(--name-size, 5.35cqw);
-  line-height: 1.02; letter-spacing: 0.01em;
+  font-size: clamp(34px, 4.35vw, 68px);
+  line-height: 1.05;
+  font-weight: 700;
+  color: #b11619;
   white-space: nowrap;
-  overflow: visible;
-  font-variant: normal; text-transform: none; font-synthesis: none;
 }
+
+.name-line {
+  position: absolute;
+  left: 20.6%;
+  top: 45.1%;
+  width: 58.8%;
+  height: 1px;
+  background: #b58a2d;
+}
+
 .copy {
-  position: absolute; left: 11%; top: 46.6%; width: 78%; height: 18.8%;
-  margin: 0; text-align: center; font-style: italic;
-  font-size: 20px; font-size: 1.95cqw;
-  line-height: 1.38; color: #1a1a1a; font-weight: 500;
-  overflow: visible;
+  position: absolute;
+  left: 14%;
+  top: 47%;
+  width: 72%;
+  margin: 0;
+  text-align: center;
+  font-family: "Cormorant Garamond", Georgia, serif;
+  font-style: italic;
+  font-size: clamp(13px, 1.58vw, 24px);
+  line-height: 1.48;
+  color: #111;
+  font-weight: 500;
 }
-.copy strong { font-style: italic; font-weight: 700; color: #1a1a1a; }
-.cert-id, .date {
-  position: absolute; top: 86.35%;
+
+.copy strong {
+  font-style: italic;
+  font-weight: 800;
+  color: #0c572f;
+}
+
+.po-sign,
+.principal-sign {
+  position: absolute;
+  top: 71%;
+  width: 22%;
+  text-align: center;
   font-family: "Noto Sans", sans-serif;
-  font-size: 13px; font-size: 1.18cqw; font-weight: 600; color: #1a1a1a;
-  line-height: 1.2; letter-spacing: 0.02em;
+}
+
+.po-sign {
+  left: 7.2%;
+}
+
+.principal-sign {
+  right: 7.2%;
+}
+
+.signature {
+  font-family: "Dancing Script", cursive;
+  font-size: clamp(22px, 2.4vw, 38px);
+  color: #1746a2;
+  line-height: 1;
+  margin-bottom: 10px;
+}
+
+.who {
+  font-family: "Noto Sans", sans-serif;
+  font-size: clamp(10px, 1.05vw, 16px);
+  font-weight: 700;
+  color: #173a87;
+}
+
+.role {
+  margin-top: 4px;
+  font-family: "Noto Sans", sans-serif;
+  font-size: clamp(9px, 0.95vw, 14px);
+  color: #111;
+}
+
+.cert-id {
+  position: absolute;
+  left: 24%;
+  bottom: 10.3%;
+  width: 18%;
+  text-align: center;
+  font-family: "Noto Sans", sans-serif;
+  font-size: clamp(9px, 0.9vw, 14px);
+  color: #111;
   white-space: nowrap;
 }
-.cert-id { left: 7%; width: 38%; text-align: center; }
-.date { left: 55%; width: 38%; text-align: center; }
-.qr {
-  position: absolute; left: 50%; top: 75.4%; transform: translateX(-50%);
-  width: 5.4%; background: #fff; padding: 3px; border-radius: 3px; z-index: 4;
+
+.date {
+  position: absolute;
+  right: 24%;
+  bottom: 10.3%;
+  width: 18%;
+  text-align: center;
+  font-family: "Noto Sans", sans-serif;
+  font-size: clamp(9px, 0.9vw, 14px);
+  color: #111;
+  white-space: nowrap;
 }
-.qr svg { width: 100%; height: auto; display: block; }
-.no-print { text-align: center; margin: 12px 0 0; }
-.no-print button { min-height: 42px; padding: 8px 16px; border-radius: 10px; border: 0; font-weight: 700; cursor: pointer; margin: 0 6px; }
-.print { background: #15803d; color: #fff; }
-.close { background: #e2e8f0; }
+
+.no-print {
+  text-align: center;
+  margin: 12px 0;
+}
+
+.no-print button {
+  min-height: 42px;
+  padding: 8px 16px;
+  border-radius: 10px;
+  border: 0;
+  font-weight: 700;
+  cursor: pointer;
+  margin: 0 6px;
+}
+
+.print {
+  background: #15803d;
+  color: #fff;
+}
+
+.close {
+  background: #e2e8f0;
+  color: #111;
+}
+
 @media screen {
-  .sheet { box-shadow: 0 10px 35px rgba(0,0,0,.16); }
-}
-@media print {
-  html, body { background: #fff !important; }
-  .wrap { padding: 0; overflow: visible; }
   .sheet {
-    width: 297mm !important;
-    max-width: 297mm !important;
-    box-shadow: none !important;
-    margin: 0 auto;
+    box-shadow: 0 10px 35px rgba(0, 0, 0, 0.16);
   }
-  .no-print { display: none !important; }
+}
+
+@media print {
+  html,
+  body {
+    background: #fff !important;
+  }
+
+  .sheet {
+    box-shadow: none !important;
+    width: 297mm;
+    height: 198mm;
+    max-width: none;
+    aspect-ratio: auto;
+    margin: 0;
+    page-break-after: always;
+  }
+
+  .certificate-bg {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+}
+
+@media (max-width: 900px) {
+  .sheet {
+    min-width: 0;
+  }
+
+  .name {
+    font-size: clamp(28px, 5vw, 54px);
+  }
 }
 `;
 
-function nameFontSize(name: string) {
-  const n = name.length;
-  if (n > 42) return "2.7cqw";
-  if (n > 36) return "3.3cqw";
-  if (n > 28) return "4.0cqw";
-  if (n > 22) return "4.6cqw";
-  if (n > 16) return "5.0cqw";
-  return "5.35cqw";
+/**
+ * Convert the fixed template image to a data URL.
+ *
+ * This is the important fix: the printable HTML is opened from a
+ * Blob URL, so the certificate artwork is embedded directly into
+ * the HTML instead of depending on /images/... resolving inside
+ * the new document.
+ */
+async function imageToDataUrl(url: string): Promise<string> {
+  if (url.startsWith("data:image/")) {
+    return url;
+  }
+
+  const response = await fetch(url, {
+    credentials: "same-origin",
+  });
+
+  if (!response.ok) {
+    throw new Error(
+      `Certificate template could not be loaded (${response.status}).`,
+    );
+  }
+
+  const blob = await response.blob();
+
+  return await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+
+    reader.onloadend = () => {
+      if (typeof reader.result === "string") {
+        resolve(reader.result);
+      } else {
+        reject(new Error("Could not convert certificate template to data URL."));
+      }
+    };
+
+    reader.onerror = () => {
+      reject(reader.error ?? new Error("Could not read certificate template."));
+    };
+
+    reader.readAsDataURL(blob);
+  });
 }
 
-function verifyHref(serial: string) {
-  const origin = typeof window !== "undefined" ? window.location.origin : "https://nsp-smart-portal.vercel.app";
-  return `${origin}/verify?id=${encodeURIComponent(serial)}`;
+/**
+ * Programme Officer signature fallback.
+ */
+function signatureShortName(
+  fullName: string,
+  fallback: string,
+) {
+  const clean = fullName
+    .replace(/^dr\.\s*/i, "")
+    .trim();
+
+  if (!clean) {
+    return fallback;
+  }
+
+  const first = clean.split(/\s+/)[0];
+  return first || fallback;
 }
 
-type SheetAssets = {
-  template: string;
-};
+/**
+ * Principal signature fallback.
+ */
+function principalSignature(fullName: string) {
+  const parts = fullName
+    .replace(/^dr\.\s*/i, "")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
 
-function certificateSheet(opts: {
+  if (!parts.length) {
+    return "T.J.Vyas";
+  }
+
+  if (parts.length === 1) {
+    return parts[0];
+  }
+
+  if (parts.length === 2) {
+    return `${parts[0][0]}.${parts[1]}`;
+  }
+
+  return `${parts[0][0]}.${parts[parts.length - 2][0]}.${parts[parts.length - 1]}`;
+}
+
+/**
+ * Create one certificate sheet.
+ *
+ * NOTE:
+ * The public API remains compatible with certificates.tsx:
+ * certificateNumber is optional.
+ */
+async function certificateSheet(opts: {
+  cert: IssuedCertificate;
   volunteer: Volunteer;
   event: NssEvent;
   settings: PortalSettings;
-  issuedOn: string;
-  serial: string;
-  assets: SheetAssets;
-  qr?: string;
+  certificateNumber?: number;
 }) {
-  const college = escapeHtml(opts.settings.collegeName);
-  const name = escapeHtml(certDisplayName(opts.volunteer.fullName));
-  const eventName = escapeHtml(opts.event.name);
-  const serial = escapeHtml(opts.serial);
-  const issued = escapeHtml(formatLongDate(opts.issuedOn));
-  const year = escapeHtml(academicYear(opts.event.date));
-  const qrBlock = opts.qr ? `<div class="qr" title="Scan to verify">${opts.qr}</div>` : "";
+  const configuredTemplate =
+    opts.settings.certificateTemplateUrl?.trim();
 
-  return `<div class="sheet">
-    <img class="bg" src="${opts.assets.template}" alt="" />
-    <div class="text-layer">
-      <p class="name" style="--name-size:${nameFontSize(name)}">${name}</p>
-      <p class="copy">
-        for actively participating with exemplary dedication in the <strong>${eventName}</strong>
-        organised by the National Service Scheme Unit of <strong>${college.toUpperCase()}</strong>
-        during the academic year <strong>${year}</strong>. We highly appreciate their sincere efforts,
-        active involvement and valuable contribution towards community service and nation-building.
-      </p>
-      <div class="cert-id">Certificate ID : ${serial}</div>
-      <div class="date">Date : ${issued}</div>
-      ${qrBlock}
+  const templateUrl =
+    configuredTemplate ||
+    new URL(
+      "/images/certificate-template.jpg",
+      window.location.origin,
+    ).href;
+
+  let templateDataUrl: string;
+
+  try {
+    templateDataUrl = await imageToDataUrl(templateUrl);
+  } catch {
+    /*
+     * If a custom configured template cannot be fetched, fall back
+     * to the fixed master template.
+     */
+    const fallbackUrl = new URL(
+      "/images/certificate-template.jpg",
+      window.location.origin,
+    ).href;
+
+    templateDataUrl = await imageToDataUrl(fallbackUrl);
+  }
+
+  const college = escapeHtml(opts.settings.collegeName);
+
+  const name = escapeHtml(
+    certDisplayName(opts.volunteer.fullName),
+  );
+
+  const eventName = escapeHtml(
+    opts.event.name.toUpperCase(),
+  );
+
+  const year = escapeHtml(
+    academicYear(opts.event.date),
+  );
+
+  /*
+   * Certificate date is ALWAYS the event/program date.
+   * Never generatedAt or sentAt.
+   */
+  const eventDate = escapeHtml(
+    formatLongDate(opts.event.date.slice(0, 10)),
+  );
+
+  /*
+   * Use the permanent certificateId assigned by store.ts.
+   * Older records without certificateId use the optional fallback.
+   */
+  const serial = escapeHtml(
+    certificateSerial(
+      opts.cert,
+      opts.event,
+      opts.certificateNumber ?? 1,
+    ),
+  );
+
+  const po = escapeHtml(opts.settings.poName);
+  const principal = escapeHtml(opts.settings.principalName);
+
+  const poSignature = escapeHtml(
+    signatureShortName(
+      opts.settings.poName,
+      "Haresh",
+    ),
+  );
+
+  const principalSignatureText = escapeHtml(
+    principalSignature(opts.settings.principalName),
+  );
+
+  const templateImage = `
+    <img
+      class="certificate-bg"
+      src="${escapeHtml(templateDataUrl)}"
+      alt=""
+      aria-hidden="true"
+    />
+  `;
+
+  const poSignatureImage =
+    opts.settings.poSignature
+      ? `
+        <img
+          src="${escapeHtml(opts.settings.poSignature)}"
+          alt="Programme Officer signature"
+          style="
+            max-height:42px;
+            max-width:140px;
+            object-fit:contain;
+            display:block;
+            margin:0 auto 8px;
+          "
+        />
+      `
+      : `
+        <div class="signature">${poSignature}</div>
+      `;
+
+  const principalSignatureImage =
+    opts.settings.principalSignature
+      ? `
+        <img
+          src="${escapeHtml(opts.settings.principalSignature)}"
+          alt="Principal signature"
+          style="
+            max-height:42px;
+            max-width:140px;
+            object-fit:contain;
+            display:block;
+            margin:0 auto 8px;
+          "
+        />
+      `
+      : `
+        <div class="signature">${principalSignatureText}</div>
+      `;
+
+  return `
+    <div class="sheet">
+
+      ${templateImage}
+
+      <div class="mask mask-name"></div>
+      <div class="mask mask-copy"></div>
+      <div class="mask mask-po"></div>
+      <div class="mask mask-principal"></div>
+      <div class="mask mask-id"></div>
+      <div class="mask mask-date"></div>
+
+      <div class="text-layer">
+
+        <p class="name">${name}</p>
+
+        <span class="name-line"></span>
+
+        <p class="copy">
+          for actively participating with exemplary dedication
+          in the
+          <strong>${eventName}</strong>
+          organised by the<br />
+
+          National Service Scheme Unit of
+          <strong>${college.toUpperCase()}</strong>
+          <br />
+
+          during the academic year
+          <strong>${year}</strong>.
+          We highly appreciate their sincere efforts,
+          active involvement<br />
+
+          and valuable contribution towards community
+          service and nation-building.
+        </p>
+
+        <div class="po-sign">
+          ${poSignatureImage}
+
+          <div class="who">${po}</div>
+
+          <div class="role">
+            NSS Program Officer
+          </div>
+        </div>
+
+        <div class="principal-sign">
+          ${principalSignatureImage}
+
+          <div class="who">${principal}</div>
+
+          <div class="role">
+            Principal
+          </div>
+        </div>
+
+        <div class="cert-id">
+          Certificate ID : ${serial}
+        </div>
+
+        <div class="date">
+          Date : ${eventDate}
+        </div>
+
+      </div>
     </div>
-  </div>`;
+  `;
 }
 
-function wrapCertificateDocument(title: string, sheets: string) {
-  return `<!doctype html>
+/**
+ * Wrap certificates in printable HTML document.
+ */
+function wrapCertificateDocument(
+  title: string,
+  sheets: string,
+) {
+  return `
+<!doctype html>
 <html>
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5, user-scalable=yes" />
+
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1"
+  />
+
   <title>${escapeHtml(title)}</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,700;1,500;1,700&family=Dancing+Script:wght@600;700&family=Noto+Sans:wght@400;600;700&display=swap" />
-  <style>${CERT_CSS}</style>
+
+  <link
+    rel="preconnect"
+    href="https://fonts.googleapis.com"
+  />
+
+  <link
+    rel="preconnect"
+    href="https://fonts.gstatic.com"
+    crossorigin
+  />
+
+  <link
+    rel="stylesheet"
+    href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,700;1,500;1,700&family=Dancing+Script:wght@600;700&family=Noto+Sans:wght@400;600;700&display=swap"
+  />
+
+  <style>
+    ${CERT_CSS}
+  </style>
 </head>
+
 <body>
   <div class="wrap">
-    <div id="print-root">${sheets}</div>
+    <div id="print-root">
+      ${sheets}
+    </div>
+
     <p class="no-print">
-      <button class="print" onclick="window.print()">Print / Save PDF</button>
-      <button class="close" onclick="window.close()">Close</button>
+      <button
+        class="print"
+        onclick="window.print()"
+      >
+        Print / Save PDF
+      </button>
+
+      <button
+        class="close"
+        onclick="window.close()"
+      >
+        Close
+      </button>
     </p>
   </div>
 </body>
-</html>`;
+</html>
+  `;
 }
 
-async function loadSheetAssets(settings: PortalSettings): Promise<SheetAssets> {
-  void settings;
-  const bundled = "/images/certificate-template.jpg?v=20260912f";
-  const template = await toDataUrl(bundled);
-  return { template: template || bundled };
-}
-
-async function qrFor(serial: string, settings: PortalSettings) {
-  if (settings.certificateQrEnabled === false) return "";
-  try {
-    return await qrSvg(verifyHref(serial), 96);
-  } catch {
-    return "";
-  }
-}
-
-export function preparedCertificate(
-  volunteer: Volunteer,
-  event: NssEvent,
-  existing?: IssuedCertificate,
-): IssuedCertificate {
-  return (
-    existing ?? {
-      id: `crt-${event.id}-${volunteer.id}`,
-      volunteerId: volunteer.id,
-      eventId: event.id,
-      generatedAt: event.date || new Date().toISOString(),
-      sentAt: null,
-      printReady: true,
-    }
-  );
-}
-
+/**
+ * Single certificate.
+ *
+ * Kept at 4 required arguments so the existing certificates.tsx
+ * does not need to be changed.
+ */
 export async function htmlForCertificate(
   cert: IssuedCertificate,
   volunteer: Volunteer,
   event: NssEvent,
   settings: PortalSettings,
 ) {
-  const serial = serialOf(cert, event);
-  const [assets, qr] = await Promise.all([loadSheetAssets(settings), qrFor(serial, settings)]);
   return wrapCertificateDocument(
     `NSS Certificate — ${volunteer.fullName}`,
-    certificateSheet({
+    await certificateSheet({
+      cert,
       volunteer,
       event,
       settings,
-      issuedOn: certDateIso(event, cert.sentAt || cert.generatedAt),
-      serial,
-      assets,
-      qr,
     }),
   );
 }
 
+/**
+ * Multiple certificates.
+ *
+ * Kept at 2 required arguments so the existing certificates.tsx
+ * does not need to be changed.
+ */
 export async function htmlForCertificates(
-  rows: Array<{ cert: IssuedCertificate; volunteer: Volunteer; event: NssEvent }>,
+  rows: Array<{
+    cert: IssuedCertificate;
+    volunteer: Volunteer;
+    event: NssEvent;
+  }>,
   settings: PortalSettings,
 ) {
-  const assets = await loadSheetAssets(settings);
   const sheets = (
     await Promise.all(
-      rows.map(async (row) => {
-        const serial = serialOf(row.cert, row.event);
-        return certificateSheet({
+      rows.map((row) =>
+        certificateSheet({
+          cert: row.cert,
           volunteer: row.volunteer,
           event: row.event,
           settings,
-          issuedOn: certDateIso(row.event, row.cert.sentAt || row.cert.generatedAt),
-          serial,
-          assets,
-          qr: await qrFor(serial, settings),
-        });
-      }),
+        }),
+      ),
     )
   ).join("");
-  return wrapCertificateDocument("NSS Certificates", sheets);
+
+  return wrapCertificateDocument(
+    "NSS Certificates",
+    sheets,
+  );
 }
 
-export function openCertificateDocument(html: string) {
-  return openHtmlDocument(html);
-}
-
-export function openPreparedCertificate(prepare: () => Promise<string>) {
-  return openHtmlDocumentWhenReady(prepare);
-}
-
-export type CertificateLookup = {
-  volunteer: Volunteer;
-  event: NssEvent;
-  serial: string;
-  cert?: IssuedCertificate;
-};
-
-export function resolveCertificate(
-  state: {
-    volunteers: Volunteer[];
-    events: NssEvent[];
-    certificates?: IssuedCertificate[];
-    attendance?: AttendanceRecord[];
-  },
-  query: string,
-): CertificateLookup | null {
-  const q = query.trim().toLowerCase();
-  if (!q) return null;
-
-  const volunteers = state.volunteers ?? [];
-  const events = state.events ?? [];
-  const certificates = state.certificates ?? [];
-  const attendance = state.attendance ?? [];
-
-  for (const cert of certificates) {
-    const volunteer = volunteers.find((v) => v.id === cert.volunteerId);
-    const event = events.find((e) => e.id === cert.eventId);
-    if (!volunteer || !event) continue;
-    const serial = serialOf(cert, event);
-    const aliases = legacyCertificateSerials(volunteer, event);
-    if (
-      cert.id.toLowerCase() === q ||
-      serial.toLowerCase() === q ||
-      aliases.some((alias) => alias.toLowerCase() === q)
-    ) {
-      return { volunteer, event, serial, cert };
-    }
-  }
-
-  for (const volunteer of volunteers) {
-    for (const event of events) {
-      const aliases = legacyCertificateSerials(volunteer, event);
-      if (!aliases.some((alias) => alias.toLowerCase() === q)) continue;
-      const issued = certificates.find((c) => c.volunteerId === volunteer.id && c.eventId === event.id);
-      const present = attendance.some(
-        (row) => row.volunteerId === volunteer.id && row.eventId === event.id && row.present,
-      );
-      if (!issued && !present) continue;
-      return { volunteer, event, serial: issued ? serialOf(issued, event) : aliases[0], cert: issued };
-    }
-  }
-
-  return null;
+/**
+ * Open printable certificate document.
+ */
+export function openCertificateDocument(
+  html: string,
+) {
+  openHtmlDocument(html);
 }
