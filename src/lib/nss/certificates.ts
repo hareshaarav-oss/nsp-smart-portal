@@ -27,6 +27,7 @@ function escapeHtml(value: string) {
 function formatCertificateDate(value: string) {
   const raw = String(value || "").slice(0, 10);
   const match = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+<<<<<<< HEAD
   if (!match) return formatLongDate(raw);
   const months = [
     "January","February","March","April","May","June",
@@ -35,6 +36,10 @@ function formatCertificateDate(value: string) {
   const day = Number(match[3]);
   const month = months[Number(match[2]) - 1] ?? match[2];
   return `${day} ${month} ${match[1]}`;
+=======
+  if (match) return `${match[3]}-${match[2]}-${match[1]}`;
+  return formatLongDate(raw);
+>>>>>>> dfda87ebb024339ad11f429ae8e6ee15f0a6ca0b
 }
 
 export function certificateSerial(
@@ -78,7 +83,15 @@ body {
   background: #fff;
   page-break-after: always;
 }
+<<<<<<< HEAD
 .sheet:last-child { page-break-after: auto; }
+=======
+
+.sheet:last-child {
+  page-break-after: auto;
+}
+
+>>>>>>> dfda87ebb024339ad11f429ae8e6ee15f0a6ca0b
 .certificate-bg {
   position: absolute;
   inset: 0;
@@ -88,6 +101,59 @@ body {
   object-fit: fill;
   z-index: 0;
 }
+<<<<<<< HEAD
+=======
+
+.mask {
+  position: absolute;
+  background: #fff;
+  z-index: 2;
+  border-radius: 2px;
+}
+
+.mask-name {
+  left: 19%;
+  top: 33.5%;
+  width: 62%;
+  height: 12.5%;
+}
+
+.mask-copy {
+  left: 13%;
+  top: 46%;
+  width: 74%;
+  height: 22.5%;
+}
+
+.mask-po {
+  left: 4.5%;
+  top: 68%;
+  width: 29%;
+  height: 18%;
+}
+
+.mask-principal {
+  right: 4.5%;
+  top: 68%;
+  width: 29%;
+  height: 18%;
+}
+
+.mask-id {
+  left: 18%;
+  bottom: 6.2%;
+  width: 28%;
+  height: 8%;
+}
+
+.mask-date {
+  right: 18%;
+  bottom: 6.2%;
+  width: 28%;
+  height: 8%;
+}
+
+>>>>>>> dfda87ebb024339ad11f429ae8e6ee15f0a6ca0b
 .text-layer {
   position: absolute;
   inset: 0;
@@ -97,7 +163,11 @@ body {
 .name {
   position: absolute;
   left: 20%;
+<<<<<<< HEAD
   top: 46.3%;
+=======
+  top: 35%;
+>>>>>>> dfda87ebb024339ad11f429ae8e6ee15f0a6ca0b
   width: 60%;
   height: 4.0%;
   margin: 0;
@@ -215,6 +285,10 @@ body {
   .name { font-size: 20pt; }
 }
 `;
+<<<<<<< HEAD
+=======
+
+>>>>>>> dfda87ebb024339ad11f429ae8e6ee15f0a6ca0b
 async function imageToDataUrl(url: string): Promise<string> {
   if (url.startsWith("data:image/")) {
     return url;
@@ -275,10 +349,19 @@ async function certificateSheet(opts: {
   settings: PortalSettings;
   certificateNumber?: number;
 }) {
+<<<<<<< HEAD
+=======
+  const configuredTemplate = opts.settings.certificateTemplateUrl?.trim();
+  const templateUrl =
+    configuredTemplate ||
+    new URL("/images/certificate-template.jpg", window.location.origin).href;
+
+>>>>>>> dfda87ebb024339ad11f429ae8e6ee15f0a6ca0b
   let templateDataUrl: string;
   try {
     templateDataUrl = await imageToDataUrl("/images/certificate-template.png");
   } catch {
+<<<<<<< HEAD
     templateDataUrl = await imageToDataUrl("/images/certificate-template.jpg");
   }
 
@@ -294,13 +377,24 @@ async function certificateSheet(opts: {
   const eventDate = escapeHtml(
     formatCertificateDate(opts.event.date),
   );
+=======
+    const fallbackUrl = new URL(
+      "/images/certificate-template.jpg",
+      window.location.origin,
+    ).href;
+    templateDataUrl = await imageToDataUrl(fallbackUrl);
+  }
+
+  const college = escapeHtml(opts.settings.collegeName);
+  const name = escapeHtml(certDisplayName(opts.volunteer.fullName));
+  const eventName = escapeHtml(opts.event.name.toUpperCase());
+  const year = escapeHtml(academicYear(opts.event.date));
+  const eventDate = escapeHtml(formatCertificateDate(opts.event.date));
+>>>>>>> dfda87ebb024339ad11f429ae8e6ee15f0a6ca0b
   const serial = escapeHtml(
-    certificateSerial(
-      opts.cert,
-      opts.event,
-      opts.certificateNumber ?? 1,
-    ),
+    certificateSerial(opts.cert, opts.event, opts.certificateNumber ?? 1),
   );
+<<<<<<< HEAD
 
   return `
     <div class="sheet">
@@ -316,6 +410,83 @@ async function certificateSheet(opts: {
         <p class="year">${year}</p>
         <p class="cert-id">${serial}</p>
         <p class="date">${eventDate}</p>
+=======
+  const po = escapeHtml(opts.settings.poName);
+  const principal = escapeHtml(opts.settings.principalName);
+  const poSignature = escapeHtml(signatureShortName(opts.settings.poName, "Haresh"));
+  const principalSignatureText = escapeHtml(
+    principalSignature(opts.settings.principalName),
+  );
+
+  const templateImage = `
+    <img
+      class="certificate-bg"
+      src="${escapeHtml(templateDataUrl)}"
+      alt=""
+      aria-hidden="true"
+    />
+  `;
+
+  const poSignatureImage = opts.settings.poSignature
+    ? `
+        <img
+          src="${escapeHtml(opts.settings.poSignature)}"
+          alt="Programme Officer signature"
+          style="max-height:42px;max-width:140px;object-fit:contain;display:block;margin:0 auto 8px;"
+        />
+      `
+    : `<div class="signature">${poSignature}</div>`;
+
+  const principalSignatureImage = opts.settings.principalSignature
+    ? `
+        <img
+          src="${escapeHtml(opts.settings.principalSignature)}"
+          alt="Principal signature"
+          style="max-height:42px;max-width:140px;object-fit:contain;display:block;margin:0 auto 8px;"
+        />
+      `
+    : `<div class="signature">${principalSignatureText}</div>`;
+
+  return `
+    <div class="sheet">
+      ${templateImage}
+      <div class="mask mask-name"></div>
+      <div class="mask mask-copy"></div>
+      <div class="mask mask-po"></div>
+      <div class="mask mask-principal"></div>
+      <div class="mask mask-id"></div>
+      <div class="mask mask-date"></div>
+      <div class="text-layer">
+        <p class="name">${name}</p>
+        <span class="name-line"></span>
+        <p class="copy">
+          for actively participating with exemplary dedication
+          in the
+          <strong>${eventName}</strong>
+          organised by the<br />
+          National Service Scheme Unit of
+          <strong>${college.toUpperCase()}</strong>
+          <br />
+          during the academic year
+          <strong>${year}</strong>.
+          We highly appreciate their sincere efforts,
+          active involvement<br />
+          and valuable contribution towards community
+          service and nation-building.
+        </p>
+        <div class="po-sign">
+          ${poSignatureImage}
+          <div class="who">${po}</div>
+          <div class="role">NSS Program Officer</div>
+        </div>
+        <div class="principal-sign">
+          ${principalSignatureImage}
+          <div class="who">${principal}</div>
+          <div class="role">Principal</div>
+        </div>
+        <div class="cert-id">Certificate ID : ${serial}</div>
+        <div class="date">Date : ${eventDate}</div>
+>>>>>>> dfda87ebb024339ad11f429ae8e6ee15f0a6ca0b
       </div>
     </div>
   `;
@@ -344,6 +515,7 @@ function wrapCertificateDocument(title: string, sheets: string) {
     <div id="print-root">
       ${sheets}
     </div>
+<<<<<<< HEAD
 
     <script>
       function fitText(el, startPt, minPt) {
@@ -360,6 +532,8 @@ function wrapCertificateDocument(title: string, sheets: string) {
         document.querySelectorAll(".event-name").forEach(function (el) { fitText(el, 16, 9); });
       });
     </script>
+=======
+>>>>>>> dfda87ebb024339ad11f429ae8e6ee15f0a6ca0b
     <p class="no-print">
       <button class="print" onclick="window.print()">Print / Save PDF</button>
       <button class="close" onclick="window.close()">Close</button>
@@ -545,4 +719,8 @@ export function resolveCertificate(
   }
 
   return null;
+<<<<<<< HEAD
 }
+=======
+}
+>>>>>>> dfda87ebb024339ad11f429ae8e6ee15f0a6ca0b
