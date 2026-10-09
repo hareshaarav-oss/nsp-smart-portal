@@ -12,8 +12,11 @@ function digits(value: unknown) {
 }
 
 function publicVolunteer(row: Row) {
+  const phone = digits(row.mobile);
+  const rawId = text(row.id);
+  const idIsPhone = digits(rawId).length >= 10 && (digits(rawId) === phone || digits(rawId).endsWith(phone));
   return {
-    id: text(row.id),
+    id: idIsPhone ? text(row.volunteerId) : rawId,
     volunteerId: text(row.volunteerId),
     fullName: text(row.fullName),
     course: text(row.course),
