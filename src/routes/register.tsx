@@ -51,7 +51,7 @@ function RegisterPage() {
     }
   }
 
-  function onSubmit(e: React.FormEvent) {
+  async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!/^\d{10}$/.test(form.mobile.trim())) {
       toast.error("Enter a 10-digit mobile number.");
@@ -59,8 +59,19 @@ function RegisterPage() {
     }
     const v = addVolunteer({ ...form, photoUrl });
     addLog("Student registration", `Registered ${v.fullName} (${v.enrollment}).`);
+    try {
+      const res = await fetch("/api/nss-cloud", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ action: "register", ...form }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) throw new Error(data.error || "Cloud save failed");
+      toast.success("Registration saved to college cloud.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Saved on this phone only. Cloud update failed.");
+    }
     setDone({ name: v.fullName, id: v.volunteerId, mobile: v.mobile, enrollment: v.enrollment });
-    toast.success("Registration saved.");
   }
 
   return (
@@ -123,7 +134,7 @@ function RegisterPage() {
                 <Field label="Full name" className="sm:col-span-2">
                   <Input required value={form.fullName} onChange={(e) => set("fullName", e.target.value)} />
                 </Field>
-                <Field label="Mobile (this is the password)">
+                <Field label="Mobile number">
                   <Input required inputMode="numeric" value={form.mobile} onChange={(e) => set("mobile", e.target.value)} />
                 </Field>
                 <Field label="Aadhaar number">
