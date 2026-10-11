@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { loadCollegeCloud } from "@/lib/nss/firestore";
+import { loadCollegeCloud, saveStudentToCloud } from "@/lib/nss/firestore";
 
 type Row = Record<string, unknown>;
 
@@ -79,6 +79,10 @@ export const Route = createFileRoute("/api/nss-cloud")({
       POST: async ({ request }) => {
         try {
           const body = (await request.json()) as { action?: string; username?: string; password?: string };
+          if (body.action === "register") {
+            const saved = await saveStudentToCloud(body as Record<string, unknown>);
+            return Response.json({ ok: true, ...saved });
+          }
           if (body.action !== "login") return Response.json({ ok: false, error: "Unsupported action." }, { status: 400 });
           const data = await loadCollegeCloud();
           const volunteers = (data?.volunteers ?? []) as unknown as Row[];
