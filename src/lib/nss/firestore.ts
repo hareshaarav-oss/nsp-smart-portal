@@ -144,9 +144,9 @@ function isPresent(row: Record<string, unknown>) {
 
 function normalizeCourse(value: unknown) {
   const raw = text(value);
-  if (/બી\.?\s*કોમ|b\.?\s*com/i.test(raw)) return "B.Com.";
-  if (/બી\.?\s*એ|b\.?\s*a\b/i.test(raw)) return "B.A.";
-  if (/બી\.?\s*એસ|b\.?\s*sc/i.test(raw)) return "B.Sc.";
+  if (/\u0aac\u0ac0\.?\s*\u0a95\u0acb\u0aae|b\.?\s*com/i.test(raw)) return "B.Com.";
+  if (/\u0aac\u0ac0\.?\s*\u0a8f|b\.?\s*a\b/i.test(raw)) return "B.A.";
+  if (/\u0aac\u0ac0\.?\s*\u0a8f\u0ab8|b\.?\s*sc/i.test(raw)) return "B.Sc.";
   return raw || "B.Com.";
 }
 
@@ -320,6 +320,8 @@ export async function loadCollegeCloud(opts: { gallery?: boolean } = {}): Promis
     return status === "alumni" || role === "alumni";
   }).length;
 
+  const computedHours = computeServiceHours(events, attendance);
+  const storedHours = Number(stats?.serviceHours ?? 0);
   return {
     volunteers,
     events,
@@ -328,6 +330,76 @@ export async function loadCollegeCloud(opts: { gallery?: boolean } = {}): Promis
     gallery,
     visitors: Number(visitorsDoc?.count ?? 0),
     alumniCount,
-    serviceHours: Number(stats?.serviceHours ?? 0),
+    serviceHours: Math.max(storedHours, computedHours),
   };
+}
+
+function encodeValue(value: unknown): Record<string, unknown> {
+  if (value === null || value === undefined || value === "") return { nullValue: null };
+  if (typeof value === "boolean") return { booleanValue: value };
+  if (typeof value === "number") return { integerValue: String(Math.trunc(value)) };
+  return { stringValue: String(value) };
+}
+
+export async function saveStudentToCloud(input: Record<string, unknown>) {
+  const mobile = digits(input.mobile);
+  if (mobile.length < 10) throw new Error("Mobile must be 10 digits");
+  const now = new Date().toISOString();
+  const fields: Record<string, unknown> = {
+    fullName: encodeValue(input.fullName),
+    mobile: encodeValue(mobile),
+    email: encodeValue(input.email),
+    course: encodeValue(input.course),
+    semester: encodeValue(input.semester),
+    nssRole: encodeValue(input.nssRole || "Volunteer"),
+    status: encodeValue("active"),
+    fatherName: encodeValue(input.fatherName),
+    dob: encodeValue(input.dob),
+    gender: encodeValue(input.gender),
+    bloodGroup: encodeValue(input.bloodGroup),
+    address: encodeValue(input.address),
+    parentMobile: encodeValue(input.parentMobile),
+    emergencyContact: encodeValue(input.emergencyContact),
+    abcId: encodeValue(input.abcId),
+    myBharatId: encodeValue(input.myBharatId),
+    createdAt: encodeValue(now),
+    updatedAt: encodeValue(now),
+  };
+  const res = await fetch(`${FIRESTORE_BASE}/students?documentId=${mobile}`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ fields }),
+  });
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(body.slice(0, 180) || "Could not save registration to cloud");
+  }
+  return { ok: true, id: mobile };
+}
+
+export async function incrementVisitors(): Promise<number> {
+  try {
+    const doc = await getDocument("portalSettings/visitors");
+    const current = Number(doc?.count ?? 0);
+    const next = current + 1;
+    const fields = { count: encodeValue(next), updatedAt: encodeValue(new Date().toISOString()) };
+    const res = await fetch(`${FIRESTORE_BASE}/portalSettings/visitors`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ fields }),
+    });
+    if (!res.ok) return current;
+    return next;
+  } catch {
+    return Number((await getDocument("portalSettings/visitors"))?.count ?? 0);
+  }
+}
+
+export function computeServiceHours(events: { id: string; hours?: number }[], attendance: { eventId: string; present: boolean }[]): number {
+  const hoursMap = new Map(events.map((e) => [e.id, Number(e.hours) > 0 ? Number(e.hours) : 4]));
+  let total = 0;
+  for (const row of attendance) {
+    if (row.present) total += hoursMap.get(row.eventId) ?? 4;
+  }
+  return total;
 }
