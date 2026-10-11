@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { loadCollegeCloud, saveStudentToCloud } from "@/lib/nss/firestore";
+import { loadCollegeCloud, saveStudentToCloud, incrementVisitors } from "@/lib/nss/firestore";
 
 type Row = Record<string, unknown>;
 
@@ -70,7 +70,10 @@ export const Route = createFileRoute("/api/nss-cloud")({
           const includeGallery = new URL(request.url).searchParams.get("gallery") === "1";
           const data = await loadCollegeCloud({ gallery: includeGallery });
           if (!data) return Response.json({ ok: false }, { status: 404 });
-          return Response.json(publicPayload(data as unknown as Row, includeGallery));
+          const visitors = await incrementVisitors();
+          const payload = publicPayload(data as unknown as Row, includeGallery);
+          payload.visitors = visitors;
+          return Response.json(payload);
         } catch (error) {
           const message = error instanceof Error ? error.message : "cloud load failed";
           return Response.json({ ok: false, error: message }, { status: 500 });
@@ -81,7 +84,7 @@ export const Route = createFileRoute("/api/nss-cloud")({
           const body = (await request.json()) as { action?: string; username?: string; password?: string };
           if (body.action === "register") {
             const saved = await saveStudentToCloud(body as Record<string, unknown>);
-            return Response.json({ ok: true, ...saved });
+            return Response.json(saved);
           }
           if (body.action !== "login") return Response.json({ ok: false, error: "Unsupported action." }, { status: 400 });
           const data = await loadCollegeCloud();
