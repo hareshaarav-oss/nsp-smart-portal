@@ -34,6 +34,7 @@ export function HydrateGate({ children }: { children: ReactNode }) {
           gallery?: unknown;
           visitors?: number;
           alumniCount?: number;
+          serviceHours?: number;
         };
         if (!cloud.ok) return false;
         useNssStore.getState().applyCloud({
@@ -44,6 +45,7 @@ export function HydrateGate({ children }: { children: ReactNode }) {
           gallery: Array.isArray(cloud.gallery) ? cloud.gallery : undefined,
           visitors: cloud.visitors,
           alumniCount: cloud.alumniCount,
+          serviceHours: cloud.serviceHours,
         });
         return Array.isArray(cloud.volunteers) && cloud.volunteers.length >= 20;
       }

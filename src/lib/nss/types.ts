@@ -402,6 +402,9 @@ export type PortalSettings = {
 
   serviceHourTarget: number;
 
+  /** College-wide hours reported by the cloud roll. Not a secret. */
+  reportedServiceHours?: number;
+
   progressHourTarget?: number;
 
   regularHourTarget?: number;

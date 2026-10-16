@@ -58,7 +58,7 @@ export function PhotoCarousel({ items }: { items: GalleryItem[] }) {
       </div>
       <div className="absolute inset-x-0 bottom-0 bg-navy/75 px-4 py-2 text-center text-xs text-paper">
         {current?.caption}
-        {current?.eventName ? ` · ${current.eventName}` : ""}
+        {current?.eventName && current.eventName !== current.caption ? ` · ${current.eventName}` : ""}
         {current?.kind === "video" ? " · Video" : ""}
       </div>
       {photos.length > 1 ? (

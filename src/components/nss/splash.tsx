@@ -45,7 +45,7 @@ export function SplashScreen({ onDone }: { onDone: () => void }) {
           <div className="text-center">
             <div className="flex items-center justify-center gap-4"><img src={settings.collegeLogo || COLLEGE_LOGO} alt="College emblem" className="h-20 w-20 object-contain rounded-full bg-white/90 p-1 md:h-24 md:w-24" /><img src={settings.nssLogo || NSS_LOGO} alt="NSS emblem" className="h-28 w-28 object-contain md:h-36 md:w-36" /></div>
             <p className="mt-5 text-sm font-semibold uppercase tracking-[0.22em] text-saffron">Welcome message</p>
-            <h1 className="mt-1 font-display text-4xl font-bold md:text-6xl">Welcome to Avyansh Tech</h1>
+            <h1 className="mt-1 font-display text-4xl font-bold md:text-6xl">NSS Smart Portal</h1>
             <p className="mt-3 text-lg font-semibold md:text-xl">{settings.portalName}</p>
             <p className="mt-2 text-sm text-paper/75">Created by Dr. Hareshkumar I. Prajapati</p>
             <p className="mt-4 text-base font-semibold md:text-lg">{settings.collegeName}</p>

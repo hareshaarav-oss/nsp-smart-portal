@@ -10,16 +10,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   dashboardPath,
-  loginStaff,
   loginVolunteer,
   loginWithFingerprint,
   loginWithMpin,
-  lookupUsernameByMobile,
-  resetPasswordToMobile,
   useSessionStore,
 } from "@/lib/nss/session";
-import { firstNameOf } from "@/lib/nss/format";
-import { useNssStore } from "@/lib/nss/store";
+import { useNssStore, rememberVolunteer } from "@/lib/nss/store";
 
 const searchSchema = z.object({
   role: z.enum(["volunteer", "po", "admin"]).optional(),
@@ -49,9 +45,7 @@ function LoginPage() {
   const [helpMobile, setHelpMobile] = useState("");
   const [helpName, setHelpName] = useState("");
   const navigate = useNavigate();
-  const settings = useNssStore((s) => s.settings);
   const volunteers = useNssStore((s) => s.volunteers);
-  const updateVolunteer = useNssStore((s) => s.updateVolunteer);
   const setSession = useSessionStore((s) => s.setSession);
   useEffect(() => {
     if (roleHint) setRole(roleHint);
@@ -68,25 +62,79 @@ function LoginPage() {
     void navigate({ to: dashboardPath(session) });
   }
 
-  function onSubmit(e: React.FormEvent) {
+  async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (captchaIn.trim().toUpperCase() !== captcha) {
       toast.error("Captcha does not match. Please type the letters again.");
       refreshCaptcha();
       return;
     }
-    const result =
-      role === "volunteer"
-        ? mode === "mpin"
-          ? loginWithMpin(id, password, volunteers)
-          : loginVolunteer(id, password, volunteers)
-        : loginStaff(role, id, password, settings);
-    if (!result.ok) {
-      toast.error(result.error);
-      refreshCaptcha();
+    if (role === "volunteer" && mode === "mpin") {
+      const result = loginWithMpin(id, password, volunteers);
+      if (!result.ok) {
+        toast.error(result.error);
+        refreshCaptcha();
+        return;
+      }
+      enter(result.session);
       return;
     }
-    enter(result.session);
+    try {
+      const res = await fetch("/api/nss-cloud", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          action: role === "volunteer" ? "login" : "staff-login",
+          role,
+          username: id,
+          password,
+        }),
+      });
+      const data = (await res.json()) as {
+        ok?: boolean;
+        error?: string;
+        session?: { role: "po" | "admin" | "volunteer" | "leader"; name: string; volunteerId?: string; enrollment?: string; mobile?: string };
+        volunteer?: Parameters<typeof rememberVolunteer>[0];
+        volunteers?: unknown[];
+        attendance?: unknown[];
+        events?: unknown[];
+        serviceHours?: number;
+      };
+      if (!res.ok || !data.ok || !data.session) {
+        toast.error(data.error || "Sign in failed.");
+        refreshCaptcha();
+        return;
+      }
+      setSession(data.session);
+      if (Array.isArray(data.volunteers) && data.volunteers.length) {
+        useNssStore.getState().applyCloud({
+          volunteers: data.volunteers as never,
+          attendance: Array.isArray(data.attendance) ? (data.attendance as never) : undefined,
+          events: Array.isArray(data.events) ? (data.events as never) : undefined,
+          serviceHours: data.serviceHours,
+          keepPrivate: true,
+        });
+      } else if (data.volunteer) {
+        rememberVolunteer({
+          ...data.volunteer,
+          mobile: data.session.mobile || data.volunteer.mobile || "",
+        });
+      }
+      toast.success(`Welcome, ${data.session.name}`);
+      void navigate({ to: dashboardPath(data.session) });
+    } catch {
+      if (role !== "volunteer") {
+        toast.error("Could not reach the college server.");
+        return;
+      }
+      const result = loginVolunteer(id, password, volunteers);
+      if (!result.ok) {
+        toast.error(result.error);
+        refreshCaptcha();
+        return;
+      }
+      enter(result.session);
+    }
   }
 
   async function onFingerprint() {
@@ -98,27 +146,28 @@ function LoginPage() {
     enter(result.session);
   }
 
-  function recoverUsername() {
-    const found = lookupUsernameByMobile(helpMobile, volunteers);
-    if (!found) {
-      toast.error("This mobile is not on the NSS roll.");
-      return;
+  async function recoverUsername() {
+    try {
+      const res = await fetch("/api/nss-cloud", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ action: "lookup", mobile: helpMobile }),
+      });
+      const data = (await res.json()) as { ok?: boolean; username?: string; error?: string };
+      if (!res.ok || !data.ok || !data.username) {
+        toast.error(data.error || "This mobile is not on the NSS roll.");
+        return;
+      }
+      setId(data.username);
+      toast.success(`Your username is ${data.username}`);
+      setHelp("none");
+    } catch {
+      toast.error("Could not reach the college server.");
     }
-    setId(found.firstName);
-    toast.success(`Your username is ${found.firstName}`);
-    setHelp("none");
   }
 
   function recoverPassword() {
-    const v = resetPasswordToMobile(helpName, helpMobile, volunteers);
-    if (!v) {
-      toast.error("First name and registered mobile do not match.");
-      return;
-    }
-    updateVolunteer(v.id, { loginPassword: "" });
-    setId(firstNameOf(v.fullName));
-    setPassword(v.mobile);
-    toast.success("Password reset to your registered mobile number.");
+    toast("Your password is the mobile number you registered with.");
     setHelp("none");
   }
 

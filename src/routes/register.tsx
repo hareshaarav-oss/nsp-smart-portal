@@ -7,13 +7,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { blobToDataUrl, compressPassport } from "@/lib/nss/media";
-import { useNssStore } from "@/lib/nss/store";
-import type { Course, Gender, NssRole, NssUnit } from "@/lib/nss/types";
+import { useNssStore, rememberVolunteer } from "@/lib/nss/store";
+import type { Course, Gender, NssRole, NssUnit, Volunteer } from "@/lib/nss/types";
 
 export const Route = createFileRoute("/register")({ component: RegisterPage });
 
 function RegisterPage() {
-  const addVolunteer = useNssStore((s) => s.addVolunteer);
   const addLog = useNssStore((s) => s.addLog);
   const [done, setDone] = useState<{ name: string; id: string; mobile: string; enrollment: string } | null>(null);
   const [photoUrl, setPhotoUrl] = useState("");
@@ -57,21 +56,26 @@ function RegisterPage() {
       toast.error("Enter a 10-digit mobile number.");
       return;
     }
-    const v = addVolunteer({ ...form, photoUrl });
-    addLog("Student registration", `Registered ${v.fullName} (${v.enrollment}).`);
     try {
       const res = await fetch("/api/nss-cloud", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ action: "register", ...form }),
       });
-      const data = await res.json();
-      if (!res.ok || !data.ok) throw new Error(data.error || "Cloud save failed");
-      toast.success("Registration saved to college cloud.");
+      const data = (await res.json()) as { ok?: boolean; error?: string; volunteer?: Volunteer };
+      if (!res.ok || !data.ok || !data.volunteer) throw new Error(data.error || "Cloud save failed");
+      rememberVolunteer(data.volunteer);
+      addLog("Student registration", `Registered ${data.volunteer.fullName} (${data.volunteer.enrollment}).`);
+      toast.success("Registration saved. The new volunteer is on the college roll.");
+      setDone({
+        name: data.volunteer.fullName,
+        id: data.volunteer.volunteerId,
+        mobile: form.mobile.trim(),
+        enrollment: data.volunteer.enrollment,
+      });
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Saved on this phone only. Cloud update failed.");
+      toast.error(error instanceof Error ? error.message : "Could not save the registration.");
     }
-    setDone({ name: v.fullName, id: v.volunteerId, mobile: v.mobile, enrollment: v.enrollment });
   }
 
   return (

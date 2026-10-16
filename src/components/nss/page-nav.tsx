@@ -35,7 +35,7 @@ export function PageNav({
           <Link to="/contact" className="rounded-sm px-3 py-2 hover:bg-white/10">
             Contact
           </Link>
-          {showDashboard ? (
+          {showDashboard && session ? (
             <Link
               to={session ? dash : "/login"}
               className={cn(

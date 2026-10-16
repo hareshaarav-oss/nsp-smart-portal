@@ -66,6 +66,8 @@ const STUDENT_FIELDS = [
   "abcId",
   "myBharatId",
   "enrollment",
+  "volunteerId",
+  "unit",
   "createdAt",
   "updatedAt",
 ];
@@ -190,16 +192,18 @@ export async function loadCollegeCloud(opts: { gallery?: boolean } = {}): Promis
     const isAlumni = statusRaw === "alumni" || roleRaw === "alumni";
     const assembled = [s.firstName, s.middleName, s.surname].map(text).filter(Boolean).join(" ");
     const fullName = titleFirstName(cleanPersonName(text(s.fullName) || assembled));
+    const storedUnit = text(s.unit);
+    const unit = storedUnit === "Unit 2" ? "Unit 2" : storedUnit === "Unit 1" ? "Unit 1" : index % 2 === 0 ? "Unit 1" : "Unit 2";
     return {
       id: text(s._id) || `vol-${n}`,
-      volunteerId: `NSS${padId(n)}`,
+      volunteerId: text(s.volunteerId) || `NSS${padId(n)}`,
       enrollment: latinDigits(text(s.enrollment)) || `2026-${semester}-${padId(n)}`,
       fullName,
       mobile,
       email: text(s.email),
       course: normalizeCourse(s.course) as Volunteer["course"],
       semester,
-      unit: index % 2 === 0 ? "Unit 1" : "Unit 2",
+      unit,
       nssRole: role,
       fatherName: text(s.fatherName),
       dob: isoDate(s.dob),
@@ -230,13 +234,17 @@ export async function loadCollegeCloud(opts: { gallery?: boolean } = {}): Promis
     const name = text(e.eventName) || text(e.title) || "NSS Activity";
     const date = isoDate(e.date) || isoDate(e.startDate);
     const statusRaw = text(e.status).toLowerCase();
+    const today = new Date().toISOString().slice(0, 10);
+    let status: NssEvent["status"] =
+      statusRaw === "cancelled" ? "cancelled" : statusRaw === "upcoming" || statusRaw === "planning" ? "upcoming" : "completed";
+    if (status === "upcoming" && date && date < today) status = "completed";
     return {
       id: text(e._id) || `evt-${name}-${date}`,
       name,
       date,
       location: text(e.location) || "Mansa",
       hours: Number(e.hours) > 0 ? Number(e.hours) : 4,
-      status: statusRaw === "upcoming" || statusRaw === "planning" ? "upcoming" : "completed",
+      status,
       description: text(e.description),
       beneficiaries: Number(e.beneficiaries) > 0 ? Number(e.beneficiaries) : 0,
       category: text(e.category),
@@ -344,13 +352,31 @@ function encodeValue(value: unknown): Record<string, unknown> {
 export async function saveStudentToCloud(input: Record<string, unknown>) {
   const mobile = digits(input.mobile);
   if (mobile.length < 10) throw new Error("Mobile must be 10 digits");
+  const existing = await getDocument(`students/${mobile}`);
+  if (existing && text(existing.fullName) && text(existing.status).toLowerCase() !== "deleted") {
+    throw new Error("This mobile number is already on the NSS roll.");
+  }
+  const students = await listCollection("students");
+  const activeCount = students.filter((row) => {
+    const status = text(row.status).toLowerCase();
+    return status !== "inactive" && status !== "deleted";
+  }).length;
+  const n = activeCount + 1;
+  const semester = latinDigits(text(input.semester) || "1");
+  const volunteerId = `NSS${padId(n)}`;
+  const enrollment = latinDigits(text(input.enrollment)) || `2026-${semester}-${padId(n)}`;
+  const unit = text(input.unit) === "Unit 2" ? "Unit 2" : "Unit 1";
   const now = new Date().toISOString();
+  const fullName = titleFirstName(cleanPersonName(text(input.fullName)));
   const fields: Record<string, unknown> = {
-    fullName: encodeValue(input.fullName),
+    fullName: encodeValue(fullName),
     mobile: encodeValue(mobile),
     email: encodeValue(input.email),
     course: encodeValue(input.course),
-    semester: encodeValue(input.semester),
+    semester: encodeValue(semester),
+    unit: encodeValue(unit),
+    volunteerId: encodeValue(volunteerId),
+    enrollment: encodeValue(enrollment),
     nssRole: encodeValue(input.nssRole || "Volunteer"),
     status: encodeValue("active"),
     fatherName: encodeValue(input.fatherName),
@@ -362,7 +388,7 @@ export async function saveStudentToCloud(input: Record<string, unknown>) {
     emergencyContact: encodeValue(input.emergencyContact),
     abcId: encodeValue(input.abcId),
     myBharatId: encodeValue(input.myBharatId),
-    createdAt: encodeValue(now),
+    createdAt: encodeValue(now.slice(0, 10)),
     updatedAt: encodeValue(now),
   };
   const res = await fetch(`${FIRESTORE_BASE}/students?documentId=${mobile}`, {
@@ -372,9 +398,33 @@ export async function saveStudentToCloud(input: Record<string, unknown>) {
   });
   if (!res.ok) {
     const body = await res.text();
+    if (res.status === 409) throw new Error("This mobile number is already on the NSS roll.");
     throw new Error(body.slice(0, 180) || "Could not save registration to cloud");
   }
-  return { ok: true, id: mobile };
+  return {
+    ok: true,
+    id: mobile,
+    volunteer: {
+      id: volunteerId,
+      volunteerId,
+      enrollment,
+      fullName,
+      mobile: "",
+      email: "",
+      course: text(input.course) || "B.Com.",
+      semester,
+      unit,
+      nssRole: /leader/i.test(text(input.nssRole)) ? "Leader" : "Volunteer",
+      fatherName: "",
+      dob: text(input.dob),
+      gender: text(input.gender) === "Female" || text(input.gender) === "Male" || text(input.gender) === "Other" ? text(input.gender) : "",
+      bloodGroup: "",
+      address: "",
+      parentMobile: "",
+      status: "active" as const,
+      createdAt: now.slice(0, 10),
+    },
+  };
 }
 
 export async function incrementVisitors(): Promise<number> {

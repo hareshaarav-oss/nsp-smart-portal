@@ -19,18 +19,26 @@ export function AppShell({
   showDashboard?: boolean;
   compactHeader?: boolean;
 }) {
-  const bumpVisitor = useNssStore((s) => s.bumpVisitor);
-
   useEffect(() => {
     try {
-      if (!sessionStorage.getItem(STORAGE_VISITOR_MARK)) {
-        sessionStorage.setItem(STORAGE_VISITOR_MARK, "1");
-        bumpVisitor();
-      }
+      if (sessionStorage.getItem(STORAGE_VISITOR_MARK)) return;
+      sessionStorage.setItem(STORAGE_VISITOR_MARK, "1");
+      void fetch("/api/nss-cloud", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ action: "visit" }),
+      })
+        .then((res) => res.json())
+        .then((data: { visitors?: number }) => {
+          if (typeof data.visitors === "number" && data.visitors > 0) {
+            useNssStore.setState({ visitors: data.visitors });
+          }
+        })
+        .catch(() => undefined);
     } catch {
       /* ignore */
     }
-  }, [bumpVisitor]);
+  }, []);
 
   return (
     <div className="flex min-h-dvh flex-col bg-bg text-foreground">

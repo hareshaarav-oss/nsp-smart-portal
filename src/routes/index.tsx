@@ -29,7 +29,7 @@ function Home() {
   const gallery = useNssStore((s) => s.gallery) ?? [];
   const visitors = useNssStore((s) => s.visitors);
   const settings = useNssStore((s) => s.settings);
-  const hours = useNssStore((s) => totalServiceHours(s));
+  const hours = useNssStore((s) => Math.max(totalServiceHours(s), s.settings.reportedServiceHours ?? 0));
   const volunteerCount = useNssStore((s) => activeVolunteers(s).length);
   const alumniCount = useNssStore((s) => Math.max(alumniVolunteers(s).length, s.settings.alumniCount));
   const bestId = useNssStore((s) => bestVolunteer(s)?.id ?? "");
@@ -81,7 +81,10 @@ function Home() {
     [events, upcoming],
   );
   const latestNotices = useMemo(
-    () => [...notices].sort((a, b) => b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt)),
+    () =>
+      [...notices]
+        .filter((notice) => !notice.audience || notice.audience === "all")
+        .sort((a, b) => b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt)),
     [notices],
   );
 

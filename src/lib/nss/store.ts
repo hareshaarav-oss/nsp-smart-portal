@@ -7,6 +7,7 @@ import {
   STORAGE_SESSION,
 } from "./constants";
 import { createSeedState } from "./seed";
+import { isOfficer, useSessionStore } from "./session";
 import { academicYear, byFullName, padId, parseDob, titleFirstName } from "./format";
 import { deleteMedia } from "./media";
 import { assignSequentialIds, certificateYear, formatCertificateSerial, nextCertificateSeq } from "./certificates";
@@ -39,6 +40,8 @@ type CloudSlice =
     >
   > & {
     alumniCount?: number;
+    serviceHours?: number;
+    keepPrivate?: boolean;
   };
 
 type Actions = {
@@ -534,6 +537,9 @@ function mergePortalState(
     settings.waLeaders ||
     current.settings.waLeaders;
 
+  settings.poPassword = "";
+  settings.adminPassword = "";
+
   const persistedVols =
     asArray<Volunteer>(
       p.volunteers,
@@ -679,6 +685,12 @@ export const useNssStore =
 
         applyCloud: (cloud) => {
           const current = get();
+          const officer =
+            Boolean(cloud.keepPrivate) ||
+            isOfficer(
+              useSessionStore.getState()
+                .session,
+            );
           const next: Partial<PortalState> =
             {};
 
@@ -774,12 +786,55 @@ export const useNssStore =
                           : "",
 
                       emergencyContact:
-                        row.emergencyContact ||
-                        prev?.emergencyContact,
+                        officer
+                          ? row.emergencyContact ||
+                            prev?.emergencyContact ||
+                            ""
+                          : "",
 
-                      loginPassword:
-                        prev?.loginPassword ||
-                        row.loginPassword,
+                      loginPassword: "",
+
+                      mobile: officer
+                        ? row.mobile ||
+                          prev?.mobile ||
+                          ""
+                        : "",
+
+                      email: officer
+                        ? row.email ||
+                          prev?.email ||
+                          ""
+                        : "",
+
+                      address: officer
+                        ? row.address ||
+                          prev?.address ||
+                          ""
+                        : "",
+
+                      bloodGroup: officer
+                        ? row.bloodGroup ||
+                          prev?.bloodGroup ||
+                          ""
+                        : "",
+
+                      fatherName: officer
+                        ? row.fatherName ||
+                          prev?.fatherName ||
+                          ""
+                        : "",
+
+                      parentMobile: officer
+                        ? row.parentMobile ||
+                          prev?.parentMobile ||
+                          ""
+                        : "",
+
+                      abcId: officer
+                        ? row.abcId ||
+                          prev?.abcId ||
+                          ""
+                        : "",
 
                       mpin:
                         prev?.mpin,
@@ -860,6 +915,7 @@ export const useNssStore =
                   e.id.startsWith(
                     "evt-",
                   ) &&
+                  e.id !== "evt-camp" &&
                   !cloud.events?.some(
                     (c) =>
                       c.id === e.id ||
@@ -999,6 +1055,16 @@ export const useNssStore =
               ) ||
               current.settings
                 .alumniCount,
+
+            reportedServiceHours:
+              typeof cloud.serviceHours ===
+              "number"
+                ? cloud.serviceHours
+                : current.settings
+                    .reportedServiceHours,
+
+            poPassword: "",
+            adminPassword: "",
           };
 
           if (
@@ -2747,4 +2813,22 @@ export function volunteerRecord(
       )?.id ===
       volunteerId,
   };
+}
+
+export function rememberVolunteer(
+  volunteer: Volunteer,
+) {
+  useNssStore.setState((state) => {
+    const volunteers = (
+      state.volunteers ?? []
+    ).filter(
+      (row) =>
+        row.id !== volunteer.id &&
+        row.volunteerId !==
+          volunteer.volunteerId,
+    );
+    volunteers.push(volunteer);
+    volunteers.sort(byFullName);
+    return { volunteers };
+  });
 }
