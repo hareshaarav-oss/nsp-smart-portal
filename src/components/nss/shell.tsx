@@ -41,19 +41,12 @@ export function AppShell({
   }, []);
 
   return (
-    <div className="min-h-dvh bg-bg text-foreground lg:pl-60">
+    <div className="flex min-h-dvh flex-col bg-bg text-foreground">
+      <BrandHeader eyebrow={eyebrow} compact={compactHeader} />
+      <TricolourStrip />
       <PageNav showDashboard={showDashboard} current={current} />
-      <div className="flex min-h-dvh flex-col">
-        <div className="lg:hidden">
-          <BrandHeader eyebrow={eyebrow} compact />
-          <TricolourStrip />
-        </div>
-        <div className="no-print hidden items-center justify-between border-b border-border bg-surface px-8 py-3 lg:flex">
-          <p className={compactHeader ? "text-xs font-semibold text-navy" : "text-sm font-semibold text-navy"}>{eyebrow ?? "NSS Smart Portal"}</p>
-        </div>
-        <main className="mx-auto min-w-0 w-full max-w-3xl flex-1 pb-20 md:max-w-5xl md:pb-0 lg:max-w-6xl">{children}</main>
-        <SiteFooter />
-      </div>
+      <main className="min-w-0 flex-1 pb-20 md:pb-0">{children}</main>
+      <SiteFooter />
     </div>
   );
 }

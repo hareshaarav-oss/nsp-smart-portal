@@ -160,7 +160,7 @@ function Home() {
                 <div className="mt-3 max-h-[32rem] space-y-1.5 overflow-y-auto">
                   {roll.length === 0 ? (
                     <p className="rounded-lg bg-muted/70 px-3 py-3 text-sm text-muted-foreground">
-                      કોલેજ NSS યાદી સુરક્ષિત છે ({volunteerCount} volunteers). રજિસ્ટર વ્યસ્ત હોય ત્યારે નામ થોડી વારમાં અહીં આવશે. તમારો ડેટા ડિલીટ થયો નથી.
+                      કોલેજ NSS યાદી રજિસ્ટર પર સુરક્ષિત છે ({volunteerCount} volunteers). થોડી વારમાં અહીં નામ દેખાશે.
                     </p>
                   ) : null}
                   {roll.map((v) => (
