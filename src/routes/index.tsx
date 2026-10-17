@@ -43,8 +43,10 @@ function Home() {
   });
   const today = todayIso();
   const volunteers = useNssStore((s) => s.volunteers) ?? [];
+  const attendance = useNssStore((s) => s.attendance) ?? [];
   const [rollQuery, setRollQuery] = useState("");
   const roll = useMemo(() => {
+    const state = useNssStore.getState();
     const q = rollQuery.trim().toLowerCase();
     return volunteers
       .filter((v) => v.status !== "alumni" && v.fullName)
@@ -54,8 +56,13 @@ function Home() {
           .toLowerCase()
           .includes(q);
       })
-      .sort((a, b) => a.fullName.localeCompare(b.fullName, "en", { sensitivity: "base" }));
-  }, [volunteers, rollQuery]);
+      .map((v) => ({ ...v, hours: volunteerHours(state, v.id) }))
+      .sort(
+        (a, b) =>
+          (b.createdAt || "").localeCompare(a.createdAt || "") ||
+          a.fullName.localeCompare(b.fullName, "en", { sensitivity: "base" }),
+      );
+  }, [volunteers, attendance, events, rollQuery]);
   const birthdayVolunteers = useMemo(
     () =>
       volunteers
@@ -135,7 +142,7 @@ function Home() {
               <div className="order-first md:order-none">
                 <div className="mb-3 flex items-center justify-between gap-3"><div><p className="text-xs font-semibold uppercase tracking-[0.18em] text-saffron">Welcome to NSP</p><h1 className="font-display text-2xl font-bold text-navy md:text-3xl">NSS Smart Portal</h1></div><span className="rounded-full bg-forest/10 px-3 py-1.5 text-xs font-semibold text-forest">☁ Cloud Connected</span></div>
                 <PhotoCarousel items={gallery} />
-                <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4"><MiniStat label="Volunteers" value={volunteerCount} /><MiniStat label="Portal visitors" value={visitors} /><MiniStat label="Alumni" value={alumniCount} /><MiniStat label="Service hours" value={hours} /></div>
+                <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4"><MiniStat label="Volunteers" value={volunteerCount} /><MiniStat label="Portal visitors" value={visitors} /><MiniStat label="Alumni" value={alumniCount} /><MiniStat label="Service hours · live" value={hours} /></div>
               </div>
               <HomeOfficer role="Principal" name={settings.principalName} quote={settings.principalQuote} photo={settings.principalPhoto} />
             </div>
@@ -147,7 +154,9 @@ function Home() {
                 <div className="flex flex-wrap items-end justify-between gap-3">
                   <div>
                     <h2 className="font-display text-xl text-navy">NSS roll</h2>
-                    <p className="text-sm text-muted-foreground">{roll.length} volunteers on the college roll</p>
+                    <p className="text-sm text-muted-foreground">
+                      {roll.length} volunteers · newest first · hours update on their own
+                    </p>
                   </div>
                   <Input
                     value={rollQuery}
@@ -173,7 +182,12 @@ function Home() {
                           <p className="truncate font-medium text-navy">{v.fullName}</p>
                           <p className="truncate text-xs text-muted-foreground">
                             {v.volunteerId} · {v.course} Sem {v.semester} · {v.unit}
+                            {v.createdAt ? ` · joined ${v.createdAt.slice(0, 10)}` : ""}
                           </p>
+                        </div>
+                        <div className="shrink-0 text-right">
+                          <p className="font-display text-lg font-semibold leading-none text-forest">{v.hours}</p>
+                          <p className="text-[10px] uppercase tracking-wide text-muted-foreground">hours</p>
                         </div>
                         {v.nssRole === "Leader" ? <Badge tone="saffron">Leader</Badge> : null}
                       </div>

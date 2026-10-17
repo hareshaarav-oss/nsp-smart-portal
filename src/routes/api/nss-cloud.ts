@@ -3,6 +3,10 @@ import { loadCollegeCloud, saveStudentToCloud, incrementVisitors, patchStudent, 
 
 type Row = Record<string, unknown>;
 
+function appBuild() {
+  return process.env.VERCEL_GIT_COMMIT_SHA || "";
+}
+
 function text(value: unknown) {
   return String(value ?? "").trim();
 }
@@ -118,6 +122,7 @@ function publicPayload(data: Row, includeGallery: boolean) {
     visitors: data.visitors ?? 0,
     alumniCount: data.alumniCount ?? 0,
     serviceHours: data.serviceHours ?? 0,
+    build: appBuild(),
   };
 }
 
@@ -281,6 +286,7 @@ export const Route = createFileRoute("/api/nss-cloud")({
               notices: data.notices,
               serviceHours: data.serviceHours,
               visitors: data.visitors,
+              build: appBuild(),
             });
           }
           if (body.action === "set-password" || body.action === "update-profile") {

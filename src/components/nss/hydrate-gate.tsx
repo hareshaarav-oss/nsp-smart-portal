@@ -3,6 +3,52 @@ import { useNssStore } from "@/lib/nss/store";
 import { useSessionStore } from "@/lib/nss/session";
 import { COLLEGE_LOGO, NSS_LOGO } from "@/lib/nss/constants";
 
+let seenBuild = "";
+
+function noteBuild(build: unknown) {
+  const value = typeof build === "string" ? build : "";
+  if (!value) return;
+  if (!seenBuild) {
+    seenBuild = value;
+    return;
+  }
+  if (seenBuild !== value) {
+    seenBuild = value;
+    window.location.reload();
+  }
+}
+
+type CloudBody = {
+  ok?: boolean;
+  private?: boolean;
+  build?: string;
+  volunteers?: unknown;
+  events?: unknown;
+  attendance?: unknown;
+  notices?: unknown;
+  gallery?: unknown;
+  visitors?: number;
+  alumniCount?: number;
+  serviceHours?: number;
+};
+
+function applyBody(cloud: CloudBody) {
+  if (!cloud.ok) return false;
+  noteBuild(cloud.build);
+  useNssStore.getState().applyCloud({
+    volunteers: Array.isArray(cloud.volunteers) ? cloud.volunteers : undefined,
+    events: Array.isArray(cloud.events) ? cloud.events : undefined,
+    attendance: Array.isArray(cloud.attendance) ? cloud.attendance : undefined,
+    notices: Array.isArray(cloud.notices) ? cloud.notices : undefined,
+    gallery: Array.isArray(cloud.gallery) ? cloud.gallery : undefined,
+    visitors: cloud.visitors,
+    alumniCount: cloud.alumniCount,
+    serviceHours: cloud.serviceHours,
+    keepPrivate: Boolean(cloud.private),
+  });
+  return Array.isArray(cloud.volunteers) && cloud.volunteers.length >= 20;
+}
+
 export function HydrateGate({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false);
   const [status, setStatus] = useState("Loading the college NSS roll…");
@@ -12,6 +58,19 @@ export function HydrateGate({ children }: { children: ReactNode }) {
     const finish = () => {
       if (!cancelled) setReady(true);
     };
+
+    async function pullLive() {
+      if (cancelled || document.hidden) return;
+      const token = useSessionStore.getState().session?.chatToken || "";
+      const res = await fetch("/api/nss-cloud", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        cache: "no-store",
+        body: JSON.stringify({ action: "roll-sync", ...(token ? { chatToken: token } : {}) }),
+      });
+      const cloud = (await res.json()) as CloudBody;
+      if (!cancelled) applyBody(cloud);
+    }
 
     void (async () => {
       try {
@@ -23,51 +82,39 @@ export function HydrateGate({ children }: { children: ReactNode }) {
         /* continue */
       }
 
-      async function applyResponse(res: Response) {
-        if (!res.ok) return false;
-        const cloud = (await res.json()) as {
-          ok?: boolean;
-          volunteers?: unknown;
-          events?: unknown;
-          attendance?: unknown;
-          notices?: unknown;
-          gallery?: unknown;
-          visitors?: number;
-          alumniCount?: number;
-          serviceHours?: number;
-        };
-        if (!cloud.ok) return false;
-        useNssStore.getState().applyCloud({
-          volunteers: Array.isArray(cloud.volunteers) ? cloud.volunteers : undefined,
-          events: Array.isArray(cloud.events) ? cloud.events : undefined,
-          attendance: Array.isArray(cloud.attendance) ? cloud.attendance : undefined,
-          notices: Array.isArray(cloud.notices) ? cloud.notices : undefined,
-          gallery: Array.isArray(cloud.gallery) ? cloud.gallery : undefined,
-          visitors: cloud.visitors,
-          alumniCount: cloud.alumniCount,
-          serviceHours: cloud.serviceHours,
-        });
-        return Array.isArray(cloud.volunteers) && cloud.volunteers.length >= 20;
-      }
-
       setStatus("Connecting to NSS cloud…");
       try {
         const res = await fetch("/api/nss-cloud", { cache: "no-store" });
-        const ok = await applyResponse(res);
+        const cloud = (await res.json()) as CloudBody;
+        const ok = res.ok && applyBody(cloud);
         if (ok) setStatus("College roll loaded.");
       } catch {
         setStatus("Could not reach the college roll. Showing saved data.");
       }
       finish();
       void fetch("/api/nss-cloud?gallery=1", { cache: "no-store" })
-        .then(applyResponse)
+        .then((res) => res.json())
+        .then((cloud: CloudBody) => {
+          if (!cancelled) applyBody(cloud);
+        })
         .catch(() => undefined);
     })();
 
+    const timer = window.setInterval(() => {
+      void pullLive().catch(() => undefined);
+    }, 10000);
+    const wake = () => {
+      void pullLive().catch(() => undefined);
+    };
+    document.addEventListener("visibilitychange", wake);
+    window.addEventListener("focus", wake);
     const safety = window.setTimeout(finish, 12000);
     return () => {
       cancelled = true;
+      window.clearInterval(timer);
       window.clearTimeout(safety);
+      document.removeEventListener("visibilitychange", wake);
+      window.removeEventListener("focus", wake);
     };
   }, []);
 
