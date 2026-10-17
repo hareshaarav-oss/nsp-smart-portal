@@ -249,9 +249,16 @@ export function HydrateGate({ children }: { children: ReactNode }) {
         });
     })();
 
+    let ticks = 0;
     const timer = window.setInterval(() => {
-      void pullLive().catch(() => undefined);
-    }, 45000);
+      ticks += 1;
+      void pullLive()
+        .catch(() => undefined)
+        .then(() => {
+          if (document.hidden || ticks % 4 !== 0) return;
+          void pullPhotos().catch(() => undefined);
+        });
+    }, 15000);
     const wake = () => {
       void pullLive().catch(() => undefined);
     };

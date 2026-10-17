@@ -906,12 +906,9 @@ export const useNssStore =
                 .map((row) => row.volunteerId)
                 .filter(Boolean),
             );
-            const pending = current.volunteers.filter((row) => {
-              if (!row.fullName || !/^NSS\d+$/i.test(row.volunteerId || "")) return false;
-              if (cloudVids.has(row.volunteerId)) return false;
-              if (row.id.startsWith("vol-")) return false;
-              return true;
-            });
+            const pending = current.volunteers.filter(
+              (row) => row.id.startsWith("vol-") && Boolean(row.fullName) && !cloudVids.has(row.volunteerId),
+            );
             if (pending.length && next.volunteers) {
               next.volunteers = dedupeVolunteers([
                 ...next.volunteers,
@@ -986,12 +983,7 @@ export const useNssStore =
             }
           }
 
-          if (
-            Array.isArray(
-              cloud.events,
-            ) &&
-            cloud.events.length
-          ) {
+          if (Array.isArray(cloud.events)) {
             const localExtra =
               current.events.filter(
                 (e) =>
@@ -1013,41 +1005,12 @@ export const useNssStore =
               ]);
           }
 
-          if (
-            Array.isArray(
-              cloud.attendance,
-            ) &&
-            cloud.attendance.length
-          ) {
-            const seedishNow =
-              looksLikeSeed(
-                current.volunteers,
-              );
-
-            const localAttendance =
-              next.attendance ??
-              (seedishNow
-                ? []
-                : current.attendance ??
-                  []);
-
-            next.attendance =
-              dedupeAttendance([
-                ...cloud.attendance,
-                ...localAttendance,
-              ]);
+          if (Array.isArray(cloud.attendance)) {
+            next.attendance = dedupeAttendance(cloud.attendance);
           }
 
-          if (
-            Array.isArray(
-              cloud.notices,
-            ) &&
-            cloud.notices.length
-          ) {
-            next.notices =
-              dedupeNotices(
-                cloud.notices,
-              );
+          if (Array.isArray(cloud.notices)) {
+            next.notices = dedupeNotices(cloud.notices);
           }
 
           if (
