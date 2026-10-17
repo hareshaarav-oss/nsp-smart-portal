@@ -724,7 +724,10 @@ let rosterCache: { at: number; rows: { docId: string; volunteerId: string; name:
 let rosterInflight: Promise<{ docId: string; volunteerId: string; name: string }[]> | null = null;
 
 export async function listPhotoRoster() {
-  if (collegeQuotaBlocked()) return rosterCache?.rows ?? [];
+  if (collegeQuotaBlocked()) {
+    if (rosterCache?.rows.length) return rosterCache.rows;
+    throw new Error("The college register is busy. Photographs will load again shortly.");
+  }
   const now = Date.now();
   if (rosterCache && now - rosterCache.at < CLOUD_FRESH_MS) return rosterCache.rows;
   if (rosterInflight) return rosterInflight;

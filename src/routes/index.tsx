@@ -36,12 +36,17 @@ function Home() {
   const bestName = useNssStore((s) => bestVolunteer(s)?.fullName ?? "");
   const bestUnit = useNssStore((s) => bestVolunteer(s)?.unit ?? "");
   const bestVid = useNssStore((s) => bestVolunteer(s)?.volunteerId ?? "");
+  const bestPhoto = useNssStore((s) => bestVolunteer(s)?.photoUrl ?? "");
   const bestHours = useNssStore((s) => {
     const v = bestVolunteer(s);
     return v ? volunteerHours(s, v.id) : 0;
   });
   const today = todayIso();
   const volunteers = useNssStore((s) => s.volunteers) ?? [];
+  const rollPhotos = useMemo(
+    () => volunteers.filter((v) => v.status !== "alumni" && v.photoUrl),
+    [volunteers],
+  );
   const birthdayVolunteers = useMemo(
     () =>
       volunteers
@@ -124,6 +129,24 @@ function Home() {
             </div>
           </section>
 
+          {rollPhotos.length ? (
+            <section className="mt-6">
+              <Card className="shadow-md">
+                <CardContent className="p-5">
+                  <h2 className="font-display text-xl text-navy">Volunteer photographs</h2>
+                  <div className="mt-4 grid grid-cols-3 gap-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8">
+                    {rollPhotos.map((v) => (
+                      <figure key={v.id} className="text-center">
+                        <img src={v.photoUrl} alt="" className="mx-auto h-24 w-20 rounded-md object-cover ring-1 ring-border" />
+                        <figcaption className="mt-1 line-clamp-2 text-[11px] leading-tight text-navy">{v.fullName}</figcaption>
+                      </figure>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            </section>
+          ) : null}
+
           <section className="mt-6 grid gap-4 md:grid-cols-2">
             <Card className="border-t-4 border-t-danger shadow-md">
               <CardContent className="p-5">
@@ -201,7 +224,7 @@ function Home() {
             <section className="mt-6">
               <Card className="border-saffron/40 shadow-md">
                 <CardContent className="flex flex-wrap items-center gap-3 p-5">
-                  <Star className="size-6 text-saffron" />
+                  {bestPhoto ? <img src={bestPhoto} alt="" className="h-16 w-14 rounded-md object-cover" /> : <Star className="size-6 text-saffron" />}
                   <div>
                     <p className="text-xs uppercase tracking-[0.16em] text-saffron">Best volunteer</p>
                     <p className="font-display text-lg text-navy">{bestName}</p>

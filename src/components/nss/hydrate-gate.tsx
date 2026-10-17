@@ -105,7 +105,7 @@ async function pullPhotos() {
     roster?: { docId: string; volunteerId: string; name?: string }[];
     brand?: { poPhoto?: string; principalPhoto?: string };
   };
-  if (!res.ok || !data.ok || !Array.isArray(data.roster)) return;
+  if (!res.ok || !data.ok || !Array.isArray(data.roster) || data.roster.length === 0) return false;
   if (data.brand?.poPhoto || data.brand?.principalPhoto) {
     const state = useNssStore.getState();
     useNssStore.setState({
@@ -130,7 +130,7 @@ async function pullPhotos() {
       body: JSON.stringify({ action: "photo-sync", ids }),
     });
     const batch = (await batchRes.json()) as { ok?: boolean; photos?: { id: string; docId: string; photoUrl: string; name?: string }[] };
-    if (!batchRes.ok || !batch.ok || !Array.isArray(batch.photos)) break;
+    if (!batchRes.ok || !batch.ok || !Array.isArray(batch.photos)) return false;
     const map = new Map<string, string>();
     const found = new Set(batch.photos.map((photo) => photo.docId));
     for (const row of slice) {
@@ -156,6 +156,7 @@ async function pullPhotos() {
     applyPhotoMap(map);
     writePhotoCache(cached);
   }
+  return true;
 }
 
 function dropStalePortalCache() {
@@ -213,7 +214,20 @@ export function HydrateGate({ children }: { children: ReactNode }) {
   useEffect(() => {
     let cancelled = false;
     let nextPull = 0;
-    let photosStarted = false;
+    let photosLoaded = false;
+    let photoFlight = false;
+
+    async function ensurePhotos() {
+      if (cancelled || photosLoaded || photoFlight || document.hidden) return;
+      photoFlight = true;
+      try {
+        photosLoaded = await pullPhotos();
+      } catch {
+        photosLoaded = false;
+      } finally {
+        photoFlight = false;
+      }
+    }
 
     async function pullLive() {
       if (cancelled || document.hidden || Date.now() < nextPull) return;
@@ -231,10 +245,7 @@ export function HydrateGate({ children }: { children: ReactNode }) {
       if (!cancelled) {
         applyBody(cloud);
         applyCachedPhotos();
-        if (!photosStarted && useNssStore.getState().volunteers.length >= 20) {
-          photosStarted = true;
-          void pullPhotos().catch(() => undefined);
-        }
+        void ensurePhotos();
       }
     }
 
@@ -295,18 +306,17 @@ export function HydrateGate({ children }: { children: ReactNode }) {
       } catch {
         setStatus("Could not reach the college roll. Showing saved data.");
       }
-      if (useNssStore.getState().volunteers.length >= 20 && !photosStarted) {
-        photosStarted = true;
-        void pullPhotos().catch(() => undefined);
-      }
+      if (!photosLoaded) void ensurePhotos();
       void pullVisitors().catch(() => undefined);
     })();
 
     const timer = window.setInterval(() => {
       void pullLive().catch(() => undefined);
+      void ensurePhotos();
     }, 60000);
     const wake = () => {
       void pullLive().catch(() => undefined);
+      void ensurePhotos();
     };
     document.addEventListener("visibilitychange", wake);
     window.addEventListener("focus", wake);
