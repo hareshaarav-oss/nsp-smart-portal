@@ -44,7 +44,7 @@ export function SplashScreen({ onDone }: { onDone: () => void }) {
           <OfficerMini title="Programme Officer" name={settings.poName} photo={settings.poPhoto} />
           <div className="text-center">
             <div className="flex items-center justify-center gap-4"><img src={settings.collegeLogo || COLLEGE_LOGO} alt="College emblem" className="h-20 w-20 object-contain rounded-full bg-white/90 p-1 md:h-24 md:w-24" /><img src={settings.nssLogo || NSS_LOGO} alt="NSS emblem" className="h-28 w-28 object-contain md:h-36 md:w-36" /></div>
-            <p className="mt-5 text-sm font-semibold uppercase tracking-[0.22em] text-saffron">Welcome message</p>
+            <p className="mt-5 text-sm font-semibold uppercase tracking-[0.22em] text-saffron">Welcome to Avyansh Tech</p>
             <h1 className="mt-1 font-display text-4xl font-bold md:text-6xl">NSS Smart Portal</h1>
             <p className="mt-3 text-lg font-semibold md:text-xl">{settings.portalName}</p>
             <p className="mt-2 text-sm text-paper/75">Created by Dr. Hareshkumar I. Prajapati</p>
@@ -62,5 +62,5 @@ export function SplashScreen({ onDone }: { onDone: () => void }) {
 }
 
 function OfficerMini({ title, name, photo }: { title: string; name: string; photo?: string }) {
-  return <div className="rounded-2xl border border-white/15 bg-white/5 p-4 text-center backdrop-blur-sm"><p className="text-xs font-semibold uppercase tracking-[0.14em] text-saffron">{title}</p>{photo ? <img src={photo} alt={name} className="mx-auto mt-3 h-24 w-20 rounded-xl object-cover" /> : <div className="mx-auto mt-3 flex h-24 w-20 items-center justify-center rounded-xl bg-white/10 text-2xl">👤</div>}<p className="mt-3 text-sm font-semibold">{name}</p></div>;
+  return <div className="rounded-2xl border border-white/15 bg-white/5 p-4 text-center backdrop-blur-sm"><p className="text-xs font-semibold uppercase tracking-[0.14em] text-saffron">{title}</p>{photo ? <img src={photo} alt={name} className="mx-auto mt-3 h-24 w-20 rounded-xl object-cover" /> : <div className="mx-auto mt-3 flex h-24 w-20 items-center justify-center rounded-xl bg-white/10 text-sm font-semibold">{name.slice(0, 1)}</div>}<p className="mt-3 text-sm font-semibold">{name}</p></div>;
 }

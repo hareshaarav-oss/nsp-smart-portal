@@ -36,6 +36,50 @@ function rescueOfficerPhotos() {
   }
 }
 
+function applyCachedPhotos() {
+  try {
+    const raw = localStorage.getItem("nsp-photo-map");
+    if (!raw) return;
+    const map = JSON.parse(raw) as Record<string, string>;
+    const volunteers = useNssStore.getState().volunteers.map((volunteer) => {
+      const photo = map[volunteer.volunteerId] || map[volunteer.id] || "";
+      return photo && !volunteer.photoUrl ? { ...volunteer, photoUrl: photo } : volunteer;
+    });
+    useNssStore.setState({ volunteers });
+  } catch {
+    /* ignore a damaged cache */
+  }
+}
+
+async function pullPhotos() {
+  const res = await fetch("/api/nss-cloud", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    cache: "no-store",
+    body: JSON.stringify({ action: "photo-sync" }),
+  });
+  const data = (await res.json()) as { ok?: boolean; photos?: { id: string; photoUrl: string }[]; brand?: { poPhoto?: string; principalPhoto?: string } };
+  if (!res.ok || !data.ok || !Array.isArray(data.photos) || data.photos.length === 0) return;
+  const map = new Map(data.photos.map((photo) => [photo.id, photo.photoUrl]));
+  const state = useNssStore.getState();
+  useNssStore.setState({
+    volunteers: state.volunteers.map((volunteer) => {
+      const photo = map.get(volunteer.volunteerId) || map.get(volunteer.id) || volunteer.photoUrl;
+      return photo ? { ...volunteer, photoUrl: photo } : volunteer;
+    }),
+    settings: {
+      ...state.settings,
+      poPhoto: data.brand?.poPhoto || state.settings.poPhoto || "",
+      principalPhoto: data.brand?.principalPhoto || state.settings.principalPhoto || "",
+    },
+  });
+  try {
+    localStorage.setItem("nsp-photo-map", JSON.stringify(Object.fromEntries(map)));
+  } catch {
+    /* storage full */
+  }
+}
+
 function dropStalePortalCache() {
   try {
     const drop: string[] = [];
@@ -113,6 +157,7 @@ export function HydrateGate({ children }: { children: ReactNode }) {
           Promise.resolve(useNssStore.persist.rehydrate()),
           Promise.resolve(useSessionStore.persist.rehydrate()),
         ]);
+        applyCachedPhotos();
       } catch {
         /* continue */
       }
@@ -125,18 +170,7 @@ export function HydrateGate({ children }: { children: ReactNode }) {
         setStatus("Could not reach the college roll. Showing saved data.");
       }
       finish();
-      void fetch("/api/nss-cloud", { cache: "no-store" })
-        .then((res) => res.json())
-        .then((cloud: CloudBody) => {
-          if (!cancelled) applyBody(cloud);
-          const saved = sessionStorage.getItem("nsp-rescued-photos");
-          if (!saved) return;
-          const photos = JSON.parse(saved) as { poPhoto?: string; principalPhoto?: string };
-          const settings = useNssStore.getState().settings;
-          if (!settings.poPhoto && photos.poPhoto) useNssStore.getState().updateSettings({ poPhoto: photos.poPhoto });
-          if (!settings.principalPhoto && photos.principalPhoto) useNssStore.getState().updateSettings({ principalPhoto: photos.principalPhoto });
-        })
-        .catch(() => undefined);
+      void pullPhotos().catch(() => undefined);
       void fetch("/api/nss-cloud?gallery=1", { cache: "no-store" })
         .then((res) => res.json())
         .then((cloud: CloudBody) => {
@@ -170,7 +204,8 @@ export function HydrateGate({ children }: { children: ReactNode }) {
           <img src={COLLEGE_LOGO} alt="College emblem" className="size-16 object-contain" />
           <img src={NSS_LOGO} alt="NSS emblem" className="size-16 object-contain" />
         </div>
-        <p className="mt-6 text-center font-display text-lg tracking-[0.18em]">NSS SMART PORTAL</p>
+        <p className="mt-6 text-center font-display text-lg">Welcome to Avyansh Tech</p>
+        <p className="mt-1 text-center text-sm tracking-[0.16em] text-paper/80">NSS SMART PORTAL</p>
         <p className="mt-2 text-center text-sm text-paper/70">
           S.D. Arts & Shah B.R. Commerce College, Mansa
         </p>

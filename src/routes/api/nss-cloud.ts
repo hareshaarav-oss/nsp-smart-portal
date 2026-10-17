@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { loadCollegeCloud, saveStudentToCloud, incrementVisitors, patchStudent, safePhoto, knownRole, issueChatPass, readChatPass, listRecentChatMessages, saveChatMessage, listChatPeople, clearAttendanceCloud, readBrandPhotos, saveBrandPhotos } from "@/lib/nss/firestore";
+import { loadCollegeCloud, saveStudentToCloud, incrementVisitors, patchStudent, safePhoto, knownRole, issueChatPass, readChatPass, listRecentChatMessages, saveChatMessage, listChatPeople, clearAttendanceCloud, readBrandPhotos, saveBrandPhotos, listStudentPhotos } from "@/lib/nss/firestore";
 
 type Row = Record<string, unknown>;
 
@@ -184,8 +184,10 @@ export const Route = createFileRoute("/api/nss-cloud")({
     handlers: {
       GET: async ({ request }) => {
         try {
-          const includeGallery = new URL(request.url).searchParams.get("gallery") === "1";
-          const data = await loadCollegeCloud({ gallery: includeGallery });
+          const url = new URL(request.url);
+          const includeGallery = url.searchParams.get("gallery") === "1";
+          const includePhotos = url.searchParams.get("photos") === "1";
+          const data = await loadCollegeCloud({ gallery: includeGallery, photos: includePhotos });
           if (!data) return Response.json({ ok: false }, { status: 404, headers: { "cache-control": "no-store" } });
           const brand = await readBrandPhotos();
           return Response.json({ ...publicPayload(data as unknown as Row, includeGallery), brand }, {
@@ -223,6 +225,11 @@ export const Route = createFileRoute("/api/nss-cloud")({
             poPhoto?: string;
             principalPhoto?: string;
           };
+          if (body.action === "photo-sync") {
+            const photos = await listStudentPhotos();
+            const brand = await readBrandPhotos();
+            return Response.json({ ok: true, photos, brand, build: appBuild() });
+          }
           if (body.action === "clear-attendance") {
             const user = await readChatPass(text(body.chatToken));
             if (!user || (user.role !== "po" && user.role !== "admin")) {

@@ -1,5 +1,5 @@
 import { createFileRoute, Link, Navigate } from "@tanstack/react-router";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ArrowLeft, CheckCheck, MessageCircle, Phone, Search, SendHorizonal } from "lucide-react";
 import { toast } from "sonner";
 import { AppShell } from "@/components/nss/shell";
@@ -67,7 +67,6 @@ function ChatPage() {
   const [active, setActive] = useState("college");
   const [draft, setDraft] = useState("");
   const [query, setQuery] = useState("");
-  const [picking, setPicking] = useState(false);
   const [mobileList, setMobileList] = useState(true);
   const [sending, setSending] = useState(false);
   const [seen, setSeen] = useState<Record<string, string>>({});
@@ -143,22 +142,6 @@ function ChatPage() {
     return true;
   });
 
-  const dmThreads = useMemo(() => {
-    const ids = new Set<string>();
-    for (const message of messages) {
-      if (message.threadId.startsWith("dm:")) ids.add(canonicalThread(message.threadId));
-    }
-    if (active.startsWith("dm:")) ids.add(canonicalThread(active));
-    return [...ids].sort((a, b) => (lastOf(b) || "").localeCompare(lastOf(a) || ""));
-  }, [messages, active]);
-
-  function lastOf(id: string) {
-    for (let i = messages.length - 1; i >= 0; i -= 1) {
-      if (canonicalThread(messages[i].threadId) === id) return messages[i].createdAt;
-    }
-    return "";
-  }
-
   function personName(id: string) {
     if (id === "po") return "Programme Officer";
     if (id === "admin") return "Admin";
@@ -206,7 +189,6 @@ function ChatPage() {
 
   function openThread(id: string) {
     setActive(id);
-    setPicking(false);
     setMobileList(false);
     const last = lastMessage(id);
     const next = { ...seen, [id]: last?.createdAt || new Date().toISOString() };
@@ -241,12 +223,32 @@ function ChatPage() {
   if (!session) return <Navigate to="/login" search={{ role: "volunteer" }} />;
 
   const threadMessages = messages.filter((message) => canonicalThread(message.threadId) === canonicalThread(active));
-  const needle = query.trim().toLowerCase();
-  const directory = people.filter((person) => person.id !== me?.id && (!needle || `${person.name} ${person.id} ${person.unit}`.toLowerCase().includes(needle)));
-  const matchesThread = (id: string) => !needle || threadTitle(id).toLowerCase().includes(needle) || (lastMessage(id)?.text || "").toLowerCase().includes(needle);
-  const personalThreads = dmThreads.filter(matchesThread);
-  const groupThreads = allowedGroups.map((group) => group.id).filter(matchesThread);
-  const activePerson = people.find((person) => person.id === otherId());
+  const meId = me?.id || (session.role === "po" ? "po" : session.role === "admin" ? "admin" : session.volunteerId || "");
+  const directory = (() => {
+    const map = new Map<string, Person>();
+    for (const volunteer of roll) {
+      if (!volunteer.fullName || volunteer.status === "alumni") continue;
+      const id = volunteer.volunteerId || volunteer.id;
+      if (!id || id === meId) continue;
+      map.set(id, { id, name: volunteer.fullName, unit: volunteer.unit || "Unit 1", role: volunteer.nssRole || "Volunteer", mobile: volunteer.mobile });
+    }
+    for (const person of people) {
+      if (!person.id || person.id === meId) continue;
+      const prev = map.get(person.id);
+      map.set(person.id, {
+        id: person.id,
+        name: person.name || prev?.name || person.id,
+        unit: person.unit || prev?.unit || "Unit 1",
+        role: person.role || prev?.role || "Volunteer",
+        mobile: person.mobile || prev?.mobile,
+      });
+    }
+    const needle = query.trim().toLowerCase();
+    return [...map.values()]
+      .filter((person) => !needle || `${person.name} ${person.id} ${person.unit}`.toLowerCase().includes(needle))
+      .sort((a, b) => a.name.localeCompare(b.name, "en", { sensitivity: "base" }));
+  })();
+  const activePerson = directory.find((person) => person.id === otherId()) || people.find((person) => person.id === otherId());
   const activeRoll = roll.find((row) => row.volunteerId === otherId() || row.id === otherId());
   const activeHours = activeRoll ? volunteerHours(useNssStore.getState(), activeRoll.id) : 0;
   const activePhone = phoneFor(otherId());
@@ -284,44 +286,42 @@ function ChatPage() {
           <div className="border-b border-border p-3">
             <div className="relative">
               <Search className="pointer-events-none absolute left-3 top-2.5 size-4 text-muted-foreground" />
-              <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search name or chat" className="pl-9" />
+              <Input id="chat-search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search a volunteer" className="pl-9" />
             </div>
-            <Button className="mt-2 w-full bg-forest text-primary-foreground hover:bg-forest/90" onClick={() => setPicking((open) => !open)}>
+            <Button className="mt-2 w-full bg-forest text-primary-foreground hover:bg-forest/90" onClick={() => document.getElementById("chat-search")?.focus()}>
               <MessageCircle />
-              {picking ? "Back to chats" : "New personal chat"}
+              Personal volunteers ({directory.length})
             </Button>
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto">
-            {picking ? (
-              <div>
-                <p className="px-4 pt-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">Personal</p>
-                {me && me.id !== "po" && me.id !== "admin" ? (
-                  <button type="button" className="flex w-full items-center gap-3 border-b border-border px-4 py-3 text-left hover:bg-muted" onClick={() => openThread(canonicalThread(`dm:${me.id}:po`))}>
-                    <span className="flex size-10 items-center justify-center rounded-full bg-navy text-xs font-semibold text-paper">PO</span>
-                    <span>
-                      <span className="block font-medium text-navy">Programme Officer</span>
-                      <span className="block text-xs text-muted-foreground">Personal · WhatsApp {poWhatsapp ? "ready" : ""}</span>
-                    </span>
-                  </button>
-                ) : null}
-                {directory.map((person) => (
-                  <button key={person.id} type="button" className="flex w-full items-center gap-3 border-b border-border px-4 py-3 text-left hover:bg-muted" onClick={() => openThread(canonicalThread(`dm:${me?.id}:${person.id}`))}>
-                    <span className="flex size-10 items-center justify-center rounded-full bg-forest text-xs font-semibold text-paper">{person.name.slice(0, 1)}</span>
-                    <span className="min-w-0">
-                      <span className="block truncate font-medium text-navy">{person.name}</span>
-                      <span className="block text-xs text-muted-foreground">{person.id} · {person.unit}{person.mobile ? " · WhatsApp" : ""}</span>
-                    </span>
-                  </button>
-                ))}
-              </div>
-            ) : (
-              <div>
-                <p className="px-4 pt-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">Personal</p>
-                {personalThreads.length === 0 ? <p className="px-4 py-3 text-sm text-muted-foreground">No personal chat yet. Start one above.</p> : personalThreads.map(threadButton)}
-                <p className="px-4 pt-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">Groups</p>
-                {groupThreads.map(threadButton)}
-              </div>
-            )}
+            <p className="px-4 pt-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">Personal</p>
+            {meId && meId !== "po" && meId !== "admin" ? (
+              <button type="button" className="flex w-full items-center gap-3 border-b border-border px-4 py-3 text-left hover:bg-muted" onClick={() => openThread(canonicalThread(`dm:${meId}:po`))}>
+                <span className="flex size-10 items-center justify-center rounded-full bg-navy text-xs font-semibold text-paper">PO</span>
+                <span>
+                  <span className="block font-medium text-navy">Programme Officer</span>
+                  <span className="block text-xs text-muted-foreground">Personal chat</span>
+                </span>
+              </button>
+            ) : null}
+            {directory.length === 0 ? <p className="px-4 py-3 text-sm text-muted-foreground">No volunteer on the roll yet.</p> : null}
+            {directory.map((person) => {
+              const thread = canonicalThread(`dm:${meId}:${person.id}`);
+              const photo = roll.find((row) => row.volunteerId === person.id || row.id === person.id)?.photoUrl;
+              const count = unreadCount(thread);
+              return (
+                <button key={person.id} type="button" className={`flex w-full items-center gap-3 border-b border-border px-4 py-3 text-left ${active === thread ? "bg-forest/10" : "hover:bg-muted"}`} onClick={() => openThread(thread)}>
+                  {photo ? <img src={photo} alt="" className="size-10 rounded-full object-cover" /> : <span className="flex size-10 items-center justify-center rounded-full bg-forest text-xs font-semibold text-paper">{person.name.slice(0, 1)}</span>}
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate font-medium text-navy">{person.name}</span>
+                    <span className="block truncate text-xs text-muted-foreground">{person.id} · {person.unit}{person.mobile ? " · WhatsApp" : ""}</span>
+                  </span>
+                  {count > 0 ? <span className="min-w-5 rounded-full bg-forest px-1.5 text-center text-[10px] font-semibold text-white">{count}</span> : null}
+                </button>
+              );
+            })}
+            <p className="px-4 pt-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">Groups</p>
+            {allowedGroups.map((group) => threadButton(group.id))}
           </div>
         </aside>
         <section className={`${mobileList ? "hidden" : "flex"} min-w-0 flex-1 flex-col md:flex`}>

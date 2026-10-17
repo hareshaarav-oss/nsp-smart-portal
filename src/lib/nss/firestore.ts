@@ -405,6 +405,30 @@ export async function saveBrandPhotos(patch: { poPhoto?: string; principalPhoto?
   return { poPhoto, principalPhoto };
 }
 
+export async function listStudentPhotos() {
+  const params = new URLSearchParams({ pageSize: "300" });
+  for (const field of ["volunteerId", "photoUrl", "status"]) params.append("mask.fieldPaths", field);
+  const photos: { id: string; photoUrl: string }[] = [];
+  let url: string | "" = `${FIRESTORE_BASE}/students?${params}`;
+  let page = 0;
+  while (url && page < 4) {
+    page += 1;
+    const res = await fetch(url);
+    if (res.status === 429) throw new Error("The college roll is busy. Photographs will load again shortly.");
+    if (!res.ok) break;
+    const json = (await res.json()) as { documents?: { name?: string; fields?: Record<string, FsValue> }[]; nextPageToken?: string };
+    for (const doc of json.documents ?? []) {
+      const row = decodeDoc(doc);
+      if (text(row.status).toLowerCase() === "deleted") continue;
+      const photoUrl = safePhoto(row.photoUrl);
+      const id = text(row.volunteerId);
+      if (id && photoUrl) photos.push({ id, photoUrl });
+    }
+    url = json.nextPageToken ? `${FIRESTORE_BASE}/students?${params}&pageToken=${encodeURIComponent(json.nextPageToken)}` : "";
+  }
+  return photos;
+}
+
 const KNOWN_ROLES = ["Volunteer", "Leader", "Group Leader", "Discipline Head", "Camp Coordinator"] as const;
 
 export function knownRole(value: unknown): (typeof KNOWN_ROLES)[number] {
