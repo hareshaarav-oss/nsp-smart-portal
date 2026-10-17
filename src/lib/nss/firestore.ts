@@ -74,11 +74,14 @@ const STUDENT_FIELDS = [
   "updatedAt",
 ];
 
-function collectionUrl(name: string, token?: string) {
+function collectionUrl(name: string, token?: string, opts?: { photos?: boolean }) {
   const params = new URLSearchParams({ pageSize: "300" });
   if (token) params.set("pageToken", token);
   if (name === "students") {
-    for (const field of STUDENT_FIELDS) params.append("mask.fieldPaths", field);
+    for (const field of STUDENT_FIELDS) {
+      if (opts?.photos === false && field === "photoUrl") continue;
+      params.append("mask.fieldPaths", field);
+    }
   }
   if (name === "events") {
     for (const field of ["eventName", "title", "date", "startDate", "location", "hours", "status", "description", "beneficiaries", "category", "coordinator", "createdAt"]) {
@@ -98,9 +101,9 @@ function collectionUrl(name: string, token?: string) {
   return `${FIRESTORE_BASE}/${name}?${params.toString()}`;
 }
 
-async function listCollection(name: string) {
+async function listCollection(name: string, opts?: { photos?: boolean }) {
   const docs: Record<string, unknown>[] = [];
-  let url: string | "" = collectionUrl(name);
+  let url: string | "" = collectionUrl(name, undefined, opts);
   while (url) {
     const res = await fetch(url);
     if (!res.ok) break;
@@ -109,7 +112,7 @@ async function listCollection(name: string) {
       nextPageToken?: string;
     };
     for (const doc of json.documents ?? []) docs.push(decodeDoc(doc));
-    url = json.nextPageToken ? collectionUrl(name, json.nextPageToken) : "";
+    url = json.nextPageToken ? collectionUrl(name, json.nextPageToken, opts) : "";
   }
   return docs;
 }
@@ -159,10 +162,10 @@ export type CloudPortal = Pick<
   "volunteers" | "events" | "attendance" | "notices" | "gallery" | "visitors"
 > & { alumniCount: number; serviceHours: number };
 
-export async function loadCollegeCloud(opts: { gallery?: boolean } = {}): Promise<CloudPortal | null> {
+export async function loadCollegeCloud(opts: { gallery?: boolean; photos?: boolean } = {}): Promise<CloudPortal | null> {
   const [students, eventDocs, noticeDocs, attendanceDocs, galleryDocs, stats, visitorsDoc] =
     await Promise.all([
-      listCollection("students"),
+      listCollection("students", { photos: opts.photos !== false }),
       listCollection("events"),
       listCollection("notices"),
       listCollection("attendance"),
@@ -538,7 +541,7 @@ export function computeServiceHours(events: { id: string; hours?: number }[], at
   return total;
 }
 
-export type ChatPerson = { id: string; name: string; unit: string; role: string };
+export type ChatPerson = { id: string; name: string; unit: string; role: string; mobile?: string };
 export type ChatRow = { id: string; threadId: string; text: string; senderId: string; senderName: string; createdAt: string };
 
 async function createDocument(collection: string, id: string, values: Record<string, unknown>) {
@@ -581,11 +584,11 @@ export async function readChatPass(token: string) {
   };
 }
 
-export async function listChatPeople(): Promise<ChatPerson[]> {
+export async function listChatPeople(opts?: { includeMobile?: boolean }): Promise<ChatPerson[]> {
   const params = new URLSearchParams({ pageSize: "300" });
-  for (const field of ["fullName", "firstName", "middleName", "surname", "volunteerId", "unit", "nssRole", "status", "createdAt"]) {
-    params.append("mask.fieldPaths", field);
-  }
+  const fields = ["fullName", "firstName", "middleName", "surname", "volunteerId", "unit", "nssRole", "status", "createdAt"];
+  if (opts?.includeMobile) fields.push("mobile");
+  for (const field of fields) params.append("mask.fieldPaths", field);
   const docs: Record<string, unknown>[] = [];
   let url: string | "" = `${FIRESTORE_BASE}/students?${params}`;
   while (url) {
@@ -608,12 +611,17 @@ export async function listChatPeople(): Promise<ChatPerson[]> {
       const n = numbers.get(s) ?? 1;
       const assembled = [s.firstName, s.middleName, s.surname].map(text).filter(Boolean).join(" ");
       const unit = text(s.unit) === "Unit 2" ? "Unit 2" : "Unit 1";
-      return {
+      const person: ChatPerson = {
         id: text(s.volunteerId) || `NSS${padId(n)}`,
         name: titleFirstName(cleanPersonName(text(s.fullName) || assembled)),
         unit,
         role: knownRole(s.nssRole),
       };
+      if (opts?.includeMobile) {
+        const mobile = digits(s.mobile).slice(-10);
+        if (mobile.length === 10) person.mobile = mobile;
+      }
+      return person;
     })
     .filter((person) => person.name);
 }

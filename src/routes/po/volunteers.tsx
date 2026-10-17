@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { CreditCard, QrCode, Star } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -14,7 +14,8 @@ import { blobToDataUrl, compressPassport } from "@/lib/nss/media";
 import { downloadVolunteerExcel } from "@/lib/nss/reports";
 import { qrSvg } from "@/lib/nss/qr";
 import { htmlForCertificate, openPreparedCertificate, preparedCertificate } from "@/lib/nss/certificates";
-import { officerCloud } from "@/lib/nss/desk-save";
+import { officerCloud, refreshRoll } from "@/lib/nss/desk-save";
+import { openWhatsApp } from "@/lib/nss/whatsapp";
 import {
   activeVolunteers,
   attendanceOf,
@@ -257,9 +258,28 @@ function SmartRecord({ volunteerId, onClose }: { volunteerId: string; onClose: (
   const state = useNssStore();
   const [qrMarkup, setQrMarkup] = useState("");
   const [qrOpen, setQrOpen] = useState(false);
+  const [syncedAt, setSyncedAt] = useState(0);
+  const [, setTick] = useState(0);
   const rec = volunteerRecord(state, volunteerId);
   const v = rec.volunteer;
   const events = [...state.events].sort((a, b) => b.date.localeCompare(a.date));
+
+  useEffect(() => {
+    let stop = false;
+    async function pull() {
+      const ok = await refreshRoll();
+      if (!stop && ok) setSyncedAt(Date.now());
+    }
+    void pull();
+    const timer = window.setInterval(() => void pull(), 8000);
+    const tick = window.setInterval(() => setTick((n) => n + 1), 1000);
+    return () => {
+      stop = true;
+      window.clearInterval(timer);
+      window.clearInterval(tick);
+    };
+  }, [volunteerId]);
+
   if (!v) return null;
 
   async function showVolunteerQr() {
@@ -351,6 +371,9 @@ function SmartRecord({ volunteerId, onClose }: { volunteerId: string; onClose: (
               <p className="text-sm text-muted-foreground">
                 {v.volunteerId} · {v.enrollment} · {v.unit} · {v.nssRole}
               </p>
+              <p className="text-xs text-forest">
+                {syncedAt ? `Live · updated ${Math.max(0, Math.round((Date.now() - syncedAt) / 1000))}s ago` : "Connecting the college roll…"}
+              </p>
               {rec.isBest ? (
                 <Badge tone="saffron" className="mt-1">
                   Best volunteer
@@ -362,6 +385,11 @@ function SmartRecord({ volunteerId, onClose }: { volunteerId: string; onClose: (
             <Button size="sm" variant="outline" onClick={() => void openIdCard(v, state.settings)}>
               ID card
             </Button>
+            {v.mobile ? (
+              <Button size="sm" className="bg-[#128C7E] text-white hover:bg-[#0f766e]" onClick={() => openWhatsApp(v.mobile, `Namaste ${v.fullName}, this is NSS Mansa.`)}>
+                WhatsApp
+              </Button>
+            ) : null}
             <Button size="sm" variant="outline" onClick={() => void showVolunteerQr()}>
               <QrCode />
               QR

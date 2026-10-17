@@ -255,12 +255,32 @@ export const Route = createFileRoute("/api/nss-cloud")({
               return Response.json({ ok: true, message: saved });
             }
             const messages = (await listRecentChatMessages()).filter((row) => canSeeThread(user, canonicalThread(row.threadId)));
-            const people = await listChatPeople();
+            const officer = user.role === "po" || user.role === "admin";
+            const people = await listChatPeople({ includeMobile: officer });
             return Response.json({
               ok: true,
               me: { id: user.id, name: user.name, role: user.role, unit: user.unit },
               people,
               messages,
+            });
+          }
+          if (body.action === "roll-sync") {
+            const user = text(body.chatToken) ? await readChatPass(text(body.chatToken)) : null;
+            const data = await loadCollegeCloud({ gallery: false, photos: false });
+            if (!data) return Response.json({ ok: false }, { status: 404 });
+            const officer = user?.role === "po" || user?.role === "admin";
+            const rows = (data.volunteers ?? []) as unknown as Row[];
+            const volunteers = rows.map((row) => ({ ...(officer ? officerVolunteer(row) : publicVolunteer(row)), photoUrl: "" }));
+            const attendance = publicAttendance(rows, (data.attendance ?? []) as unknown as Row[]);
+            return Response.json({
+              ok: true,
+              private: officer,
+              volunteers,
+              events: data.events,
+              attendance,
+              notices: data.notices,
+              serviceHours: data.serviceHours,
+              visitors: data.visitors,
             });
           }
           if (body.action === "set-password" || body.action === "update-profile") {
