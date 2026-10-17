@@ -1,11 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useCallback, useMemo, useState } from "react";
-import { Cake, Star } from "lucide-react";
 import { AppShell } from "@/components/nss/shell";
-import { PhotoCarousel } from "@/components/nss/photo-carousel";
 import { shouldShowSplash, SplashScreen } from "@/components/nss/splash";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { daysUntilBirthday, formatLongDate, isBirthdayOn, todayIso } from "@/lib/nss/format";
 import { activeVolunteers, alumniVolunteers, bestVolunteer, totalServiceHours, useNssStore, volunteerHours } from "@/lib/nss/store";
@@ -26,9 +22,7 @@ function Home() {
   const dismiss = useCallback(() => setSplashing(false), []);
   const events = useNssStore((s) => s.events) ?? [];
   const notices = useNssStore((s) => s.notices) ?? [];
-  const gallery = useNssStore((s) => s.gallery) ?? [];
   const visitors = useNssStore((s) => s.visitors);
-  const settings = useNssStore((s) => s.settings);
   const hours = useNssStore((s) => (s.attendance.length ? totalServiceHours(s) : Math.max(totalServiceHours(s), s.settings.reportedServiceHours ?? 0)));
   const volunteerCount = useNssStore((s) => activeVolunteers(s).length);
   const alumniCount = useNssStore((s) => Math.max(alumniVolunteers(s).length, s.settings.alumniCount));
@@ -112,138 +106,113 @@ function Home() {
     <>
       {splashing ? <SplashScreen onDone={dismiss} /> : null}
       <AppShell current="home" compactHeader>
-        <section className="mx-auto w-full max-w-6xl flex-1 px-4 py-5 md:px-6 md:py-6">
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
-            <Link to="/register" className="rounded-xl bg-forest px-3 py-3 text-center text-sm font-semibold text-paper">Registration</Link>
-            <Link to="/login" search={{ role: "volunteer" }} className="rounded-xl border border-border bg-card px-3 py-3 text-center text-sm font-semibold text-navy">Student</Link>
-            <Link to="/chat" className="rounded-xl border border-border bg-card px-3 py-3 text-center text-sm font-semibold text-navy">Chat</Link>
-            <Link to="/login" search={{ role: "po" }} className="rounded-xl bg-navy px-3 py-3 text-center text-sm font-semibold text-paper">Admin</Link>
-            <Link to="/verify" search={{ id: "" }} className="col-span-2 rounded-xl border border-border bg-card px-3 py-3 text-center text-sm font-semibold text-navy sm:col-span-1">Verify</Link>
+        <div className="px-3 py-3">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#c4121a]">Welcome to Avyansh Tech</p>
+          <h1 className="font-display text-3xl font-bold leading-tight text-[#161311]">NSS Smart Portal</h1>
+          <div className="mt-3 grid grid-cols-4 overflow-hidden rounded-lg bg-white shadow-sm">
+            <MiniStat label="Roll" value={volunteerCount} />
+            <MiniStat label="Hours" value={hours} />
+            <MiniStat label="Alumni" value={alumniCount} />
+            <MiniStat label="Visits" value={visitors} />
           </div>
 
-          <section className="mt-4 overflow-hidden rounded-2xl border border-border bg-card">
-            <div className="grid gap-4 p-4 md:grid-cols-[180px_1fr_180px] md:items-center md:p-5">
-              <HomeOfficer role="Programme Officer" name={settings.poName} quote={settings.poQuote} photo={settings.poPhoto} />
-              <div className="order-first md:order-none">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-saffron">S.D. Arts & Shah B.R. Commerce College</p>
-                <p className="mt-1 text-sm font-semibold text-forest">Welcome to Avyansh Tech</p>
-                <h1 className="font-display text-3xl font-semibold text-navy">NSS Smart Portal</h1>
-                <div className="mt-4"><PhotoCarousel items={gallery} /></div>
-                <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
-                  <MiniStat label="Volunteers" value={volunteerCount} />
-                  <MiniStat label="Visitors" value={visitors} />
-                  <MiniStat label="Alumni" value={alumniCount} />
-                  <MiniStat label="Hours" value={hours} />
-                </div>
+          {latestNotices[0] ? (
+            <article className="mt-3 overflow-hidden rounded-lg bg-white shadow-sm">
+              <p className="bg-[#c4121a] px-3 py-1 text-[11px] font-bold uppercase tracking-wide text-white">Lead notice</p>
+              <div className="p-3">
+                <h2 className="font-display text-2xl font-bold leading-tight">{latestNotices[0].title}</h2>
+                <p className="mt-1 text-xs text-[#7a6d62]">{formatLongDate(latestNotices[0].date)}</p>
+                {latestNotices[0].body ? <p className="gu mt-2 text-sm leading-relaxed">{latestNotices[0].body}</p> : null}
               </div>
-              <HomeOfficer role="Principal" name={settings.principalName} quote={settings.principalQuote} photo={settings.principalPhoto} />
+            </article>
+          ) : null}
+
+          <section id="notices" className="mt-4">
+            <h2 className="border-b-2 border-[#c4121a] pb-1 font-display text-xl font-bold">Notices</h2>
+            <div className="mt-2 divide-y divide-[#eadfce] overflow-hidden rounded-lg bg-white shadow-sm">
+              {latestNotices.slice(1).map((notice) => (
+                <article key={notice.id} className="px-3 py-3">
+                  <p className="text-[11px] font-bold uppercase tracking-wide text-[#c4121a]">{formatLongDate(notice.date)}</p>
+                  <h3 className="mt-0.5 text-lg font-bold leading-snug">{notice.title}</h3>
+                  {notice.body ? <p className="gu mt-1 line-clamp-3 text-sm leading-relaxed text-[#3d342c]">{notice.body}</p> : null}
+                </article>
+              ))}
             </div>
           </section>
 
-          <div className="mt-4 grid gap-4 xl:grid-cols-[1.35fr_0.65fr]">
-            <Card>
-              <CardContent className="p-4">
-                <div className="flex items-center justify-between gap-3">
-                  <h2 className="font-display text-lg text-navy">Roll</h2>
-                  <span className="text-sm tabular-nums text-muted-foreground">{roll.length}</span>
-                </div>
-                <Input value={rollQuery} onChange={(e) => setRollQuery(e.target.value)} placeholder="Search" className="mt-3" />
-                <div className="mt-3 max-h-[32rem] space-y-1.5 overflow-y-auto">
-                  {roll.map((v) => (
-                    <div key={v.volunteerId || v.id} className="flex items-center gap-3 rounded-lg px-2 py-2 hover:bg-muted/70">
-                      {v.photoUrl ? (
-                        <img src={v.photoUrl} alt="" className="h-10 w-10 rounded-full object-cover" />
-                      ) : (
-                        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-navy text-[11px] font-semibold text-paper">{initials(v.fullName) || "NSS"}</div>
-                      )}
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-medium text-navy">{v.fullName}</p>
-                        <p className="truncate text-xs text-muted-foreground">{v.volunteerId} · {v.course} {v.semester} · {v.unit}</p>
-                      </div>
-                      <p className="font-display text-lg tabular-nums text-forest">{v.hours}</p>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-
-            <div className="space-y-4">
-              <Card>
-                <CardContent className="p-4">
-                  <h2 className="font-display text-lg text-navy">Notices</h2>
-                  <div className="mt-3 max-h-80 space-y-2 overflow-y-auto">
-                    {latestNotices.map((notice) => (
-                      <article key={notice.id} className="rounded-lg border border-border px-3 py-2.5">
-                        <div className="flex items-start justify-between gap-3">
-                          <h3 className="text-sm font-medium text-navy">{notice.title}</h3>
-                          <span className="shrink-0 text-[11px] text-muted-foreground">{formatLongDate(notice.date)}</span>
-                        </div>
-                        {notice.body ? <p className="gu mt-1 text-sm leading-relaxed text-muted-foreground">{notice.body}</p> : null}
-                      </article>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardContent className="p-4">
-                  <div className="flex items-center gap-2"><Cake className="size-4 text-saffron" /><h2 className="font-display text-lg text-navy">Birthdays</h2></div>
-                  <div className="mt-3 space-y-2">
-                    {birthdayVolunteers.map((v) => {
-                      const days = daysUntilBirthday(v.dob, today);
-                      return (
-                        <div key={v.id} className="flex items-center gap-3">
-                          {v.photoUrl ? <img src={v.photoUrl} alt="" className="h-10 w-10 rounded-full object-cover" /> : <div className="flex h-10 w-10 items-center justify-center rounded-full bg-navy text-[11px] font-semibold text-paper">{initials(v.fullName)}</div>}
-                          <div className="min-w-0">
-                            <p className="truncate text-sm font-medium text-navy">{v.fullName}</p>
-                            <p className="text-xs text-muted-foreground">{days === 0 ? "Today" : `${days}d`}</p>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </CardContent>
-              </Card>
-              {bestId ? (
-                <Card>
-                  <CardContent className="flex items-center gap-3 p-4">
-                    <Star className="size-5 text-saffron" />
-                    <div className="min-w-0">
-                      <p className="text-[11px] uppercase tracking-[0.14em] text-saffron">Best volunteer</p>
-                      <p className="truncate font-medium text-navy">{bestName}</p>
-                      <p className="text-xs text-muted-foreground">{bestVid} · {bestHours} hours</p>
-                    </div>
-                  </CardContent>
-                </Card>
-              ) : null}
+          <section className="mt-4">
+            <h2 className="border-b-2 border-[#c4121a] pb-1 font-display text-xl font-bold">Activities</h2>
+            <div className="mt-2 space-y-2">
+              {upcoming.map((event) => (
+                <article key={event.id} className="rounded-lg bg-white px-3 py-3 shadow-sm">
+                  <p className="text-[11px] font-bold uppercase tracking-wide text-[#c4121a]">Upcoming</p>
+                  <h3 className="text-lg font-bold leading-snug">{event.name}</h3>
+                  <p className="mt-1 text-xs text-[#7a6d62]">{formatLongDate(event.date)} · {event.location}</p>
+                </article>
+              ))}
+              {completed.map((event) => (
+                <article key={event.id} className="rounded-lg bg-white px-3 py-3 shadow-sm">
+                  <p className="text-[11px] font-bold uppercase tracking-wide text-[#1f7a3a]">Done</p>
+                  <h3 className="text-lg font-bold leading-snug">{event.name}</h3>
+                  <p className="mt-1 text-xs text-[#7a6d62]">{formatLongDate(event.date)} · {event.location}</p>
+                </article>
+              ))}
             </div>
-          </div>
+          </section>
 
-          <Card className="mt-4">
-            <CardContent className="p-4">
-              <h2 className="font-display text-lg text-navy">Activities</h2>
-              <div className="mt-3 grid gap-2 md:grid-cols-2">
-                {upcoming.map((event) => (
-                  <div key={event.id} className="rounded-lg border border-border px-3 py-3">
-                    <div className="flex items-start justify-between gap-3">
-                      <p className="font-medium text-navy">{event.name}</p>
-                      <Badge tone="saffron">Upcoming</Badge>
+          {birthdayVolunteers.length ? (
+            <section className="mt-4">
+              <h2 className="border-b-2 border-[#c4121a] pb-1 font-display text-xl font-bold">Birthdays</h2>
+              <div className="mt-2 divide-y divide-[#eadfce] overflow-hidden rounded-lg bg-white shadow-sm">
+                {birthdayVolunteers.map((v) => {
+                  const days = daysUntilBirthday(v.dob, today);
+                  return (
+                    <div key={v.id} className="flex items-center gap-3 px-3 py-2.5">
+                      {v.photoUrl ? <img src={v.photoUrl} alt="" className="h-12 w-12 rounded object-cover" /> : <div className="flex h-12 w-12 items-center justify-center bg-[#c4121a] text-xs font-bold text-white">{initials(v.fullName)}</div>}
+                      <div className="min-w-0">
+                        <p className="truncate font-bold">{v.fullName}</p>
+                        <p className="text-xs text-[#7a6d62]">{days === 0 ? "Today" : `${days} days`}</p>
+                      </div>
                     </div>
-                    <p className="mt-1 text-xs text-muted-foreground">{formatLongDate(event.date)} · {event.location}</p>
-                  </div>
-                ))}
-                {completed.map((event) => (
-                  <div key={event.id} className="rounded-lg border border-border px-3 py-3">
-                    <div className="flex items-start justify-between gap-3">
-                      <p className="font-medium text-navy">{event.name}</p>
-                      <Badge tone="forest">Done</Badge>
-                    </div>
-                    <p className="mt-1 text-xs text-muted-foreground">{formatLongDate(event.date)} · {event.location}</p>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
-            </CardContent>
-          </Card>
-        </section>
+            </section>
+          ) : null}
+
+          <section id="roll" className="mt-4">
+            <div className="flex items-end justify-between border-b-2 border-[#c4121a] pb-1">
+              <h2 className="font-display text-xl font-bold">NSS Roll</h2>
+              <span className="text-sm tabular-nums text-[#7a6d62]">{roll.length}</span>
+            </div>
+            <Input value={rollQuery} onChange={(e) => setRollQuery(e.target.value)} placeholder="Search name" className="mt-2 bg-white" />
+            <div className="mt-2 divide-y divide-[#eadfce] overflow-hidden rounded-lg bg-white shadow-sm">
+              {roll.map((v) => (
+                <div key={v.volunteerId || v.id} className="flex items-center gap-3 px-3 py-2.5">
+                  {v.photoUrl ? (
+                    <img src={v.photoUrl} alt="" className="h-14 w-12 rounded object-cover" />
+                  ) : (
+                    <div className="flex h-14 w-12 items-center justify-center bg-[#1a2744] text-[11px] font-bold text-white">{initials(v.fullName) || "NSS"}</div>
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-base font-bold leading-tight">{v.fullName}</p>
+                    <p className="truncate text-xs text-[#7a6d62]">{v.volunteerId} · {v.course} {v.semester}</p>
+                  </div>
+                  <p className="font-display text-xl font-bold tabular-nums text-[#c4121a]">{v.hours}</p>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          {bestId ? (
+            <p className="mt-4 text-sm"><span className="font-bold text-[#c4121a]">Best volunteer · </span>{bestName} · {bestVid} · {bestHours} hours{bestUnit ? ` · ${bestUnit}` : ""}</p>
+          ) : null}
+
+          <div className="mt-4 grid grid-cols-2 gap-2 pb-2 text-sm font-bold">
+            <Link to="/register" className="rounded-lg bg-[#c4121a] px-3 py-3 text-center text-white">Register</Link>
+            <Link to="/login" className="rounded-lg bg-[#1a2744] px-3 py-3 text-center text-white">Sign in</Link>
+          </div>
+        </div>
       </AppShell>
     </>
   );
@@ -251,20 +220,9 @@ function Home() {
 
 function MiniStat({ label, value }: { label: string; value: number }) {
   return (
-    <div className="rounded-xl border border-border bg-card px-3 py-3 text-center">
-      <p className="font-display text-2xl font-semibold tabular-nums text-navy">{value}</p>
-      <p className="mt-0.5 text-[11px] uppercase tracking-wide text-muted-foreground">{label}</p>
-    </div>
-  );
-}
-
-function HomeOfficer({ role, name, quote, photo }: { role: string; name: string; quote: string; photo?: string }) {
-  return (
-    <div className="rounded-xl bg-bg p-3 text-center">
-      <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-forest">{role}</p>
-      {photo ? <img src={photo} alt={name} className="mx-auto mt-2 h-24 w-20 rounded-lg object-cover" /> : <div className="mx-auto mt-2 flex h-24 w-20 items-center justify-center rounded-lg bg-navy text-sm font-semibold text-paper">{initials(name) || "NSS"}</div>}
-      <p className="mt-2 text-sm font-semibold text-navy">{name}</p>
-      {quote ? <p className="gu mt-1 line-clamp-3 text-xs leading-relaxed text-muted-foreground">“{quote}”</p> : null}
+    <div className="px-1 py-2.5 text-center">
+      <p className="font-display text-xl font-bold tabular-nums text-[#c4121a]">{value}</p>
+      <p className="text-[10px] font-semibold uppercase tracking-wide text-[#7a6d62]">{label}</p>
     </div>
   );
 }

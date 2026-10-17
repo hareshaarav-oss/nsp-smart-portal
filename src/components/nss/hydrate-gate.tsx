@@ -254,14 +254,6 @@ export function HydrateGate({ children }: { children: ReactNode }) {
         ]);
         applyCachedPhotos();
         const session = useSessionStore.getState().session;
-        try {
-          if (session && localStorage.getItem("nsp-view") === "app" && window.location.pathname === "/") {
-            window.location.replace(session.role === "po" || session.role === "admin" ? "/po" : "/volunteer");
-            return;
-          }
-        } catch {
-          /* stay on the portal */
-        }
         if (session && !session.chatToken) {
           const renewed = await fetch("/api/nss-cloud", {
             method: "POST",
