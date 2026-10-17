@@ -368,7 +368,7 @@ function encodeValue(value: unknown): Record<string, unknown> {
 
 export function safePhoto(value: unknown) {
   const src = text(value);
-  if ((src.startsWith("data:image/") || src.startsWith("https://")) && src.length < 420000) return src;
+  if ((src.startsWith("data:image/") || src.startsWith("https://")) && src.length < 700000) return src;
   return "";
 }
 
@@ -408,10 +408,10 @@ export async function saveBrandPhotos(patch: { poPhoto?: string; principalPhoto?
   return { poPhoto, principalPhoto };
 }
 
-export async function listStudentPhotos() {
+export async function listPhotoRoster() {
   const params = new URLSearchParams({ pageSize: "300" });
-  for (const field of ["volunteerId", "photoUrl", "status"]) params.append("mask.fieldPaths", field);
-  const photos: { id: string; photoUrl: string }[] = [];
+  for (const field of ["volunteerId", "fullName", "status", "createdAt"]) params.append("mask.fieldPaths", field);
+  const docs: Record<string, unknown>[] = [];
   let url: string | "" = `${FIRESTORE_BASE}/students?${params}`;
   let page = 0;
   while (url && page < 4) {
@@ -420,14 +420,53 @@ export async function listStudentPhotos() {
     if (res.status === 429) throw new Error("The college roll is busy. Photographs will load again shortly.");
     if (!res.ok) break;
     const json = (await res.json()) as { documents?: { name?: string; fields?: Record<string, FsValue> }[]; nextPageToken?: string };
-    for (const doc of json.documents ?? []) {
-      const row = decodeDoc(doc);
-      if (text(row.status).toLowerCase() === "deleted") continue;
-      const photoUrl = safePhoto(row.photoUrl);
-      const id = text(row.volunteerId);
-      if (id && photoUrl) photos.push({ id, photoUrl });
-    }
+    for (const doc of json.documents ?? []) docs.push(decodeDoc(doc));
     url = json.nextPageToken ? `${FIRESTORE_BASE}/students?${params}&pageToken=${encodeURIComponent(json.nextPageToken)}` : "";
+  }
+  const live = docs.filter((row) => text(row.status).toLowerCase() !== "deleted");
+  live.sort(
+    (a, b) =>
+      isoDate(a.createdAt).localeCompare(isoDate(b.createdAt)) ||
+      text(a.fullName).localeCompare(text(b.fullName), "en", { sensitivity: "base" }),
+  );
+  const numbers = rollNumbers(live);
+  return live.map((row) => {
+    const n = numbers.get(row) ?? 1;
+    return {
+      docId: text(row._id),
+      volunteerId: text(row.volunteerId) || `NSS${padId(n)}`,
+    };
+  }).filter((row) => row.docId);
+}
+
+export async function readPhotoBatch(docIds: string[]) {
+  const photos: { id: string; docId: string; photoUrl: string }[] = [];
+  await Promise.all(docIds.slice(0, 4).map(async (docId) => {
+    const id = text(docId);
+    if (!id) return;
+    const params = new URLSearchParams();
+    params.append("mask.fieldPaths", "photoUrl");
+    params.append("mask.fieldPaths", "volunteerId");
+    const res = await fetch(`${FIRESTORE_BASE}/students/${encodeURIComponent(id)}?${params}`);
+    if (res.status === 429) throw new Error("The college roll is busy. Photographs will load again shortly.");
+    if (!res.ok) return;
+    const json = (await res.json()) as { fields?: Record<string, FsValue> };
+    const row = decodeDoc({ name: `students/${id}`, fields: json.fields });
+    const photoUrl = safePhoto(row.photoUrl);
+    if (!photoUrl) return;
+    photos.push({ id: text(row.volunteerId) || id, docId: id, photoUrl });
+  }));
+  return photos;
+}
+
+export async function listStudentPhotos() {
+  const roster = await listPhotoRoster();
+  const photos: { id: string; photoUrl: string }[] = [];
+  for (let i = 0; i < roster.length; i += 4) {
+    const batch = await readPhotoBatch(roster.slice(i, i + 4).map((row) => row.docId));
+    for (const photo of batch) {
+      photos.push({ id: photo.id || photo.docId, photoUrl: photo.photoUrl });
+    }
   }
   return photos;
 }

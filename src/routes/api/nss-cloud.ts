@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { loadCollegeCloud, saveStudentToCloud, incrementVisitors, patchStudent, safePhoto, knownRole, issueChatPass, readChatPass, listRecentChatMessages, saveChatMessage, listChatPeople, clearAttendanceCloud, readBrandPhotos, saveBrandPhotos, listStudentPhotos, saveAttendanceMarks } from "@/lib/nss/firestore";
+import { loadCollegeCloud, saveStudentToCloud, incrementVisitors, patchStudent, safePhoto, knownRole, issueChatPass, readChatPass, listRecentChatMessages, saveChatMessage, listChatPeople, clearAttendanceCloud, readBrandPhotos, saveBrandPhotos, listPhotoRoster, readPhotoBatch, saveAttendanceMarks } from "@/lib/nss/firestore";
 
 type Row = Record<string, unknown>;
 
@@ -243,11 +243,17 @@ export const Route = createFileRoute("/api/nss-cloud")({
             all?: boolean;
             unit?: string;
             rows?: { mobile?: string; name?: string; eventName?: string; present?: boolean; date?: string }[];
+            ids?: string[];
           };
           if (body.action === "photo-sync") {
-            const photos = await listStudentPhotos();
+            const ids = Array.isArray(body.ids) ? body.ids.map((id) => text(id)).filter(Boolean).slice(0, 4) : [];
+            if (ids.length) {
+              const photos = await readPhotoBatch(ids);
+              return Response.json({ ok: true, photos, build: appBuild() });
+            }
+            const roster = await listPhotoRoster();
             const brand = await readBrandPhotos();
-            return Response.json({ ok: true, photos, brand, build: appBuild() });
+            return Response.json({ ok: true, roster, brand, build: appBuild() });
           }
           if (body.action === "resume-session") {
             const role = text(body.role);

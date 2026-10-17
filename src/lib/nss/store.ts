@@ -774,7 +774,7 @@ export const useNssStore =
                     const cloudPhoto =
                       row.photoUrl &&
                       row.photoUrl.length <
-                        420000
+                        700000
                         ? row.photoUrl
                         : "";
 
@@ -824,7 +824,7 @@ export const useNssStore =
                         cloudPhoto ||
                         (prev?.photoUrl &&
                         prev.photoUrl.length <
-                          420000
+                          700000
                           ? prev.photoUrl
                           : ""),
 
@@ -2529,7 +2529,7 @@ export const useNssStore =
         partialize: (s) => ({
           volunteers: (s.volunteers ?? []).map((v) => ({
             ...v,
-            photoUrl: v.photoUrl && v.photoUrl.length < 420000 ? v.photoUrl : "",
+            photoUrl: v.photoUrl && v.photoUrl.length < 700000 ? v.photoUrl : "",
           })),
 
           events:

@@ -36,47 +36,96 @@ function rescueOfficerPhotos() {
   }
 }
 
-function applyCachedPhotos() {
+function readPhotoCache() {
   try {
     const raw = localStorage.getItem("nsp-photo-map");
-    if (!raw) return;
-    const map = JSON.parse(raw) as Record<string, string>;
-    const volunteers = useNssStore.getState().volunteers.map((volunteer) => {
-      const photo = map[volunteer.volunteerId] || map[volunteer.id] || "";
-      return photo && !volunteer.photoUrl ? { ...volunteer, photoUrl: photo } : volunteer;
-    });
-    useNssStore.setState({ volunteers });
+    return raw ? (JSON.parse(raw) as Record<string, string>) : {};
   } catch {
-    /* ignore a damaged cache */
+    return {};
   }
 }
 
+function writePhotoCache(map: Record<string, string>) {
+  try {
+    localStorage.setItem("nsp-photo-map", JSON.stringify(map));
+  } catch {
+    /* storage full */
+  }
+}
+
+function applyPhotoMap(map: Map<string, string>) {
+  if (!map.size) return;
+  const state = useNssStore.getState();
+  useNssStore.setState({
+    volunteers: state.volunteers.map((volunteer) => {
+      const photo = map.get(volunteer.volunteerId) || map.get(volunteer.id) || volunteer.photoUrl || "";
+      return photo ? { ...volunteer, photoUrl: photo } : volunteer;
+    }),
+  });
+}
+
+function applyCachedPhotos() {
+  const cached = readPhotoCache();
+  applyPhotoMap(new Map(Object.entries(cached).filter(([, photo]) => photo.startsWith("data:image/") || photo.startsWith("https://"))));
+}
+
 async function pullPhotos() {
+  const cached = readPhotoCache();
+  applyPhotoMap(new Map(Object.entries(cached)));
   const res = await fetch("/api/nss-cloud", {
     method: "POST",
     headers: { "content-type": "application/json" },
     cache: "no-store",
     body: JSON.stringify({ action: "photo-sync" }),
   });
-  const data = (await res.json()) as { ok?: boolean; photos?: { id: string; photoUrl: string }[]; brand?: { poPhoto?: string; principalPhoto?: string } };
-  if (!res.ok || !data.ok || !Array.isArray(data.photos) || data.photos.length === 0) return;
-  const map = new Map(data.photos.map((photo) => [photo.id, photo.photoUrl]));
-  const state = useNssStore.getState();
-  useNssStore.setState({
-    volunteers: state.volunteers.map((volunteer) => {
-      const photo = map.get(volunteer.volunteerId) || map.get(volunteer.id) || volunteer.photoUrl;
-      return photo ? { ...volunteer, photoUrl: photo } : volunteer;
-    }),
-    settings: {
-      ...state.settings,
-      poPhoto: data.brand?.poPhoto || state.settings.poPhoto || "",
-      principalPhoto: data.brand?.principalPhoto || state.settings.principalPhoto || "",
-    },
-  });
-  try {
-    localStorage.setItem("nsp-photo-map", JSON.stringify(Object.fromEntries(map)));
-  } catch {
-    /* storage full */
+  const data = (await res.json()) as {
+    ok?: boolean;
+    roster?: { docId: string; volunteerId: string }[];
+    brand?: { poPhoto?: string; principalPhoto?: string };
+  };
+  if (!res.ok || !data.ok || !Array.isArray(data.roster)) return;
+  if (data.brand?.poPhoto || data.brand?.principalPhoto) {
+    const state = useNssStore.getState();
+    useNssStore.setState({
+      settings: {
+        ...state.settings,
+        poPhoto: data.brand.poPhoto || state.settings.poPhoto || "",
+        principalPhoto: data.brand.principalPhoto || state.settings.principalPhoto || "",
+      },
+    });
+  }
+  const pending = data.roster.filter((row) => row.docId && !(row.docId in cached));
+  for (let i = 0; i < pending.length; i += 4) {
+    const slice = pending.slice(i, i + 4);
+    const ids = slice.map((row) => row.docId);
+    const batchRes = await fetch("/api/nss-cloud", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      cache: "no-store",
+      body: JSON.stringify({ action: "photo-sync", ids }),
+    });
+    const batch = (await batchRes.json()) as { ok?: boolean; photos?: { id: string; docId: string; photoUrl: string }[] };
+    if (!batchRes.ok || !batch.ok || !Array.isArray(batch.photos)) break;
+    const map = new Map<string, string>();
+    for (const id of ids) cached[id] = cached[id] || "";
+    for (const photo of batch.photos) {
+      if (!photo.photoUrl) continue;
+      if (photo.id) {
+        cached[photo.id] = photo.photoUrl;
+        map.set(photo.id, photo.photoUrl);
+      }
+      if (photo.docId) {
+        cached[photo.docId] = photo.photoUrl;
+        map.set(photo.docId, photo.photoUrl);
+      }
+      const roster = slice.find((row) => row.docId === photo.docId);
+      if (roster?.volunteerId) {
+        cached[roster.volunteerId] = photo.photoUrl;
+        map.set(roster.volunteerId, photo.photoUrl);
+      }
+    }
+    applyPhotoMap(map);
+    writePhotoCache(cached);
   }
 }
 
@@ -187,13 +236,17 @@ export function HydrateGate({ children }: { children: ReactNode }) {
         setStatus("Could not reach the college roll. Showing saved data.");
       }
       finish();
-      void pullPhotos().catch(() => undefined);
-      void fetch("/api/nss-cloud?gallery=1", { cache: "no-store" })
-        .then((res) => res.json())
-        .then((cloud: CloudBody) => {
-          if (!cancelled) applyBody(cloud);
-        })
-        .catch(() => undefined);
+      void pullPhotos()
+        .catch(() => undefined)
+        .finally(() => {
+          if (cancelled) return;
+          void fetch("/api/nss-cloud?gallery=1", { cache: "no-store" })
+            .then((res) => res.json())
+            .then((cloud: CloudBody) => {
+              if (!cancelled) applyBody(cloud);
+            })
+            .catch(() => undefined);
+        });
     })();
 
     const timer = window.setInterval(() => {
