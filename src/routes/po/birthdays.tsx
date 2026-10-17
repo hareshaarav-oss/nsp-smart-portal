@@ -1,15 +1,18 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
-import { Cake } from "lucide-react";
+import { Cake, ImagePlus } from "lucide-react";
+import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { WhatsAppGroupButtons, WhatsAppSendPanel } from "@/components/nss/whatsapp-send";
 import { BIRTHDAY_TEMPLATE } from "@/lib/nss/constants";
+import { sendBirthdayWish } from "@/lib/nss/birthday-card";
 import { daysUntilBirthday, formatLongDate, isBirthdayOn, parseDob, todayIso } from "@/lib/nss/format";
 import { birthdayWish } from "@/lib/nss/whatsapp";
 import { useNssStore } from "@/lib/nss/store";
-import type { Volunteer } from "@/lib/nss/types";
+import type { PortalSettings, Volunteer } from "@/lib/nss/types";
 
 export const Route = createFileRoute("/po/birthdays")({ component: BirthdaysPage });
 
@@ -38,6 +41,24 @@ function BirthdaysPage() {
   }, [volunteers, today]);
 
   const birthdayDisabled = settings.birthdayEnabled === false;
+  const [sending, setSending] = useState(false);
+
+  async function wishAllToday() {
+    const people = groups.today;
+    if (!people.length || sending) return;
+    setSending(true);
+    try {
+      for (const volunteer of people) {
+        await sendBirthdayWish(volunteer, settings, template);
+      }
+      toast.success("Birthday card opened in WhatsApp. Choose the group and send.");
+    } catch (error) {
+      if (error instanceof Error && error.name === "AbortError") return;
+      toast.error("Could not open the birthday card.");
+    } finally {
+      setSending(false);
+    }
+  }
   const list = birthdayDisabled ? [] : groups[tab];
   const girlsToday = groups.today.filter((v) => v.gender === "Female");
   const boysToday = groups.today.filter((v) => v.gender === "Male");
@@ -88,7 +109,14 @@ function BirthdaysPage() {
       {groups.today.length > 0 ? (
         <Card className="border-saffron/40">
           <CardContent className="space-y-3 pt-5">
-            <p className="font-medium">Today’s wishes to WhatsApp groups</p>
+            <p className="font-medium">Today’s photo wishes</p>
+            <p className="text-sm text-muted-foreground">
+              Each card uses the student’s uploaded photo. WhatsApp opens with the image and the wish. Pick the girls or boys group and send.
+            </p>
+            <Button className="bg-[#128C7E] text-white hover:bg-[#0f766e]" disabled={sending} onClick={() => void wishAllToday()}>
+              <ImagePlus />
+              {sending ? "Opening WhatsApp…" : "Send photo wishes"}
+            </Button>
             {girlsToday.length ? (
               <WhatsAppGroupButtons text={girlsMsg} audience="girls" />
             ) : null}
@@ -105,7 +133,7 @@ function BirthdaysPage() {
             <CardContent className="pt-5 text-sm text-muted-foreground">No birthdays in this list.</CardContent>
           </Card>
         ) : (
-          list.map((v) => <BirthdayRow key={v.id} volunteer={v} today={today} template={template} />)
+          list.map((v) => <BirthdayRow key={v.id} volunteer={v} today={today} template={template} settings={settings} />)
         )}
       </div>
 
@@ -130,29 +158,53 @@ function BirthdayRow({
   volunteer: v,
   today,
   template,
+  settings,
 }: {
   volunteer: Volunteer;
   today: string;
   template: string;
+  settings: PortalSettings;
 }) {
   const days = daysUntilBirthday(v.dob, today);
   const isToday = days === 0;
   const text = birthdayWish(v.fullName, template);
+  const [busy, setBusy] = useState(false);
+
+  async function wish() {
+    setBusy(true);
+    try {
+      const mode = await sendBirthdayWish(v, settings, template);
+      toast.success(mode === "shared" ? "WhatsApp opened with the photo card." : "Card saved and the WhatsApp group opened. Attach the image, then send.");
+    } catch (error) {
+      if (error instanceof Error && error.name === "AbortError") return;
+      toast.error("Could not make the birthday card.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <Card className={isToday ? "border-saffron/50" : undefined}>
       <CardContent className="flex flex-wrap items-center justify-between gap-3 pt-5">
         <div className="flex items-start gap-3">
-          <Cake className={isToday ? "size-5 text-saffron" : "size-5 text-muted-foreground"} />
+          {v.photoUrl ? (
+            <img src={v.photoUrl} alt="" className="h-14 w-14 rounded-full object-cover" />
+          ) : (
+            <Cake className={isToday ? "size-5 text-saffron" : "size-5 text-muted-foreground"} />
+          )}
           <div>
             <p className="font-display text-lg font-semibold">{v.fullName}</p>
             <p className="text-sm text-muted-foreground">
               {v.volunteerId} · {v.unit} · {v.mobile} · {v.gender || "—"}
+              {v.photoUrl ? " · photo ready" : " · no photo yet"}
             </p>
-            {isToday ? (
-              <div className="mt-2">
-                <WhatsAppGroupButtons text={text} gender={v.gender} />
-              </div>
-            ) : null}
+            <div className="mt-2 flex flex-wrap gap-2">
+              <Button size="sm" className="bg-[#128C7E] text-white hover:bg-[#0f766e]" disabled={busy} onClick={() => void wish()}>
+                <ImagePlus />
+                {busy ? "Preparing…" : "Photo wish"}
+              </Button>
+              {isToday ? <WhatsAppGroupButtons text={text} gender={v.gender} /> : null}
+            </div>
           </div>
         </div>
         <div className="text-right">

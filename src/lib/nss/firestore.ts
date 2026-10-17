@@ -532,7 +532,30 @@ export async function incrementVisitors(): Promise<number> {
   }
 }
 
-export function computeServiceHours(events: { id: string; hours?: number }[], attendance: { eventId: string; present: boolean }[]): number {
+export async function clearAttendanceCloud(eventName: string) {
+  const want = text(eventName).trim().toLowerCase();
+  if (!want) return { removed: 0, serviceHours: 0 };
+  const docs = await listCollection("attendance");
+  let removed = 0;
+  for (const row of docs) {
+    const name = (text(row.eventName) || text(row.title)).trim().toLowerCase();
+    if (name !== want) continue;
+    const id = text(row._id);
+    if (!id) continue;
+    const res = await fetch(`${FIRESTORE_BASE}/attendance/${encodeURIComponent(id)}`, { method: "DELETE" });
+    if (res.ok || res.status === 404) removed += 1;
+  }
+  const data = await loadCollegeCloud({ gallery: false, photos: false });
+  const hours = data ? computeServiceHours(data.events, data.attendance) : 0;
+  await fetch(`${FIRESTORE_BASE}/portalSettings/publicStats?updateMask.fieldPaths=serviceHours`, {
+    method: "PATCH",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ fields: { serviceHours: encodeValue(hours) } }),
+  });
+  return { removed, serviceHours: hours };
+}
+
+export function computeServiceHours(events: { id: string; hours?: number }[], attendance: { eventId: string; present: boolean }[]) {
   const hoursMap = new Map(events.map((e) => [e.id, Number(e.hours) > 0 ? Number(e.hours) : 4]));
   let total = 0;
   for (const row of attendance) {

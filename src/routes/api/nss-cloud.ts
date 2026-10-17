@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { loadCollegeCloud, saveStudentToCloud, incrementVisitors, patchStudent, safePhoto, knownRole, issueChatPass, readChatPass, listRecentChatMessages, saveChatMessage, listChatPeople } from "@/lib/nss/firestore";
+import { loadCollegeCloud, saveStudentToCloud, incrementVisitors, patchStudent, safePhoto, knownRole, issueChatPass, readChatPass, listRecentChatMessages, saveChatMessage, listChatPeople, clearAttendanceCloud } from "@/lib/nss/firestore";
 
 type Row = Record<string, unknown>;
 
@@ -218,7 +218,18 @@ export const Route = createFileRoute("/api/nss-cloud")({
             text?: string;
             nssRole?: string;
             status?: string;
+            eventName?: string;
           };
+          if (body.action === "clear-attendance") {
+            const user = await readChatPass(text(body.chatToken));
+            if (!user || (user.role !== "po" && user.role !== "admin")) {
+              return Response.json({ ok: false, error: "Sign in again as Programme Officer to delete attendance." }, { status: 401 });
+            }
+            const eventName = text(body.eventName);
+            if (!eventName) return Response.json({ ok: false, error: "Choose an event first." }, { status: 400 });
+            const result = await clearAttendanceCloud(eventName);
+            return Response.json({ ok: true, ...result });
+          }
           if (body.action === "visit") {
             const visitors = await incrementVisitors();
             return Response.json({ ok: true, visitors });

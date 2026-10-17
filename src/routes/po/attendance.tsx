@@ -11,6 +11,7 @@ import {
   Users,
   XCircle,
   Printer,
+  Trash2,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -42,6 +43,8 @@ import {
 } from "@/lib/nss/format";
 
 import { qrSvg } from "@/lib/nss/qr";
+import { refreshRoll } from "@/lib/nss/desk-save";
+import { useSessionStore } from "@/lib/nss/session";
 
 export const Route = createFileRoute("/po/attendance")({
   component: AttendancePage,
@@ -953,13 +956,48 @@ function AttendancePage() {
                     "Attendance saved",
                     `Attendance saved for ${current.name}.`,
                   );
-
-                  toast.success(
-                    "Attendance saved successfully.",
-                  );
+                  toast.success("Attendance saved successfully.");
                 }}
               >
                 Save attendance
+              </Button>
+
+              <Button
+                size="sm"
+                variant="danger"
+                onClick={() => {
+                  if (!current) return;
+                  const ok = window.confirm(
+                    `Delete all attendance for ${current.name}? Service hours will update from the remaining records.`,
+                  );
+                  if (!ok) return;
+                  void (async () => {
+                    const token = useSessionStore.getState().session?.chatToken || "";
+                    const res = await fetch("/api/nss-cloud", {
+                      method: "POST",
+                      headers: { "content-type": "application/json" },
+                      body: JSON.stringify({
+                        action: "clear-attendance",
+                        chatToken: token,
+                        eventName: current.name,
+                      }),
+                    });
+                    const data = (await res.json()) as { ok?: boolean; error?: string; removed?: number };
+                    if (!res.ok || !data.ok) {
+                      toast.error(data.error || "Could not delete attendance.");
+                      return;
+                    }
+                    useNssStore.setState({
+                      attendance: useNssStore.getState().attendance.filter((row) => row.eventId !== current.id),
+                    });
+                    await refreshRoll();
+                    state.addLog("Attendance deleted", `All attendance removed for ${current.name}.`);
+                    toast.success(`Deleted ${data.removed ?? 0} attendance records.`);
+                  })();
+                }}
+              >
+                <Trash2 />
+                Delete all
               </Button>
             </div>
           ) : null}
