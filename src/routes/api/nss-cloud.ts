@@ -245,6 +245,21 @@ export const Route = createFileRoute("/api/nss-cloud")({
             rows?: { mobile?: string; name?: string; eventName?: string; present?: boolean; date?: string }[];
             ids?: string[];
           };
+          if (body.action === "student-photo") {
+            const roster = await listPhotoRoster();
+            const wantId = text(body.volunteerId).toLowerCase();
+            const wantName = text(body.name).toLowerCase();
+            const found = roster.find(
+              (row) =>
+                row.docId.toLowerCase() === wantId ||
+                row.volunteerId.toLowerCase() === wantId ||
+                (wantName.length > 2 && row.name === wantName),
+            );
+            if (!found) return Response.json({ ok: false, photoUrl: "" });
+            const photos = await readPhotoBatch([found.docId]);
+            const photoUrl = photos[0]?.photoUrl || "";
+            return Response.json({ ok: Boolean(photoUrl), photoUrl });
+          }
           if (body.action === "photo-sync") {
             const ids = Array.isArray(body.ids) ? body.ids.map((id) => text(id)).filter(Boolean).slice(0, 4) : [];
             if (ids.length) {

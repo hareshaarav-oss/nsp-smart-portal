@@ -138,6 +138,32 @@ export async function htmlForIdCard(volunteer: Volunteer, settings: PortalSettin
 </html>`;
 }
 
+async function recoverStudentPhoto(volunteer: Volunteer) {
+  if (volunteer.photoUrl && (volunteer.photoUrl.startsWith("data:image/") || volunteer.photoUrl.startsWith("https://"))) {
+    return volunteer.photoUrl;
+  }
+  try {
+    const raw = localStorage.getItem("nsp-photo-map-v2") || localStorage.getItem("nsp-photo-map");
+    const map = raw ? (JSON.parse(raw) as Record<string, string>) : {};
+    const cached = map[volunteer.volunteerId] || map[volunteer.id] || map[volunteer.fullName.toLowerCase()] || "";
+    if (cached.startsWith("data:image/") || cached.startsWith("https://")) return cached;
+  } catch {
+    /* try the college roll */
+  }
+  const res = await fetch("/api/nss-cloud", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      action: "student-photo",
+      volunteerId: volunteer.volunteerId || volunteer.id,
+      name: volunteer.fullName,
+    }),
+  });
+  const data = (await res.json()) as { ok?: boolean; photoUrl?: string };
+  return data.ok && data.photoUrl ? data.photoUrl : "";
+}
+
 export async function openIdCard(volunteer: Volunteer, settings: PortalSettings) {
-  return openHtmlDocumentWhenReady(() => htmlForIdCard(volunteer, settings));
+  const photoUrl = await recoverStudentPhoto(volunteer);
+  return openHtmlDocumentWhenReady(() => htmlForIdCard({ ...volunteer, photoUrl: photoUrl || volunteer.photoUrl }, settings));
 }

@@ -20,17 +20,31 @@ function noteBuild(build: unknown) {
 
 function rescueOfficerPhotos() {
   try {
-    for (const key of ["nsp-portal-data-v1", STORAGE_DATA]) {
+    const cached = readPhotoCache();
+    for (const key of ["nsp-portal-data-v1", "nsp-portal-data", STORAGE_DATA]) {
       const raw = localStorage.getItem(key);
       if (!raw || !raw.includes("data:image")) continue;
-      const parsed = JSON.parse(raw) as { state?: { settings?: { poPhoto?: string; principalPhoto?: string } }; settings?: { poPhoto?: string; principalPhoto?: string } };
+      const parsed = JSON.parse(raw) as {
+        state?: { settings?: { poPhoto?: string; principalPhoto?: string }; volunteers?: { id?: string; volunteerId?: string; fullName?: string; photoUrl?: string }[] };
+        settings?: { poPhoto?: string; principalPhoto?: string };
+        volunteers?: { id?: string; volunteerId?: string; fullName?: string; photoUrl?: string }[];
+      };
       const settings = parsed.state?.settings || parsed.settings;
       const poPhoto = settings?.poPhoto || "";
       const principalPhoto = settings?.principalPhoto || "";
-      if (!poPhoto.startsWith("data:image") && !principalPhoto.startsWith("data:image")) continue;
-      sessionStorage.setItem("nsp-rescued-photos", JSON.stringify({ poPhoto, principalPhoto }));
-      return;
+      if (poPhoto.startsWith("data:image") || principalPhoto.startsWith("data:image")) {
+        sessionStorage.setItem("nsp-rescued-photos", JSON.stringify({ poPhoto, principalPhoto }));
+      }
+      const volunteers = parsed.state?.volunteers || parsed.volunteers || [];
+      for (const volunteer of volunteers) {
+        const photo = volunteer.photoUrl || "";
+        if (!photo.startsWith("data:image/") && !photo.startsWith("https://")) continue;
+        if (volunteer.volunteerId) cached[volunteer.volunteerId] = photo;
+        if (volunteer.id) cached[volunteer.id] = photo;
+        if (volunteer.fullName) cached[volunteer.fullName.toLowerCase()] = photo;
+      }
     }
+    writePhotoCache(cached);
   } catch {
     /* keep going */
   }
@@ -38,8 +52,10 @@ function rescueOfficerPhotos() {
 
 function readPhotoCache() {
   try {
-    const raw = localStorage.getItem("nsp-photo-map");
-    return raw ? (JSON.parse(raw) as Record<string, string>) : {};
+    const raw = localStorage.getItem("nsp-photo-map-v2") || localStorage.getItem("nsp-photo-map");
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as Record<string, string>;
+    return Object.fromEntries(Object.entries(parsed).filter(([, photo]) => photo.startsWith("data:image/") || photo.startsWith("https://")));
   } catch {
     return {};
   }
@@ -47,7 +63,8 @@ function readPhotoCache() {
 
 function writePhotoCache(map: Record<string, string>) {
   try {
-    localStorage.setItem("nsp-photo-map", JSON.stringify(map));
+    const photos = Object.fromEntries(Object.entries(map).filter(([, photo]) => photo.startsWith("data:image/") || photo.startsWith("https://")));
+    localStorage.setItem("nsp-photo-map-v2", JSON.stringify(photos));
   } catch {
     /* storage full */
   }
