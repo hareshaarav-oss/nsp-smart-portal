@@ -17,9 +17,9 @@ export function PageNav({
   const officer = isOfficer(session);
 
   return (
-    <nav className="sticky top-0 z-40 bg-navy text-paper shadow-[0_8px_20px_rgb(12_28_51/0.18)]">
-      <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-2 px-4 py-2 md:px-6">
-        <div className="flex flex-wrap items-center gap-1 text-sm">
+    <nav className="sticky top-0 z-40 border-b border-white/10 bg-navy text-paper">
+      <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-2 md:px-6">
+        <div className="flex min-w-0 items-center gap-1 overflow-x-auto text-sm">
           <Link
             to="/"
             className={cn(

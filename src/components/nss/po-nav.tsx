@@ -42,7 +42,7 @@ const ITEMS = [
 
 export function PoNav({ current }: { current: string }) {
   return (
-    <nav className="flex gap-1 overflow-x-auto pb-1 sm:flex-wrap">
+    <nav className="mt-4 flex gap-1 overflow-x-auto rounded-xl border border-border bg-card p-1">
       {ITEMS.map((item) => {
         const active = current === item.to;
         const Icon = item.icon;
@@ -51,10 +51,8 @@ export function PoNav({ current }: { current: string }) {
             key={item.to}
             to={item.to}
             className={cn(
-              "inline-flex h-10 shrink-0 items-center gap-2 rounded-md px-3 text-sm font-medium",
-              active
-                ? "bg-primary text-primary-foreground"
-                : "bg-card text-foreground ring-1 ring-border hover:bg-muted",
+              "inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg px-2.5 text-xs font-medium",
+              active ? "bg-navy text-paper" : "text-foreground hover:bg-muted",
             )}
           >
             <Icon className="size-4" />
