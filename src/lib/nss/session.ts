@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
+import { createJSONStorage, persist } from "zustand/middleware";
 import { STORAGE_SESSION } from "./constants";
 import { digitsOnly, firstNameOf } from "./format";
 import type { PortalSession, PortalSettings, Volunteer } from "./types";
@@ -8,6 +8,40 @@ type SessionState = {
   session: PortalSession | null;
   setSession: (s: PortalSession | null) => void;
   hydrate: () => void;
+};
+
+const sessionStorageSafe = {
+  getItem: (name: string) => {
+    try {
+      return window.localStorage.getItem(name) || window.sessionStorage.getItem(name);
+    } catch {
+      return null;
+    }
+  },
+  setItem: (name: string, value: string) => {
+    try {
+      window.localStorage.setItem(name, value);
+    } catch {
+      /* the photo cache can fill local storage */
+    }
+    try {
+      window.sessionStorage.setItem(name, value);
+    } catch {
+      /* ignore */
+    }
+  },
+  removeItem: (name: string) => {
+    try {
+      window.localStorage.removeItem(name);
+    } catch {
+      /* ignore */
+    }
+    try {
+      window.sessionStorage.removeItem(name);
+    } catch {
+      /* ignore */
+    }
+  },
 };
 
 export const useSessionStore = create<SessionState>()(
@@ -19,7 +53,11 @@ export const useSessionStore = create<SessionState>()(
         void useSessionStore.persist.rehydrate();
       },
     }),
-    { name: STORAGE_SESSION, skipHydration: true },
+    {
+      name: STORAGE_SESSION,
+      skipHydration: true,
+      storage: createJSONStorage(() => sessionStorageSafe),
+    },
   ),
 );
 

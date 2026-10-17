@@ -476,10 +476,11 @@ const portalStorage =
         return;
       }
 
-      localStorage.setItem(
-        name,
-        value,
-      );
+      try {
+        localStorage.setItem(name, value);
+      } catch {
+        /* keep the signed-in session even if the roll cache is full */
+      }
     },
 
     removeItem: (name: string) => {
@@ -2491,7 +2492,7 @@ export const useNssStore =
         partialize: (s) => ({
           volunteers: (s.volunteers ?? []).map((v) => ({
             ...v,
-            photoUrl: v.photoUrl && v.photoUrl.length < 1200000 ? v.photoUrl : "",
+            photoUrl: v.photoUrl && !v.photoUrl.startsWith("data:") && v.photoUrl.length < 1200000 ? v.photoUrl : "",
           })),
 
           events:
@@ -2531,8 +2532,13 @@ export const useNssStore =
               s.logs ?? []
             ).slice(0, 250),
 
-          settings:
-            s.settings,
+          settings: {
+            ...s.settings,
+            poPhoto: s.settings.poPhoto?.startsWith("data:") ? "" : s.settings.poPhoto,
+            principalPhoto: s.settings.principalPhoto?.startsWith("data:") ? "" : s.settings.principalPhoto,
+            poSignature: s.settings.poSignature?.startsWith("data:") ? "" : s.settings.poSignature,
+            principalSignature: s.settings.principalSignature?.startsWith("data:") ? "" : s.settings.principalSignature,
+          },
 
           visitors:
             s.visitors,

@@ -22,13 +22,55 @@ export function PageNav({
         <div className="flex min-w-0 items-center gap-1 overflow-x-auto text-sm">
           <Link
             to="/"
+            onClick={() => {
+              try {
+                localStorage.setItem("nsp-view", "portal");
+              } catch {
+                /* ignore */
+              }
+            }}
             className={cn(
               "rounded-sm px-3 py-2 hover:bg-white/10",
               current === "home" ? "bg-white/10" : "",
             )}
           >
-            Home
+            Portal
           </Link>
+          {showDashboard ? (
+            session ? (
+            <Link
+              to={dash}
+              onClick={() => {
+                try {
+                  localStorage.setItem("nsp-view", "app");
+                } catch {
+                  /* ignore */
+                }
+              }}
+              className={cn(
+                "rounded-sm px-3 py-2 hover:bg-white/10",
+                current === "dashboard" ? "bg-white/10" : "",
+              )}
+            >
+              App
+            </Link>
+          ) : (
+            <Link
+              to="/login"
+              search={{ role: "volunteer" }}
+              onClick={() => {
+                try {
+                  localStorage.setItem("nsp-view", "app");
+                } catch {
+                  /* ignore */
+                }
+              }}
+              className="rounded-sm px-3 py-2 hover:bg-white/10"
+            >
+              App
+            </Link>
+            )
+          ) : null}
           <Link to="/gallery" className="rounded-sm px-3 py-2 hover:bg-white/10">
             Gallery
           </Link>
@@ -39,17 +81,6 @@ export function PageNav({
             <Link to="/chat" className="inline-flex items-center gap-1 rounded-sm px-3 py-2 hover:bg-white/10">
               <MessageCircle className="size-4" />
               Chat
-            </Link>
-          ) : null}
-          {showDashboard && session ? (
-            <Link
-              to={session ? dash : "/login"}
-              className={cn(
-                "rounded-sm px-3 py-2 hover:bg-white/10",
-                current === "dashboard" ? "bg-white/10" : "",
-              )}
-            >
-              {officer ? "Desk" : "Back to dashboard"}
             </Link>
           ) : null}
           {officer ? (
@@ -83,6 +114,11 @@ export function PageNav({
                 variant="outline"
                 className="h-9 border-white/20 bg-transparent text-paper hover:bg-white/10"
                 onClick={() => {
+                  try {
+                    localStorage.setItem("nsp-view", "portal");
+                  } catch {
+                    /* ignore */
+                  }
                   setSession(null);
                   window.location.href = "/";
                 }}

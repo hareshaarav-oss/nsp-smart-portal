@@ -1,5 +1,5 @@
 import { createFileRoute, Link, Navigate } from "@tanstack/react-router";
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { BarChart, Bar, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { toast } from "sonner";
 import { Award, Cake, CreditCard, Fingerprint, KeyRound, Lock, LogOut, MessageCircle, Pencil, Star } from "lucide-react";
@@ -36,13 +36,7 @@ function VolunteerDash() {
   const [cur, setCur] = useState("");
   const [next, setNext] = useState("");
   const [confirm, setConfirm] = useState("");
-  const [wait, setWait] = useState(true);
   const meRef = useRef<typeof volunteers[number] | undefined>(undefined);
-
-  useEffect(() => {
-    const t = window.setTimeout(() => setWait(false), 8000);
-    return () => window.clearTimeout(t);
-  }, []);
 
   if (!session) return <Navigate to="/login" search={{ role: "volunteer" }} />;
   if (isOfficer(session)) return <Navigate to="/po" />;
@@ -51,14 +45,21 @@ function VolunteerDash() {
   if (meFound) meRef.current = meFound;
   const me = meFound ?? meRef.current;
   if (!me) {
-    if (wait || volunteers.length === 0) {
-      return (
-        <AppShell eyebrow="NSS STUDENT DASHBOARD" current="dashboard">
-          <p className="px-4 py-16 text-center text-sm text-muted-foreground">Loading your profile…</p>
-        </AppShell>
-      );
-    }
-    return <Navigate to="/login" search={{ role: "volunteer" }} />;
+    return (
+      <AppShell eyebrow="NSS APP" current="dashboard">
+        <div className="mx-auto max-w-lg px-4 py-10">
+          <Card>
+            <CardContent className="p-5">
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-forest">App</p>
+              <h1 className="mt-1 font-display text-2xl text-navy">{session.name}</h1>
+              <p className="mt-2 text-sm text-muted-foreground">
+                {volunteers.length === 0 ? "Opening your roll record…" : "Your sign-in is saved on this phone."}
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+      </AppShell>
+    );
   }
 
   const hours = volunteerHours(portalState, me.id);

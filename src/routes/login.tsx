@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Navigate, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { z } from "zod";
@@ -35,6 +35,7 @@ function LoginPage() {
   const [captchaIn, setCaptchaIn] = useState("");
   const navigate = useNavigate();
   const setSession = useSessionStore((s) => s.setSession);
+  const session = useSessionStore((s) => s.session);
   useEffect(() => {
     if (roleHint) setRole(roleHint);
   }, [roleHint]);
@@ -78,6 +79,11 @@ function LoginPage() {
         return;
       }
       setSession(data.session);
+      try {
+        localStorage.setItem("nsp-view", "app");
+      } catch {
+        /* ignore */
+      }
       if (Array.isArray(data.volunteers) && data.volunteers.length) {
         useNssStore.getState().applyCloud({
           volunteers: data.volunteers as never,
@@ -100,6 +106,7 @@ function LoginPage() {
   }
 
   const staff = role !== "volunteer";
+  if (session) return <Navigate to={dashboardPath(session)} />;
 
   return (
     <AppShell eyebrow="NSS PORTAL LOGIN">
