@@ -319,6 +319,22 @@ function dedupePressReports(
   );
 }
 
+function persistAttendance(rows: { mobile: string; name: string; eventName: string; present: boolean; date?: string }[]) {
+  const ready = rows.filter((row) => row.mobile.replace(/\D/g, "").length >= 10 && row.eventName);
+  if (!ready.length) return;
+  const session = useSessionStore.getState().session;
+  void fetch("/api/nss-cloud", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      action: "save-attendance",
+      chatToken: session?.chatToken || "",
+      deskRole: session?.role === "admin" ? "admin" : "po",
+      rows: ready,
+    }),
+  }).catch(() => undefined);
+}
+
 function looksLikeSeed(
   vols: Volunteer[],
 ) {
@@ -1464,6 +1480,12 @@ export const useNssStore =
               row,
             ],
           });
+          const saved = get();
+          const volunteer = saved.volunteers.find((item) => item.id === volunteerId);
+          const event = saved.events.find((item) => item.id === eventId);
+          if (volunteer && event) {
+            persistAttendance([{ mobile: volunteer.mobile, name: volunteer.fullName, eventName: event.name, present, date: event.date }]);
+          }
         },
 
         setEventRSVP: (
@@ -1564,6 +1586,18 @@ export const useNssStore =
               ...rows,
             ],
           });
+          const event = state.events.find((item) => item.id === eventId);
+          if (event) {
+            persistAttendance(
+              activeVolunteers(state).map((volunteer) => ({
+                mobile: volunteer.mobile,
+                name: volunteer.fullName,
+                eventName: event.name,
+                present,
+                date: event.date,
+              })),
+            );
+          }
         },
 
         addNotice: (input) => {

@@ -30,7 +30,7 @@ function Home() {
   const gallery = useNssStore((s) => s.gallery) ?? [];
   const visitors = useNssStore((s) => s.visitors);
   const settings = useNssStore((s) => s.settings);
-  const hours = useNssStore((s) => Math.max(totalServiceHours(s), s.settings.reportedServiceHours ?? 0));
+  const hours = useNssStore((s) => (s.attendance.length ? totalServiceHours(s) : Math.max(totalServiceHours(s), s.settings.reportedServiceHours ?? 0)));
   const volunteerCount = useNssStore((s) => activeVolunteers(s).length);
   const alumniCount = useNssStore((s) => Math.max(alumniVolunteers(s).length, s.settings.alumniCount));
   const bestId = useNssStore((s) => bestVolunteer(s)?.id ?? "");

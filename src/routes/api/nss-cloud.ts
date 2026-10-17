@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { loadCollegeCloud, saveStudentToCloud, incrementVisitors, patchStudent, safePhoto, knownRole, issueChatPass, readChatPass, listRecentChatMessages, saveChatMessage, listChatPeople, clearAttendanceCloud, readBrandPhotos, saveBrandPhotos, listStudentPhotos } from "@/lib/nss/firestore";
+import { loadCollegeCloud, saveStudentToCloud, incrementVisitors, patchStudent, safePhoto, knownRole, issueChatPass, readChatPass, listRecentChatMessages, saveChatMessage, listChatPeople, clearAttendanceCloud, readBrandPhotos, saveBrandPhotos, listStudentPhotos, saveAttendanceMarks } from "@/lib/nss/firestore";
 
 type Row = Record<string, unknown>;
 
@@ -138,8 +138,13 @@ function matchVolunteer(volunteers: Row[], username: string, password: string) {
     const id = text(row.volunteerId).toLowerCase();
     const enrollment = text(row.enrollment).toLowerCase();
     const phone = digits(row.mobile);
+    const name = text(row.fullName).toLowerCase();
+    const compact = name.replace(/[^a-z0-9\u0a80-\u0aff]+/gi, "");
+    const compactKey = key.replace(/[^a-z0-9\u0a80-\u0aff]+/gi, "");
     return (
       tokens.includes(key) ||
+      name === key ||
+      (compactKey.length > 2 && compact === compactKey) ||
       id === key ||
       enrollment === key ||
       (keyDigits.length >= 8 && phone.endsWith(keyDigits))
@@ -237,6 +242,7 @@ export const Route = createFileRoute("/api/nss-cloud")({
             deskRole?: string;
             all?: boolean;
             unit?: string;
+            rows?: { mobile?: string; name?: string; eventName?: string; present?: boolean; date?: string }[];
           };
           if (body.action === "photo-sync") {
             const photos = await listStudentPhotos();
@@ -272,6 +278,23 @@ export const Route = createFileRoute("/api/nss-cloud")({
             if (!officer) return Response.json({ ok: false, error: "Open the Programme Officer desk first." }, { status: 403 });
             const result = await clearAttendanceCloud(text(body.eventName), { all: body.all === true || !text(body.eventName) });
             return Response.json({ ok: true, ...result });
+          }
+          if (body.action === "save-attendance") {
+            const desk = text(body.deskRole);
+            const user = text(body.chatToken) ? await readChatPass(text(body.chatToken)).catch(() => null) : null;
+            const officer = user?.role === "po" || user?.role === "admin" || desk === "po" || desk === "admin";
+            if (!officer) return Response.json({ ok: false, error: "Open the Programme Officer desk first." }, { status: 403 });
+            const rows = Array.isArray(body.rows) ? body.rows : [];
+            const saved = await saveAttendanceMarks(
+              rows.slice(0, 300).map((row) => ({
+                mobile: text(row.mobile),
+                name: text(row.name),
+                eventName: text(row.eventName),
+                present: row.present !== false,
+                date: text(row.date),
+              })),
+            );
+            return Response.json({ ok: true, saved });
           }
           if (body.action === "save-brand") {
             const user = await readChatPass(text(body.chatToken));

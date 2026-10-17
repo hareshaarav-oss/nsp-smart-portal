@@ -596,9 +596,9 @@ export async function incrementVisitors(): Promise<number> {
       body: JSON.stringify({ fields }),
     });
     if (create.ok || create.status === 409) return next;
-    return current > 0 ? current : fallback;
+    return 0;
   } catch {
-    return fallback;
+    return 0;
   }
 }
 
@@ -635,6 +635,55 @@ export async function clearAttendanceCloud(eventName = "", opts?: { all?: boolea
     hours = 0;
   }
   return { removed, serviceHours: hours };
+}
+
+function attendanceDocId(mobile: string, eventName: string) {
+  const phone = digits(mobile).slice(-10);
+  const slug = text(eventName).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 48);
+  if (phone.length < 10 || !slug) return "";
+  return `${phone}-${slug}`;
+}
+
+export async function saveAttendanceMark(input: { mobile: string; name: string; eventName: string; present: boolean; date?: string }) {
+  const id = attendanceDocId(input.mobile, input.eventName);
+  if (!id) return false;
+  const status = input.present ? "Present" : "Absent";
+  const phone = digits(input.mobile).slice(-10);
+  const fields = {
+    eventName: encodeValue(input.eventName),
+    title: encodeValue(input.eventName),
+    status: encodeValue(status),
+    attendance: encodeValue(status),
+    studentMobile: encodeValue(phone),
+    mobile: encodeValue(phone),
+    studentName: encodeValue(input.name),
+    name: encodeValue(input.name),
+    date: encodeValue(input.date || new Date().toISOString().slice(0, 10)),
+    updatedAt: encodeValue(new Date().toISOString()),
+  };
+  const body = JSON.stringify({ fields });
+  const patch = await fetch(`${FIRESTORE_BASE}/attendance/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    headers: { "content-type": "application/json" },
+    body,
+  });
+  if (patch.ok) return true;
+  const create = await fetch(`${FIRESTORE_BASE}/attendance?documentId=${encodeURIComponent(id)}`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body,
+  });
+  return create.ok || create.status === 409;
+}
+
+export async function saveAttendanceMarks(rows: { mobile: string; name: string; eventName: string; present: boolean; date?: string }[]) {
+  let saved = 0;
+  for (let i = 0; i < rows.length; i += 20) {
+    const batch = rows.slice(i, i + 20);
+    const results = await Promise.all(batch.map((row) => saveAttendanceMark(row).catch(() => false)));
+    saved += results.filter(Boolean).length;
+  }
+  return saved;
 }
 
 export function computeServiceHours(events: { id: string; hours?: number }[], attendance: { eventId: string; present: boolean }[]) {

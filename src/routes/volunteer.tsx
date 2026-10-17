@@ -40,7 +40,7 @@ function VolunteerDash() {
   const meRef = useRef<typeof volunteers[number] | undefined>(undefined);
 
   useEffect(() => {
-    const t = window.setTimeout(() => setWait(false), 1600);
+    const t = window.setTimeout(() => setWait(false), 8000);
     return () => window.clearTimeout(t);
   }, []);
 
@@ -51,7 +51,7 @@ function VolunteerDash() {
   if (meFound) meRef.current = meFound;
   const me = meFound ?? meRef.current;
   if (!me) {
-    if (wait) {
+    if (wait || volunteers.length === 0) {
       return (
         <AppShell eyebrow="NSS STUDENT DASHBOARD" current="dashboard">
           <p className="px-4 py-16 text-center text-sm text-muted-foreground">Loading your profile…</p>
