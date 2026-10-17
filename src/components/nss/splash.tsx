@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { COLLEGE_LOGO, NSS_LOGO } from "@/lib/nss/constants";
 import { useNssStore } from "@/lib/nss/store";
 
-const DURATION_MS = 10000;
+const DURATION_MS = 1200;
 export const SPLASH_SEEN_KEY = "nsp-splash-seen";
 
 export function markSplashSeen() {
@@ -49,12 +49,7 @@ export function SplashScreen({ onDone }: { onDone: () => void }) {
             <p className="mt-3 text-lg font-semibold md:text-xl">{settings.portalName}</p>
             <p className="mt-2 text-sm text-paper/75">Created by Dr. Hareshkumar I. Prajapati</p>
             <p className="mt-4 text-base font-semibold md:text-lg">{settings.collegeName}</p>
-            <p className="mt-2 text-sm text-paper/70">{settings.sloganEn} · {settings.sloganGu}</p>
-            <div className="mt-6 flex flex-wrap justify-center gap-2 text-xs">
-              <span className="rounded-full border border-white/20 px-3 py-1.5">☁ Cloud Ready</span>
-              <span className="rounded-full border border-white/20 px-3 py-1.5">📱 Installable PWA</span>
-              <span className="rounded-full border border-white/20 px-3 py-1.5">🧠 Smart Portal</span>
-            </div>
+            <p className="mt-4 text-sm text-paper/70">{settings.sloganEn}</p>
           </div>
         </div>
         <div className="mx-auto mt-8 w-full max-w-md">

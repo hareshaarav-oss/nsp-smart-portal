@@ -25,11 +25,18 @@ function getSnapshot() {
 
 export function NspPwaRoot() {
   useEffect(() => {
-    const swTimer = window.setTimeout(() => {
-      if ("serviceWorker" in navigator) {
-        void navigator.serviceWorker.register("/sw.js").catch(() => undefined);
+    void (async () => {
+      if ("caches" in window) {
+        const keys = await caches.keys();
+        await Promise.all(keys.map((key) => caches.delete(key)));
       }
-    }, 2500);
+      if (!("serviceWorker" in navigator)) return;
+      const regs = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(regs.map((reg) => reg.update().catch(() => undefined)));
+      const current = await navigator.serviceWorker.register("/sw.js", { updateViaCache: "none" });
+      current.waiting?.postMessage("skip");
+      void current.update();
+    })().catch(() => undefined);
     const onPrompt = (event: Event) => {
       event.preventDefault();
       deferred = event as BeforeInstallPromptEvent;
@@ -42,7 +49,6 @@ export function NspPwaRoot() {
     window.addEventListener("beforeinstallprompt", onPrompt);
     window.addEventListener("appinstalled", onInstalled);
     return () => {
-      window.clearTimeout(swTimer);
       window.removeEventListener("beforeinstallprompt", onPrompt);
       window.removeEventListener("appinstalled", onInstalled);
     };

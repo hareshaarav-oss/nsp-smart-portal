@@ -2484,8 +2484,10 @@ export const useNssStore =
           portalStorage,
 
         partialize: (s) => ({
-          volunteers:
-            s.volunteers,
+          volunteers: (s.volunteers ?? []).map((v) => ({
+            ...v,
+            photoUrl: v.photoUrl?.startsWith("data:") ? "" : v.photoUrl,
+          })),
 
           events:
             s.events,

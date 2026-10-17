@@ -46,7 +46,9 @@
     -moz-osx-font-smoothing: grayscale;
   }
   body {
-    background: var(--color-bg);
+    background:
+      radial-gradient(900px 280px at 50% -40px, rgb(196 92 38 / 0.07), transparent 55%),
+      var(--color-bg);
     color: var(--color-foreground);
     font-family: var(--font-sans);
   }

@@ -75,6 +75,6 @@ export const DEFAULT_SETTINGS: PortalSettings = {
   themeMode: "system",
 };
 
-export const STORAGE_DATA = "nsp-portal-data-v1";
+export const STORAGE_DATA = "nsp-portal-data-v2";
 export const STORAGE_SESSION = "nsp-portal-session-v1";
 export const STORAGE_VISITOR_MARK = "nsp-visitor-session";

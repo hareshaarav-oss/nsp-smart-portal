@@ -13,7 +13,7 @@ export function BrandHeader({
   const collegeLogo = settings.collegeLogo || COLLEGE_LOGO;
   const nssLogo = settings.nssLogo || NSS_LOGO;
   return (
-    <header className="no-print border-b border-border bg-surface">
+    <header className="no-print border-b border-border bg-surface shadow-sm">
       <div className={cn("mx-auto max-w-6xl px-4 md:px-6", compact ? "py-3" : "py-3 md:py-4")}>
         <div className="flex items-center gap-3 md:gap-5">
           <img

@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { useNssStore } from "@/lib/nss/store";
 import { useSessionStore } from "@/lib/nss/session";
-import { COLLEGE_LOGO, NSS_LOGO } from "@/lib/nss/constants";
+import { COLLEGE_LOGO, NSS_LOGO, STORAGE_DATA } from "@/lib/nss/constants";
 
 let seenBuild = "";
 
@@ -15,6 +15,19 @@ function noteBuild(build: unknown) {
   if (seenBuild !== value) {
     seenBuild = value;
     window.location.reload();
+  }
+}
+
+function dropStalePortalCache() {
+  try {
+    const drop: string[] = [];
+    for (let i = 0; i < localStorage.length; i += 1) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith("nsp-portal-data") && key !== STORAGE_DATA) drop.push(key);
+    }
+    for (const key of drop) localStorage.removeItem(key);
+  } catch {
+    /* private mode */
   }
 }
 
@@ -73,6 +86,7 @@ export function HydrateGate({ children }: { children: ReactNode }) {
     }
 
     void (async () => {
+      dropStalePortalCache();
       try {
         await Promise.all([
           Promise.resolve(useNssStore.persist.rehydrate()),
@@ -82,12 +96,10 @@ export function HydrateGate({ children }: { children: ReactNode }) {
         /* continue */
       }
 
-      setStatus("Connecting to NSS cloud…");
+      setStatus("Opening the college roll…");
       try {
-        const res = await fetch("/api/nss-cloud", { cache: "no-store" });
-        const cloud = (await res.json()) as CloudBody;
-        const ok = res.ok && applyBody(cloud);
-        if (ok) setStatus("College roll loaded.");
+        await pullLive();
+        if (!cancelled) setStatus("College roll loaded.");
       } catch {
         setStatus("Could not reach the college roll. Showing saved data.");
       }
@@ -108,7 +120,7 @@ export function HydrateGate({ children }: { children: ReactNode }) {
     };
     document.addEventListener("visibilitychange", wake);
     window.addEventListener("focus", wake);
-    const safety = window.setTimeout(finish, 12000);
+    const safety = window.setTimeout(finish, 4000);
     return () => {
       cancelled = true;
       window.clearInterval(timer);

@@ -114,33 +114,35 @@ function Home() {
       {splashing ? <SplashScreen onDone={dismiss} /> : null}
       <AppShell current="home" compactHeader>
         <section className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 md:px-6 md:py-8">
-          <section className="flex flex-wrap justify-center gap-2">
-            <Button asChild className="h-11 bg-forest text-primary-foreground hover:bg-forest/90">
+          <section className="rounded-2xl border border-border bg-card p-3 shadow-sm">
+            <div className="flex flex-wrap justify-center gap-2">
+            <Button asChild className="h-10 bg-forest text-primary-foreground hover:bg-forest/90">
               <Link to="/register">Student registration</Link>
             </Button>
-            <Button asChild variant="outline" className="h-11">
+            <Button asChild variant="outline" className="h-10">
               <Link to="/login" search={{ role: "volunteer" }}>
                 Student login
               </Link>
             </Button>
-            <Button asChild className="h-11 bg-forest text-primary-foreground hover:bg-forest/90">
+            <Button asChild variant="outline" className="h-10">
               <Link to="/chat">NSS Chat</Link>
             </Button>
-            <Button asChild className="h-11 bg-navy text-paper hover:bg-navy-deep">
+            <Button asChild className="h-10 bg-navy text-paper hover:bg-navy-deep">
               <Link to="/login" search={{ role: "po" }}>
                 Admin login
               </Link>
             </Button>
-            <Button asChild variant="outline" className="h-11">
+            <Button asChild variant="outline" className="h-10">
               <Link to="/verify" search={{ id: "" }}>Certificate verification</Link>
             </Button>
+            </div>
           </section>
 
           <section className="mt-6 overflow-hidden rounded-3xl border border-border bg-gradient-to-br from-surface via-card to-muted shadow-md">
             <div className="grid gap-5 p-4 md:grid-cols-[190px_1fr_190px] md:p-6 md:items-center">
               <HomeOfficer role="Programme Officer" name={settings.poName} quote={settings.poQuote} photo={settings.poPhoto} />
               <div className="order-first md:order-none">
-                <div className="mb-3 flex items-center justify-between gap-3"><div><p className="text-xs font-semibold uppercase tracking-[0.18em] text-saffron">Welcome to NSP</p><h1 className="font-display text-2xl font-bold text-navy md:text-3xl">NSS Smart Portal</h1></div><span className="rounded-full bg-forest/10 px-3 py-1.5 text-xs font-semibold text-forest">☁ Cloud Connected</span></div>
+                <div className="mb-3 flex items-center justify-between gap-3"><div><p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-saffron">S.D. Arts & Shah B.R. Commerce College</p><h1 className="font-display text-2xl font-bold text-navy md:text-3xl">NSS Smart Portal</h1></div><span className="inline-flex items-center gap-1.5 rounded-full border border-forest/20 bg-forest/10 px-3 py-1 text-xs font-semibold text-forest"><span className="size-1.5 rounded-full bg-forest" />Live</span></div>
                 <PhotoCarousel items={gallery} />
                 <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4"><MiniStat label="Volunteers" value={volunteerCount} /><MiniStat label="Portal visitors" value={visitors} /><MiniStat label="Alumni" value={alumniCount} /><MiniStat label="Service hours · live" value={hours} /></div>
               </div>
@@ -170,7 +172,7 @@ function Home() {
                     <p className="py-8 text-center text-sm text-muted-foreground">No volunteer matches that search.</p>
                   ) : (
                     roll.map((v) => (
-                      <div key={v.volunteerId || v.id} className="flex items-center gap-3 rounded-xl border border-border bg-bg px-3 py-2">
+                      <div key={v.volunteerId || v.id} className="flex items-center gap-3 rounded-xl border border-border bg-card px-3 py-2.5">
                         {v.photoUrl ? (
                           <img src={v.photoUrl} alt="" className="h-10 w-10 rounded-full object-cover" />
                         ) : (
@@ -185,9 +187,9 @@ function Home() {
                             {v.createdAt ? ` · joined ${v.createdAt.slice(0, 10)}` : ""}
                           </p>
                         </div>
-                        <div className="shrink-0 text-right">
-                          <p className="font-display text-lg font-semibold leading-none text-forest">{v.hours}</p>
-                          <p className="text-[10px] uppercase tracking-wide text-muted-foreground">hours</p>
+                        <div className="shrink-0 rounded-lg bg-forest/10 px-2.5 py-1 text-right">
+                          <p className="font-display text-lg font-semibold leading-none text-forest tabular-nums">{v.hours}</p>
+                          <p className="text-[10px] uppercase tracking-wide text-forest/70">hours</p>
                         </div>
                         {v.nssRole === "Leader" ? <Badge tone="saffron">Leader</Badge> : null}
                       </div>
@@ -296,7 +298,12 @@ function Home() {
 }
 
 function MiniStat({ label, value }: { label: string; value: number }) {
-  return <div className="rounded-xl border border-border bg-card p-3 text-center"><p className="font-display text-xl font-bold text-navy">{value}</p><p className="text-[11px] text-muted-foreground">{label}</p></div>;
+  return (
+    <div className="rounded-xl border border-border bg-card px-3 py-3 text-center">
+      <p className="font-display text-2xl font-semibold tabular-nums text-navy">{value}</p>
+      <p className="mt-0.5 text-[11px] uppercase tracking-wide text-muted-foreground">{label}</p>
+    </div>
+  );
 }
 
 function HomeOfficer({ role, name, quote, photo }: { role: string; name: string; quote: string; photo?: string }) {
