@@ -13,6 +13,15 @@ export const FIRESTORE_BASE =
   process.env.NSS_FIRESTORE_BASE_URL?.trim() ||
   `https://firestore.googleapis.com/v1/projects/${FIRESTORE_PROJECT_ID}/databases/(default)/documents`;
 
+const CLOUD_FRESH_MS = 30 * 60 * 1000;
+let cloudCache: { at: number; data: CloudPortal; withGallery: boolean } | null = null;
+let cloudInflight: Promise<CloudPortal | null> | null = null;
+let cloudInflightGallery = false;
+
+function invalidateCollegeCache() {
+  cloudCache = null;
+}
+
 type FsValue = Record<string, unknown>;
 
 function decodeValue(value: FsValue | undefined): unknown {
@@ -107,6 +116,9 @@ async function listCollection(name: string, opts?: { photos?: boolean; strict?: 
   while (url) {
     const res = await fetch(url);
     if (!res.ok) {
+      if (res.status === 429 || res.status === 503) {
+        throw new Error("The college register is busy. Try again in a little while.");
+      }
       if (opts?.strict) throw new Error(res.status === 429 ? "The college roll is busy. Try delete once more in a moment." : "Could not read attendance.");
       break;
     }
@@ -122,6 +134,9 @@ async function listCollection(name: string, opts?: { photos?: boolean; strict?: 
 
 async function getDocument(path: string) {
   const res = await fetch(`${FIRESTORE_BASE}/${path}`);
+  if (res.status === 429 || res.status === 503) {
+    throw new Error("The college register is busy. Try again in a little while.");
+  }
   if (!res.ok) return null;
   const json = (await res.json()) as { fields?: Record<string, FsValue> };
   return decodeDoc({ name: path, fields: json.fields });
@@ -165,7 +180,7 @@ export type CloudPortal = Pick<
   "volunteers" | "events" | "attendance" | "notices" | "gallery" | "visitors"
 > & { alumniCount: number; serviceHours: number };
 
-export async function loadCollegeCloud(opts: { gallery?: boolean; photos?: boolean } = {}): Promise<CloudPortal | null> {
+async function loadCollegeCloudFresh(opts: { gallery?: boolean; photos?: boolean } = {}): Promise<CloudPortal | null> {
   const [students, eventDocs, noticeDocs, attendanceDocs, galleryDocs, stats, visitorsDoc] =
     await Promise.all([
       listCollection("students", { photos: opts.photos !== false }),
@@ -359,6 +374,42 @@ export async function loadCollegeCloud(opts: { gallery?: boolean; photos?: boole
   };
 }
 
+export async function loadCollegeCloud(opts: { gallery?: boolean; photos?: boolean } = {}): Promise<CloudPortal | null> {
+  const wantGallery = opts.gallery !== false;
+  const now = Date.now();
+  if (cloudCache && now - cloudCache.at < CLOUD_FRESH_MS && (cloudCache.withGallery || !wantGallery)) {
+    return cloudCache.data;
+  }
+  if (cloudInflight && (cloudInflightGallery || !wantGallery)) {
+    try {
+      return await cloudInflight;
+    } catch (error) {
+      if (cloudCache) return cloudCache.data;
+      throw error;
+    }
+  }
+  cloudInflightGallery = wantGallery;
+  cloudInflight = loadCollegeCloudFresh({ gallery: wantGallery, photos: false })
+    .then((data) => {
+      if (data && data.volunteers.length > 0) {
+        cloudCache = {
+          at: Date.now(),
+          data,
+          withGallery: wantGallery || Boolean(cloudCache?.withGallery && cloudCache.data.gallery.length),
+        };
+      }
+      return data;
+    })
+    .catch((error) => {
+      if (cloudCache) return cloudCache.data;
+      throw error;
+    })
+    .finally(() => {
+      cloudInflight = null;
+    });
+  return cloudInflight;
+}
+
 function encodeValue(value: unknown): Record<string, unknown> {
   if (value === null || value === undefined || value === "") return { nullValue: null };
   if (typeof value === "boolean") return { booleanValue: value };
@@ -408,7 +459,25 @@ export async function saveBrandPhotos(patch: { poPhoto?: string; principalPhoto?
   return { poPhoto, principalPhoto };
 }
 
+let rosterCache: { at: number; rows: { docId: string; volunteerId: string; name: string }[] } | null = null;
+let rosterInflight: Promise<{ docId: string; volunteerId: string; name: string }[]> | null = null;
+
 export async function listPhotoRoster() {
+  const now = Date.now();
+  if (rosterCache && now - rosterCache.at < CLOUD_FRESH_MS) return rosterCache.rows;
+  if (rosterInflight) return rosterInflight;
+  rosterInflight = listPhotoRosterFresh()
+    .then((rows) => {
+      if (rows.length) rosterCache = { at: Date.now(), rows };
+      return rows;
+    })
+    .finally(() => {
+      rosterInflight = null;
+    });
+  return rosterInflight;
+}
+
+async function listPhotoRosterFresh() {
   const params = new URLSearchParams({ pageSize: "300" });
   for (const field of ["volunteerId", "fullName", "status", "createdAt"]) params.append("mask.fieldPaths", field);
   const docs: Record<string, unknown>[] = [];
@@ -524,6 +593,8 @@ function rollNumbers(sorted: Record<string, unknown>[]) {
 }
 
 export async function patchStudent(docId: string, values: Record<string, unknown>) {
+  invalidateCollegeCache();
+  rosterCache = null;
   const id = text(docId);
   if (!id) throw new Error("Student record was not found.");
   const fields: Record<string, unknown> = {};
@@ -544,6 +615,8 @@ export async function patchStudent(docId: string, values: Record<string, unknown
 }
 
 export async function saveStudentToCloud(input: Record<string, unknown>) {
+  invalidateCollegeCache();
+  rosterCache = null;
   const mobile = digits(input.mobile);
   if (mobile.length < 10) throw new Error("Mobile must be 10 digits");
   const existing = await getDocument(`students/${mobile}`);
@@ -621,11 +694,23 @@ export async function saveStudentToCloud(input: Record<string, unknown>) {
 }
 
 export async function readVisitorCount(): Promise<number> {
-  const doc = await getDocument("portalSettings/visitors");
-  return Number(doc?.count ?? 0);
+  try {
+    const doc = await getDocument("portalSettings/visitors");
+    return Number(doc?.count ?? 0);
+  } catch {
+    return 0;
+  }
 }
 
 export async function incrementVisitors(): Promise<number> {
+  try {
+    return await incrementVisitorsFresh();
+  } catch {
+    return 0;
+  }
+}
+
+async function incrementVisitorsFresh(): Promise<number> {
   const project = process.env.NSS_FIRESTORE_PROJECT_ID?.trim() || "studio-8504026975-1fdbc";
   const existing = await getDocument("portalSettings/visitors");
   const current = Number(existing?.count ?? 0);
@@ -662,6 +747,7 @@ export async function incrementVisitors(): Promise<number> {
 }
 
 export async function clearAttendanceCloud(eventName = "", opts?: { all?: boolean }) {
+  invalidateCollegeCache();
   const want = text(eventName).trim().toLowerCase();
   const wipeAll = Boolean(opts?.all) || !want;
   const docs = await listCollection("attendance", { strict: true });
@@ -704,6 +790,7 @@ function attendanceDocId(mobile: string, eventName: string) {
 }
 
 export async function saveAttendanceMark(input: { mobile: string; name: string; eventName: string; present: boolean; date?: string }) {
+  invalidateCollegeCache();
   const id = attendanceDocId(input.mobile, input.eventName);
   if (!id) return false;
   const status = input.present ? "Present" : "Absent";
@@ -736,6 +823,7 @@ export async function saveAttendanceMark(input: { mobile: string; name: string; 
 }
 
 export async function saveAttendanceMarks(rows: { mobile: string; name: string; eventName: string; present: boolean; date?: string }[]) {
+  invalidateCollegeCache();
   let saved = 0;
   for (let i = 0; i < rows.length; i += 20) {
     const batch = rows.slice(i, i + 20);

@@ -398,6 +398,9 @@ export type PortalSettings = {
 
   alumniCount: number;
 
+  /** Published size of the college roll when the live register is paused. */
+  publishedVolunteerCount?: number;
+
   academicYear: string;
 
   serviceHourTarget: number;

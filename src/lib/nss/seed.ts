@@ -1,4 +1,3 @@
-import { titleFirstName } from "./format";
 import type {
   GalleryItem,
   IssuedCertificate,
@@ -9,60 +8,75 @@ import type {
 } from "./types";
 import { DEFAULT_SETTINGS } from "./constants";
 
-const NAMES: Array<{
-  fullName: string;
-  gender: "Male" | "Female";
-  course: "B.A." | "B.Com." | "B.Sc.";
-  role: "Volunteer" | "Leader";
-  dob: string;
-  sem: string;
-}> = [
-  { fullName: "Mahi Sharadkumar Patel", gender: "Female", course: "B.Com.", role: "Leader", dob: "2006-08-26", sem: "3" },
-  { fullName: "Aarav Hiteshbhai Shah", gender: "Male", course: "B.A.", role: "Leader", dob: "2005-11-14", sem: "5" },
-];
-
 function seedVolunteers(): Volunteer[] {
-  return NAMES.map((n, i) => {
-    const num = String(i + 1).padStart(3, "0");
-    return {
-      id: `vol-${num}`,
-      volunteerId: `NSS${num}`,
-      enrollment: `2026-${n.sem}-${num}`,
-      fullName: titleFirstName(n.fullName),
-      mobile: `98765${String(10000 + i + 1).slice(-5)}`,
-      email: `${n.fullName.split(" ")[0]?.toLowerCase() ?? "nss"}.${num}@sdmansa.edu.in`,
-      course: n.course,
-      semester: n.sem,
-      unit: i % 2 === 0 ? "Unit 1" : "Unit 2",
-      nssRole: n.role,
-      fatherName: n.fullName.split(" ").slice(1).join(" "),
-      dob: n.dob,
-      gender: n.gender,
-      bloodGroup: "O+",
-      address: "Mansa, Gandhinagar, Gujarat",
-      parentMobile: `98250${String(20000 + i + 1).slice(-5)}`,
-      createdAt: "2026-06-15",
-    };
-  });
+  return [];
 }
 
 function seedEvents(): NssEvent[] {
   return [
+    {
+      id: "evt-plantation",
+      name: "Tree Plantation",
+      date: "2026-08-05",
+      location: "College campus, Mansa",
+      hours: 6,
+      status: "completed",
+      description: "Plantation drive on the college campus.",
+      createdAt: "2026-08-05",
+    },
     {
       id: "evt-camp",
       name: "NSS Camp",
       date: "2026-09-05",
       location: "Adopted village, Mansa",
       hours: 40,
-      status: "upcoming",
+      status: "completed",
       description: "Seven-day special camping programme.",
       createdAt: "2026-08-18",
+    },
+    {
+      id: "evt-blood",
+      name: "Blood Donation",
+      date: "2026-10-01",
+      location: "College campus, Mansa",
+      hours: 4,
+      status: "completed",
+      description: "Voluntary blood donation camp.",
+      createdAt: "2026-10-01",
+    },
+    {
+      id: "evt-swachhata",
+      name: "Swachhata Abhiyan",
+      date: "2026-10-02",
+      location: "Mansa town",
+      hours: 4,
+      status: "completed",
+      description: "Cleanliness drive.",
+      createdAt: "2026-10-02",
+    },
+    {
+      id: "evt-republic",
+      name: "Republic Day Parade",
+      date: "2027-01-26",
+      location: "College ground, Mansa",
+      hours: 3,
+      status: "upcoming",
+      description: "Republic Day parade by NSS volunteers.",
+      createdAt: "2026-10-02",
     },
   ];
 }
 
 function seedNotices(): Notice[] {
   return [
+    {
+      id: "ntc-leaders",
+      title: "Leaders meeting",
+      body: "NSS leaders meeting at 10:30 AM.",
+      date: "2026-08-25",
+      audience: "leaders",
+      createdAt: "2026-08-20",
+    },
     {
       id: "ntc-reg",
       title: "NSS registration reminder",
@@ -74,6 +88,35 @@ function seedNotices(): Notice[] {
   ];
 }
 
+function seedGallery(): GalleryItem[] {
+  return [
+    {
+      id: "gal-plantation",
+      src: "/images/gallery-plantation.jpg",
+      caption: "Tree Plantation",
+      date: "2026-08-05",
+      eventName: "Tree Plantation",
+      kind: "photo",
+    },
+    {
+      id: "gal-plantation-2",
+      src: "/images/gallery-plantation-2.jpg",
+      caption: "Plantation drive",
+      date: "2026-08-05",
+      eventName: "Tree Plantation",
+      kind: "photo",
+    },
+    {
+      id: "gal-swachhata",
+      src: "/images/gallery-swachhata.jpg",
+      caption: "Swachhata Abhiyan",
+      date: "2026-10-02",
+      eventName: "Swachhata Abhiyan",
+      kind: "photo",
+    },
+  ];
+}
+
 export function createSeedState(): PortalState {
   return {
     volunteers: seedVolunteers(),
@@ -81,12 +124,12 @@ export function createSeedState(): PortalState {
     attendance: [],
     eventRsvps: [],
     notices: seedNotices(),
-    gallery: [] as GalleryItem[],
+    gallery: seedGallery(),
     certificates: [] as IssuedCertificate[],
     pressReports: [],
     logs: [],
     settings: DEFAULT_SETTINGS,
-    visitors: 1361,
+    visitors: 1362,
     recycleBin: [],
   };
 }

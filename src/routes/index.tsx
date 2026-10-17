@@ -29,8 +29,13 @@ function Home() {
   const gallery = useNssStore((s) => s.gallery) ?? [];
   const visitors = useNssStore((s) => s.visitors);
   const settings = useNssStore((s) => s.settings);
-  const hours = useNssStore((s) => (s.attendance.length ? totalServiceHours(s) : Math.max(totalServiceHours(s), s.settings.reportedServiceHours ?? 0)));
-  const volunteerCount = useNssStore((s) => activeVolunteers(s).length);
+  const hours = useNssStore((s) => Math.max(totalServiceHours(s), s.settings.reportedServiceHours ?? 0));
+  const volunteerCount = useNssStore((s) => {
+    const live = activeVolunteers(s);
+    const seeded = live.length > 0 && live.length <= 30 && live.every((v) => v.id.startsWith("vol-"));
+    if (!seeded && live.length >= 20) return live.length;
+    return Math.max(seeded ? 0 : live.length, s.settings.publishedVolunteerCount ?? 66);
+  });
   const alumniCount = useNssStore((s) => Math.max(alumniVolunteers(s).length, s.settings.alumniCount));
   const bestId = useNssStore((s) => bestVolunteer(s)?.id ?? "");
   const bestName = useNssStore((s) => bestVolunteer(s)?.fullName ?? "");
@@ -46,8 +51,12 @@ function Home() {
   const [rollQuery, setRollQuery] = useState("");
   const roll = useMemo(() => {
     const state = useNssStore.getState();
+    const seeded =
+      volunteers.length > 0 &&
+      volunteers.length <= 30 &&
+      volunteers.every((v) => v.id.startsWith("vol-"));
     const q = rollQuery.trim().toLowerCase();
-    return volunteers
+    return (seeded ? [] : volunteers)
       .filter((v) => v.status !== "alumni" && v.fullName)
       .filter((v) => {
         if (!q) return true;
@@ -126,7 +135,7 @@ function Home() {
               <HomeOfficer role="Programme Officer" name={settings.poName} quote={settings.poQuote} photo={settings.poPhoto} />
               <div className="order-first md:order-none">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-saffron">S.D. Arts & Shah B.R. Commerce College</p>
-                <p className="mt-1 text-sm font-semibold text-forest">Welcome to Avyansh Tech</p>
+                <p className="mt-1 text-sm font-semibold text-forest">{settings.sloganGu}</p>
                 <h1 className="font-display text-3xl font-semibold text-navy">NSS Smart Portal</h1>
                 <div className="mt-4"><PhotoCarousel items={gallery} /></div>
                 <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -149,6 +158,11 @@ function Home() {
                 </div>
                 <Input value={rollQuery} onChange={(e) => setRollQuery(e.target.value)} placeholder="Search" className="mt-3" />
                 <div className="mt-3 max-h-[32rem] space-y-1.5 overflow-y-auto">
+                  {roll.length === 0 ? (
+                    <p className="rounded-lg bg-muted/70 px-3 py-3 text-sm text-muted-foreground">
+                      કોલેજ NSS યાદી રજિસ્ટર પર સુરક્ષિત છે ({volunteerCount} volunteers). થોડી વારમાં અહીં નામ દેખાશે.
+                    </p>
+                  ) : null}
                   {roll.map((v) => (
                     <div key={v.volunteerId || v.id} className="flex items-center gap-3 rounded-lg px-2 py-2 hover:bg-muted/70">
                       {v.photoUrl ? (

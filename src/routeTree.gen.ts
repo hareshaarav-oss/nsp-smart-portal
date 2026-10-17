@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as AdminDashboardRouteImport } from './routes/admin-dashboard'
+import { Route as ChatRouteImport } from './routes/chat'
 import { Route as ContactRouteImport } from './routes/contact'
 import { Route as GalleryRouteImport } from './routes/gallery'
 import { Route as InstallRouteImport } from './routes/install'
@@ -22,7 +23,6 @@ import { Route as StudentDashboardRouteImport } from './routes/student-dashboard
 import { Route as StudentRegisterRouteImport } from './routes/student-register'
 import { Route as VerifyRouteImport } from './routes/verify'
 import { Route as VolunteerRouteImport } from './routes/volunteer'
-import { Route as ChatRouteImport } from './routes/chat'
 import { Route as AdminSplatRouteImport } from './routes/admin.$'
 import { Route as ApiNssCloudRouteImport } from './routes/api/nss-cloud'
 import { Route as PoIndexRouteImport } from './routes/po/index'
@@ -55,6 +55,11 @@ const AdminRoute = AdminRouteImport.update({
 const AdminDashboardRoute = AdminDashboardRouteImport.update({
   id: '/admin-dashboard',
   path: '/admin-dashboard',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ChatRoute = ChatRouteImport.update({
+  id: '/chat',
+  path: '/chat',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ContactRoute = ContactRouteImport.update({
@@ -105,11 +110,6 @@ const VerifyRoute = VerifyRouteImport.update({
 const VolunteerRoute = VolunteerRouteImport.update({
   id: '/volunteer',
   path: '/volunteer',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ChatRoute = ChatRouteImport.update({
-  id: '/chat',
-  path: '/chat',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdminSplatRoute = AdminSplatRouteImport.update({
@@ -207,6 +207,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/admin': typeof AdminRouteWithChildren
   '/admin-dashboard': typeof AdminDashboardRoute
+  '/chat': typeof ChatRoute
   '/contact': typeof ContactRoute
   '/gallery': typeof GalleryRoute
   '/install': typeof InstallRoute
@@ -217,7 +218,6 @@ export interface FileRoutesByFullPath {
   '/student-register': typeof StudentRegisterRoute
   '/verify': typeof VerifyRoute
   '/volunteer': typeof VolunteerRoute
-  '/chat': typeof ChatRoute
   '/admin/$': typeof AdminSplatRoute
   '/api/nss-cloud': typeof ApiNssCloudRoute
   '/po/ai': typeof PoAiRoute
@@ -241,6 +241,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/admin': typeof AdminRouteWithChildren
   '/admin-dashboard': typeof AdminDashboardRoute
+  '/chat': typeof ChatRoute
   '/contact': typeof ContactRoute
   '/gallery': typeof GalleryRoute
   '/install': typeof InstallRoute
@@ -250,7 +251,6 @@ export interface FileRoutesByTo {
   '/student-register': typeof StudentRegisterRoute
   '/verify': typeof VerifyRoute
   '/volunteer': typeof VolunteerRoute
-  '/chat': typeof ChatRoute
   '/admin/$': typeof AdminSplatRoute
   '/api/nss-cloud': typeof ApiNssCloudRoute
   '/po/ai': typeof PoAiRoute
@@ -275,6 +275,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/admin': typeof AdminRouteWithChildren
   '/admin-dashboard': typeof AdminDashboardRoute
+  '/chat': typeof ChatRoute
   '/contact': typeof ContactRoute
   '/gallery': typeof GalleryRoute
   '/install': typeof InstallRoute
@@ -285,7 +286,6 @@ export interface FileRoutesById {
   '/student-register': typeof StudentRegisterRoute
   '/verify': typeof VerifyRoute
   '/volunteer': typeof VolunteerRoute
-  '/chat': typeof ChatRoute
   '/admin/$': typeof AdminSplatRoute
   '/api/nss-cloud': typeof ApiNssCloudRoute
   '/po/ai': typeof PoAiRoute
@@ -311,6 +311,7 @@ export interface FileRouteTypes {
     | '/'
     | '/admin'
     | '/admin-dashboard'
+    | '/chat'
     | '/contact'
     | '/gallery'
     | '/install'
@@ -321,7 +322,6 @@ export interface FileRouteTypes {
     | '/student-register'
     | '/verify'
     | '/volunteer'
-    | '/chat'
     | '/admin/$'
     | '/api/nss-cloud'
     | '/po/ai'
@@ -345,6 +345,7 @@ export interface FileRouteTypes {
     | '/'
     | '/admin'
     | '/admin-dashboard'
+    | '/chat'
     | '/contact'
     | '/gallery'
     | '/install'
@@ -354,7 +355,6 @@ export interface FileRouteTypes {
     | '/student-register'
     | '/verify'
     | '/volunteer'
-    | '/chat'
     | '/admin/$'
     | '/api/nss-cloud'
     | '/po/ai'
@@ -378,6 +378,7 @@ export interface FileRouteTypes {
     | '/'
     | '/admin'
     | '/admin-dashboard'
+    | '/chat'
     | '/contact'
     | '/gallery'
     | '/install'
@@ -388,7 +389,6 @@ export interface FileRouteTypes {
     | '/student-register'
     | '/verify'
     | '/volunteer'
-    | '/chat'
     | '/admin/$'
     | '/api/nss-cloud'
     | '/po/ai'
@@ -413,6 +413,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AdminRoute: typeof AdminRouteWithChildren
   AdminDashboardRoute: typeof AdminDashboardRoute
+  ChatRoute: typeof ChatRoute
   ContactRoute: typeof ContactRoute
   GalleryRoute: typeof GalleryRoute
   InstallRoute: typeof InstallRoute
@@ -423,7 +424,6 @@ export interface RootRouteChildren {
   StudentRegisterRoute: typeof StudentRegisterRoute
   VerifyRoute: typeof VerifyRoute
   VolunteerRoute: typeof VolunteerRoute
-  ChatRoute: typeof ChatRoute
   ApiNssCloudRoute: typeof ApiNssCloudRoute
 }
 
@@ -448,6 +448,13 @@ declare module '@tanstack/react-router' {
       path: '/admin-dashboard'
       fullPath: '/admin-dashboard'
       preLoaderRoute: typeof AdminDashboardRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/chat': {
+      id: '/chat'
+      path: '/chat'
+      fullPath: '/chat'
+      preLoaderRoute: typeof ChatRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/contact': {
@@ -518,13 +525,6 @@ declare module '@tanstack/react-router' {
       path: '/volunteer'
       fullPath: '/volunteer'
       preLoaderRoute: typeof VolunteerRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/chat': {
-      id: '/chat'
-      path: '/chat'
-      fullPath: '/chat'
-      preLoaderRoute: typeof ChatRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/admin/$': {
@@ -710,6 +710,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AdminRoute: AdminRouteWithChildren,
   AdminDashboardRoute: AdminDashboardRoute,
+  ChatRoute: ChatRoute,
   ContactRoute: ContactRoute,
   GalleryRoute: GalleryRoute,
   InstallRoute: InstallRoute,
@@ -720,7 +721,6 @@ const rootRouteChildren: RootRouteChildren = {
   StudentRegisterRoute: StudentRegisterRoute,
   VerifyRoute: VerifyRoute,
   VolunteerRoute: VolunteerRoute,
-  ChatRoute: ChatRoute,
   ApiNssCloudRoute: ApiNssCloudRoute,
 }
 export const routeTree = rootRouteImport

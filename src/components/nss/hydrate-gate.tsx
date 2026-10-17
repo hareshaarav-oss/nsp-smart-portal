@@ -205,14 +205,11 @@ function applyBody(cloud: CloudBody) {
 }
 
 export function HydrateGate({ children }: { children: ReactNode }) {
-  const [ready, setReady] = useState(false);
+  const [ready] = useState(true);
   const [status, setStatus] = useState("Loading the college NSS roll…");
 
   useEffect(() => {
     let cancelled = false;
-    const finish = () => {
-      if (!cancelled) setReady(true);
-    };
 
     async function pullLive() {
       if (cancelled || document.hidden) return;
@@ -285,50 +282,45 @@ export function HydrateGate({ children }: { children: ReactNode }) {
       setStatus("Opening the college roll…");
       try {
         await pullLive();
-        if (!cancelled) setStatus("College roll loaded.");
       } catch {
         setStatus("Could not reach the college roll. Showing saved data.");
       }
-      finish();
+      if (useNssStore.getState().volunteers.length >= 20) {
+        void pullPhotos().catch(() => undefined);
+      }
       void pullVisitors().catch(() => undefined);
-      void pullPhotos()
-        .catch(() => undefined)
-        .finally(() => {
-          if (cancelled) return;
-          void fetch("/api/nss-cloud?gallery=1", { cache: "no-store" })
-            .then((res) => res.json())
-            .then((cloud: CloudBody) => {
-              if (!cancelled) {
-                applyBody(cloud);
-                applyCachedPhotos();
-              }
-            })
-            .catch(() => undefined);
-        });
+      void fetch("/api/nss-cloud?gallery=1", { cache: "no-store" })
+        .then((res) => res.json())
+        .then((cloud: CloudBody) => {
+          if (!cancelled) {
+            applyBody(cloud);
+            applyCachedPhotos();
+          }
+        })
+        .catch(() => undefined);
     })();
 
     let ticks = 0;
     const timer = window.setInterval(() => {
+      if (document.hidden) return;
       ticks += 1;
       void pullVisitors().catch(() => undefined);
       void pullLive()
         .catch(() => undefined)
         .then(() => {
-          if (document.hidden || ticks % 4 !== 0) return;
-          void pullPhotos().catch(() => undefined);
+          if (document.hidden || ticks % 5 !== 0) return;
+          if (useNssStore.getState().volunteers.length >= 20) void pullPhotos().catch(() => undefined);
         });
-    }, 15000);
+    }, 60000);
     const wake = () => {
       void pullVisitors().catch(() => undefined);
       void pullLive().catch(() => undefined);
     };
     document.addEventListener("visibilitychange", wake);
     window.addEventListener("focus", wake);
-    const safety = window.setTimeout(finish, 4000);
     return () => {
       cancelled = true;
       window.clearInterval(timer);
-      window.clearTimeout(safety);
       document.removeEventListener("visibilitychange", wake);
       window.removeEventListener("focus", wake);
     };
@@ -341,7 +333,7 @@ export function HydrateGate({ children }: { children: ReactNode }) {
           <img src={COLLEGE_LOGO} alt="College emblem" className="size-16 object-contain" />
           <img src={NSS_LOGO} alt="NSS emblem" className="size-16 object-contain" />
         </div>
-        <p className="mt-6 text-center font-display text-lg">Welcome to Avyansh Tech</p>
+        <p className="mt-6 text-center font-display text-lg">NSS Smart Portal</p>
         <p className="mt-1 text-center text-sm tracking-[0.16em] text-paper/80">NSS SMART PORTAL</p>
         <p className="mt-2 text-center text-sm text-paper/70">
           S.D. Arts & Shah B.R. Commerce College, Mansa
