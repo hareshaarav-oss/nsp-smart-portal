@@ -5,7 +5,6 @@ import { toast } from "sonner";
 import { AppShell } from "@/components/nss/shell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { refreshRoll } from "@/lib/nss/desk-save";
 import { useSessionStore } from "@/lib/nss/session";
 import { useNssStore, volunteerHours } from "@/lib/nss/store";
 import { openWhatsApp } from "@/lib/nss/whatsapp";
@@ -106,18 +105,13 @@ function ChatPage() {
       }
     }
     void pull();
-    void refreshRoll();
-    const timer = window.setInterval(() => void pull(), 2000);
-    const rollTimer = window.setInterval(() => {
-      if (!document.hidden) void refreshRoll();
-    }, 12000);
+    const timer = window.setInterval(() => void pull(), 8000);
     const wake = () => void pull();
     document.addEventListener("visibilitychange", wake);
     window.addEventListener("focus", wake);
     return () => {
       stop = true;
       window.clearInterval(timer);
-      window.clearInterval(rollTimer);
       document.removeEventListener("visibilitychange", wake);
       window.removeEventListener("focus", wake);
     };

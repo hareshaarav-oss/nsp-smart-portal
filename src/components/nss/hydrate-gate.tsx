@@ -147,7 +147,7 @@ export function HydrateGate({ children }: { children: ReactNode }) {
 
     const timer = window.setInterval(() => {
       void pullLive().catch(() => undefined);
-    }, 10000);
+    }, 45000);
     const wake = () => {
       void pullLive().catch(() => undefined);
     };
