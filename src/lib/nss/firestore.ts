@@ -183,8 +183,9 @@ export async function loadCollegeCloud(opts: { gallery?: boolean } = {}): Promis
     text(a.fullName).localeCompare(text(b.fullName), "en", { sensitivity: "base" }),
   );
 
-  const volunteers: Volunteer[] = sorted.map((s, index) => {
-    const n = index + 1;
+  const numbers = rollNumbers(sorted);
+  const volunteers: Volunteer[] = sorted.map((s) => {
+    const n = numbers.get(s) ?? 1;
     const semester = latinDigits(text(s.semester) || "1");
     const mobileDigits = mobileKey(s.mobile) || mobileKey(s._id);
     const mobile = mobileDigits.length >= 10 ? mobileDigits : latinDigits(text(s.mobile));
@@ -195,7 +196,7 @@ export async function loadCollegeCloud(opts: { gallery?: boolean } = {}): Promis
     const assembled = [s.firstName, s.middleName, s.surname].map(text).filter(Boolean).join(" ");
     const fullName = titleFirstName(cleanPersonName(text(s.fullName) || assembled));
     const storedUnit = text(s.unit);
-    const unit = storedUnit === "Unit 2" ? "Unit 2" : storedUnit === "Unit 1" ? "Unit 1" : index % 2 === 0 ? "Unit 1" : "Unit 2";
+    const unit = storedUnit === "Unit 2" ? "Unit 2" : storedUnit === "Unit 1" ? "Unit 1" : n % 2 === 1 ? "Unit 1" : "Unit 2";
     return {
       id: text(s._id) || `vol-${n}`,
       volunteerId: text(s.volunteerId) || `NSS${padId(n)}`,
@@ -359,13 +360,43 @@ export function safePhoto(value: unknown) {
   return "";
 }
 
+function storedNssNumber(value: unknown) {
+  const match = /NSS(\d+)/i.exec(text(value));
+  return match ? Number(match[1]) : 0;
+}
+
 function nextVolunteerNumber(students: Record<string, unknown>[]) {
+  const live = students.filter((s) => {
+    const status = text(s.status).toLowerCase();
+    return status !== "inactive" && status !== "deleted";
+  });
   let max = 0;
-  for (const row of students) {
-    const match = /NSS(\d+)/i.exec(text(row.volunteerId));
-    if (match) max = Math.max(max, Number(match[1]));
+  for (const row of live) max = Math.max(max, storedNssNumber(row.volunteerId));
+  // Older roll rows have no stored NSS id. Their public numbers are 1..count
+  // in joined-date order, so the next registration must continue after that.
+  return Math.max(max, live.length) + 1;
+}
+
+function rollNumbers(sorted: Record<string, unknown>[]) {
+  const taken = new Set<number>();
+  for (const row of sorted) {
+    const n = storedNssNumber(row.volunteerId);
+    if (n > 0) taken.add(n);
   }
-  return max + 1;
+  let cursor = 1;
+  const numbers = new Map<Record<string, unknown>, number>();
+  for (const row of sorted) {
+    const stored = storedNssNumber(row.volunteerId);
+    if (stored > 0) {
+      numbers.set(row, stored);
+      continue;
+    }
+    while (taken.has(cursor)) cursor += 1;
+    taken.add(cursor);
+    numbers.set(row, cursor);
+    cursor += 1;
+  }
+  return numbers;
 }
 
 export async function patchStudent(docId: string, values: Record<string, unknown>) {

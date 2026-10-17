@@ -7,6 +7,7 @@ import { shouldShowSplash, SplashScreen } from "@/components/nss/splash";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { daysUntilBirthday, formatLongDate, isBirthdayOn, todayIso } from "@/lib/nss/format";
 import { activeVolunteers, alumniVolunteers, bestVolunteer, totalServiceHours, useNssStore, volunteerHours } from "@/lib/nss/store";
 
@@ -42,6 +43,19 @@ function Home() {
   });
   const today = todayIso();
   const volunteers = useNssStore((s) => s.volunteers) ?? [];
+  const [rollQuery, setRollQuery] = useState("");
+  const roll = useMemo(() => {
+    const q = rollQuery.trim().toLowerCase();
+    return volunteers
+      .filter((v) => v.status !== "alumni" && v.fullName)
+      .filter((v) => {
+        if (!q) return true;
+        return `${v.fullName} ${v.volunteerId} ${v.enrollment} ${v.course} ${v.semester} ${v.unit}`
+          .toLowerCase()
+          .includes(q);
+      })
+      .sort((a, b) => a.fullName.localeCompare(b.fullName, "en", { sensitivity: "base" }));
+  }, [volunteers, rollQuery]);
   const birthdayVolunteers = useMemo(
     () =>
       volunteers
@@ -122,6 +136,49 @@ function Home() {
               </div>
               <HomeOfficer role="Principal" name={settings.principalName} quote={settings.principalQuote} photo={settings.principalPhoto} />
             </div>
+          </section>
+
+          <section className="mt-6">
+            <Card className="shadow-md">
+              <CardContent className="p-5">
+                <div className="flex flex-wrap items-end justify-between gap-3">
+                  <div>
+                    <h2 className="font-display text-xl text-navy">NSS roll</h2>
+                    <p className="text-sm text-muted-foreground">{roll.length} volunteers on the college roll</p>
+                  </div>
+                  <Input
+                    value={rollQuery}
+                    onChange={(e) => setRollQuery(e.target.value)}
+                    placeholder="Search name or NSS ID"
+                    className="max-w-xs"
+                  />
+                </div>
+                <div className="mt-4 max-h-[28rem] space-y-2 overflow-y-auto pr-1">
+                  {roll.length === 0 ? (
+                    <p className="py-8 text-center text-sm text-muted-foreground">No volunteer matches that search.</p>
+                  ) : (
+                    roll.map((v) => (
+                      <div key={v.volunteerId || v.id} className="flex items-center gap-3 rounded-xl border border-border bg-bg px-3 py-2">
+                        {v.photoUrl ? (
+                          <img src={v.photoUrl} alt="" className="h-10 w-10 rounded-full object-cover" />
+                        ) : (
+                          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-navy text-xs font-semibold text-paper">
+                            {initials(v.fullName) || "NSS"}
+                          </div>
+                        )}
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate font-medium text-navy">{v.fullName}</p>
+                          <p className="truncate text-xs text-muted-foreground">
+                            {v.volunteerId} · {v.course} Sem {v.semester} · {v.unit}
+                          </p>
+                        </div>
+                        {v.nssRole === "Leader" ? <Badge tone="saffron">Leader</Badge> : null}
+                      </div>
+                    ))
+                  )}
+                </div>
+              </CardContent>
+            </Card>
           </section>
 
           <section className="mt-6 grid gap-4 md:grid-cols-2">

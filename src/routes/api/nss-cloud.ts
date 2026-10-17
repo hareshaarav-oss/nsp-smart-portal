@@ -150,8 +150,10 @@ export const Route = createFileRoute("/api/nss-cloud")({
         try {
           const includeGallery = new URL(request.url).searchParams.get("gallery") === "1";
           const data = await loadCollegeCloud({ gallery: includeGallery });
-          if (!data) return Response.json({ ok: false }, { status: 404 });
-          return Response.json(publicPayload(data as unknown as Row, includeGallery));
+          if (!data) return Response.json({ ok: false }, { status: 404, headers: { "cache-control": "no-store" } });
+          return Response.json(publicPayload(data as unknown as Row, includeGallery), {
+            headers: { "cache-control": "no-store" },
+          });
         } catch (error) {
           const message = error instanceof Error ? error.message : "cloud load failed";
           return Response.json({ ok: false, error: message }, { status: 500 });

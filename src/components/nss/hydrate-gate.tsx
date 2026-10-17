@@ -52,14 +52,14 @@ export function HydrateGate({ children }: { children: ReactNode }) {
 
       setStatus("Connecting to NSS cloud…");
       try {
-        const res = await fetch("/api/nss-cloud");
+        const res = await fetch("/api/nss-cloud", { cache: "no-store" });
         const ok = await applyResponse(res);
         if (ok) setStatus("College roll loaded.");
       } catch {
         setStatus("Could not reach the college roll. Showing saved data.");
       }
       finish();
-      void fetch("/api/nss-cloud?gallery=1")
+      void fetch("/api/nss-cloud?gallery=1", { cache: "no-store" })
         .then(applyResponse)
         .catch(() => undefined);
     })();

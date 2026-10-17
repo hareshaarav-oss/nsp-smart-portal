@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { blobToDataUrl, compressPassport } from "@/lib/nss/media";
+import { latinDigits } from "@/lib/nss/format";
 import { useNssStore, rememberVolunteer } from "@/lib/nss/store";
 import type { Course, Gender, NssRole, NssUnit, Volunteer } from "@/lib/nss/types";
 
@@ -51,7 +52,9 @@ function RegisterPage() {
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!/^\d{10}$/.test(form.mobile.trim())) {
+    let mobile = latinDigits(form.mobile).replace(/\D/g, "");
+    if (mobile.length === 12 && mobile.startsWith("91")) mobile = mobile.slice(2);
+    if (!/^\d{10}$/.test(mobile)) {
       toast.error("Enter a 10-digit mobile number.");
       return;
     }
@@ -59,17 +62,39 @@ function RegisterPage() {
       const res = await fetch("/api/nss-cloud", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ action: "register", ...form, photoUrl }),
+        body: JSON.stringify({ action: "register", ...form, mobile, photoUrl }),
       });
       const data = (await res.json()) as { ok?: boolean; error?: string; volunteer?: Volunteer };
       if (!res.ok || !data.ok || !data.volunteer) throw new Error(data.error || "Cloud save failed");
-      rememberVolunteer(data.volunteer);
+      rememberVolunteer({ ...data.volunteer, mobile });
+      try {
+        const fresh = await fetch("/api/nss-cloud", { cache: "no-store" });
+        if (fresh.ok) {
+          const cloud = (await fresh.json()) as {
+            ok?: boolean;
+            volunteers?: Volunteer[];
+            visitors?: number;
+            alumniCount?: number;
+            serviceHours?: number;
+          };
+          if (cloud.ok && Array.isArray(cloud.volunteers)) {
+            useNssStore.getState().applyCloud({
+              volunteers: cloud.volunteers,
+              visitors: cloud.visitors,
+              alumniCount: cloud.alumniCount,
+              serviceHours: cloud.serviceHours,
+            });
+          }
+        }
+      } catch {
+        /* the saved volunteer stays in the local roll */
+      }
       addLog("Student registration", `Registered ${data.volunteer.fullName} (${data.volunteer.enrollment}).`);
       toast.success("Registration saved. The new volunteer is on the college roll.");
       setDone({
         name: data.volunteer.fullName,
         id: data.volunteer.volunteerId,
-        mobile: form.mobile.trim(),
+        mobile,
         enrollment: data.volunteer.enrollment,
       });
     } catch (error) {

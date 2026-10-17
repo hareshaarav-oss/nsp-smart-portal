@@ -242,21 +242,13 @@ function uniqueBy<T>(
   });
 }
 
-function dedupeVolunteers(
-  items: Volunteer[],
-) {
+function dedupeVolunteers(items: Volunteer[]) {
   return uniqueBy(items, (v) => {
     const mobile = digits(v.mobile).slice(-10);
-
-    if (mobile.length === 10) {
-      return `mobile:${mobile}`;
-    }
-
-    if (v.enrollment) {
-      return `enrollment:${v.enrollment}`;
-    }
-
-    return `id:${v.id}`;
+    if (mobile.length === 10) return `mobile:${mobile}`;
+    if (v.volunteerId) return `vid:${v.volunteerId}`;
+    if (v.id) return `id:${v.id}`;
+    return `enrollment:${v.enrollment}`;
   });
 }
 
@@ -778,8 +770,9 @@ export const useNssStore =
                         "",
 
                       enrollment:
+                        row.enrollment ||
                         prev?.enrollment ||
-                        row.enrollment,
+                        "",
 
                       fullName:
                         titleFirstName(
@@ -890,6 +883,24 @@ export const useNssStore =
                   })
                   .sort(byFullName),
               );
+
+            const cloudVids = new Set(
+              (next.volunteers ?? [])
+                .map((row) => row.volunteerId)
+                .filter(Boolean),
+            );
+            const pending = current.volunteers.filter((row) => {
+              if (!row.fullName || !/^NSS\d+$/i.test(row.volunteerId || "")) return false;
+              if (cloudVids.has(row.volunteerId)) return false;
+              if (row.id.startsWith("vol-")) return false;
+              return true;
+            });
+            if (pending.length && next.volunteers) {
+              next.volunteers = dedupeVolunteers([
+                ...next.volunteers,
+                ...pending,
+              ]).sort(byFullName);
+            }
 
             const seedish =
               looksLikeSeed(
@@ -2870,19 +2881,26 @@ export function volunteerRecord(
   };
 }
 
-export function rememberVolunteer(
-  volunteer: Volunteer,
-) {
+export function rememberVolunteer(volunteer: Volunteer) {
   useNssStore.setState((state) => {
-    const volunteers = (
-      state.volunteers ?? []
-    ).filter(
-      (row) =>
-        row.id !== volunteer.id &&
-        row.volunteerId !==
-          volunteer.volunteerId,
-    );
-    volunteers.push(volunteer);
+    const mobile = digits(volunteer.mobile).slice(-10);
+    const same = (row: Volunteer) => {
+      const rowMobile = digits(row.mobile).slice(-10);
+      if (mobile.length === 10 && rowMobile === mobile) return true;
+      if (
+        row.volunteerId &&
+        row.volunteerId === volunteer.volunteerId &&
+        row.fullName === volunteer.fullName
+      ) {
+        return true;
+      }
+      return row.id === volunteer.id && row.fullName === volunteer.fullName;
+    };
+    const volunteers = (state.volunteers ?? []).filter((row) => !same(row));
+    volunteers.push({
+      ...volunteer,
+      fullName: titleFirstName(volunteer.fullName),
+    });
     volunteers.sort(byFullName);
     return { volunteers };
   });
