@@ -543,9 +543,13 @@ function EditVolunteer({ volunteer, onClose }: { volunteer: Volunteer; onClose: 
 
   async function onPhoto(file: File | undefined) {
     if (!file) return;
-    const { blob } = await compressPassport(file);
-    const url = await blobToDataUrl(blob);
-    setForm((f) => ({ ...f, photoUrl: url }));
+    try {
+      const { blob } = await compressPassport(file);
+      const url = await blobToDataUrl(blob);
+      setForm((f) => ({ ...f, photoUrl: url }));
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not read that photograph.");
+    }
   }
 
   function save(e: React.FormEvent) {

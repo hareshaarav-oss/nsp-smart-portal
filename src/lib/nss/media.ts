@@ -1,7 +1,6 @@
 const DB_NAME = "nsp-media-v1";
 const STORE = "files";
 const HD_EDGE = 1920;
-const PORTRAIT_EDGE = 720;
 const PHOTO_QUALITY = 0.88;
 const VIDEO_MAX_BYTES = 80 * 1024 * 1024;
 
@@ -80,12 +79,79 @@ export async function compressImageFile(file: File, maxEdge = HD_EDGE, quality =
   return { blob, width, height };
 }
 
+async function drawJpeg(source: CanvasImageSource, sw: number, sh: number, maxEdge: number, quality: number) {
+  const scale = Math.min(1, maxEdge / Math.max(sw, sh, 1));
+  const width = Math.max(1, Math.round(sw * scale));
+  const height = Math.max(1, Math.round(sh * scale));
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("Canvas unavailable");
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, width, height);
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
+  ctx.drawImage(source, 0, 0, width, height);
+  const blob = await canvasToJpeg(canvas, quality);
+  return { blob, width, height };
+}
+
+export async function compressHdPhoto(file: File, maxEdge = 1080) {
+  if (file.size > 40 * 1024 * 1024) throw new Error("Photograph is over 40 MB.");
+  const url = URL.createObjectURL(file);
+  let bitmap: ImageBitmap | null = null;
+  let image: HTMLImageElement | null = null;
+  try {
+    try {
+      bitmap = await createImageBitmap(file);
+    } catch {
+      image = await new Promise<HTMLImageElement>((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => resolve(img);
+        img.onerror = () => reject(new Error("Could not read that photograph. Try a JPG or PNG."));
+        img.src = url;
+      });
+    }
+    const source = (bitmap ?? image) as CanvasImageSource;
+    const sw = bitmap ? bitmap.width : image?.naturalWidth || 1;
+    const sh = bitmap ? bitmap.height : image?.naturalHeight || 1;
+    let edge = maxEdge;
+    let quality = 0.86;
+    let result = await drawJpeg(source, sw, sh, edge, quality);
+    for (let i = 0; i < 5 && result.blob.size > 260000; i += 1) {
+      quality = Math.max(0.6, quality - 0.07);
+      if (result.blob.size > 500000) edge = Math.round(edge * 0.82);
+      result = await drawJpeg(source, sw, sh, edge, quality);
+    }
+    return result;
+  } finally {
+    bitmap?.close();
+    URL.revokeObjectURL(url);
+  }
+}
+
+export function rememberPhoto(keys: string[], photoUrl: string) {
+  if (!photoUrl.startsWith("data:image/") && !photoUrl.startsWith("https://")) return;
+  try {
+    const raw = localStorage.getItem("nsp-photo-map-v2");
+    const map = raw ? (JSON.parse(raw) as Record<string, string>) : {};
+    for (const key of keys) {
+      const id = key.trim();
+      if (id) map[id] = photoUrl;
+    }
+    localStorage.setItem("nsp-photo-map-v2", JSON.stringify(map));
+  } catch {
+    /* the phone is full; the college roll still keeps the photograph */
+  }
+}
+
 export async function compressPortrait(file: File) {
-  return compressImageFile(file, PORTRAIT_EDGE, 0.86);
+  return compressHdPhoto(file, 1080);
 }
 
 export async function compressPassport(file: File) {
-  return compressImageFile(file, 240, 0.82);
+  return compressHdPhoto(file, 1080);
 }
 
 export async function videoPoster(file: File): Promise<Blob | null> {

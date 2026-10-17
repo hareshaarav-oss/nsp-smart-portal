@@ -66,7 +66,7 @@ function SettingsPage() {
 
   async function onPhoto(kind: "principal" | "po", file: File | undefined) {
     if (!file) return;
-    if (!file.type.startsWith("image/")) {
+    if (file.type && !file.type.startsWith("image/")) {
       toast.error("Please choose a photograph.");
       return;
     }

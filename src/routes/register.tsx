@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { blobToDataUrl, compressPassport } from "@/lib/nss/media";
+import { blobToDataUrl, compressPassport, rememberPhoto } from "@/lib/nss/media";
 import { latinDigits } from "@/lib/nss/format";
 import { useNssStore, rememberVolunteer } from "@/lib/nss/store";
 import type { Course, Gender, NssRole, NssUnit, Volunteer } from "@/lib/nss/types";
@@ -90,6 +90,10 @@ function RegisterPage() {
         /* the saved volunteer stays in the local roll */
       }
       addLog("Student registration", `Registered ${data.volunteer.fullName} (${data.volunteer.enrollment}).`);
+      rememberPhoto(
+        [data.volunteer.volunteerId, data.volunteer.id, data.volunteer.fullName.toLowerCase()],
+        photoUrl,
+      );
       toast.success("Registration saved. The new volunteer is on the college roll.");
       setDone({
         name: data.volunteer.fullName,

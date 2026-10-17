@@ -12,7 +12,7 @@ import { Label } from "@/components/ui/label";
 import { htmlForCertificate, openPreparedCertificate } from "@/lib/nss/certificates";
 import { daysUntilBirthday, formatLongDate, idCardName, isBirthdayOn, parseDob, todayIso } from "@/lib/nss/format";
 import { openIdCard } from "@/lib/nss/id-card";
-import { blobToDataUrl, compressPassport } from "@/lib/nss/media";
+import { blobToDataUrl, compressPassport, rememberPhoto } from "@/lib/nss/media";
 import { findSessionVolunteer, isOfficer, registerFingerprint, useSessionStore } from "@/lib/nss/session";
 import { attendanceOf, bestVolunteer, rsvpOf, useNssStore, volunteerHours } from "@/lib/nss/store";
 
@@ -216,7 +216,33 @@ function VolunteerDash() {
 
         <div className="grid gap-4 lg:grid-cols-[1.35fr_1fr]">
           <Card className="shadow-md"><CardHeader><CardTitle>My Attendance & Service Progress</CardTitle></CardHeader><CardContent><div className="h-64"><ResponsiveContainer width="100%" height="100%"><BarChart data={events.filter((e)=>myAtt.some((a)=>a.eventId===e.id)).map((e)=>({name:e.name.length>12?e.name.slice(0,12)+"…":e.name, attendance: attendanceOf(portalState, me.id, e.id)?.present?100:0, hours: attendanceOf(portalState, me.id, e.id)?.present?e.hours:0}))}><CartesianGrid strokeDasharray="3 3"/><XAxis dataKey="name" hide/><YAxis/><Tooltip/><Bar dataKey="attendance" name="Attendance %"/><Bar dataKey="hours" name="Hours"/></BarChart></ResponsiveContainer></div></CardContent></Card>
-          <Card className="shadow-md"><CardHeader><CardTitle>My Progress</CardTitle></CardHeader><CardContent className="space-y-4"><ProgressRow label="Attendance" value={attPct} suffix="%"/><ProgressRow label="Regular service hours" value={Math.min(100, Math.round(hours / Math.max(1, settings.serviceHourTarget) * 100))} suffix={`% of ${settings.serviceHourTarget} hrs target`}/><ProgressRow label="240-hour NSS progress" value={Math.min(100, Math.round(hours / 240 * 100))} suffix={`${hours} / 240 hours completed`}/><ProgressRow label="Certificates" value={Math.min(100, mine.length * 20)} suffix={`${mine.length} earned`}/><div className="rounded-xl border border-saffron/30 bg-saffron/5 p-3 text-sm"><strong>Achievement badges</strong><div className="mt-2 flex flex-wrap gap-2">{present >= 5 ? <Badge tone="forest">Attendance Champion</Badge> : null}{hours >= 40 ? <Badge tone="saffron">Community Service</Badge> : null}{hours >= 120 ? <Badge tone="navy">Service Milestone</Badge> : null}{isBest ? <Badge tone="saffron">Best Volunteer</Badge> : null}{present === 0 && hours === 0 ? <span className="text-muted-foreground">Participate in activities to earn badges.</span> : null}</div></div><div className="rounded-xl bg-muted p-3 text-sm"><strong>NSS Impact</strong><p className="mt-1 text-muted-foreground">Keep participating in activities to improve your attendance, service hours and achievements.</p></div></CardContent></Card>
+          <Card className="shadow-md">
+            <CardHeader>
+              <CardTitle>Progress</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-5">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="rounded-xl bg-navy px-3 py-3 text-paper">
+                  <p className="font-display text-3xl tabular-nums">{hours}</p>
+                  <p className="text-xs text-paper/70">Hours done</p>
+                </div>
+                <div className="rounded-xl bg-forest px-3 py-3 text-paper">
+                  <p className="font-display text-3xl tabular-nums">{attPct}%</p>
+                  <p className="text-xs text-paper/70">Attendance</p>
+                </div>
+              </div>
+              <ProgressRow label="Attendance" value={attPct} suffix={`${present} activities marked present`} />
+              <ProgressRow label="Service hours" value={Math.min(100, Math.round((hours / Math.max(1, settings.serviceHourTarget)) * 100))} suffix={`${hours} of ${settings.serviceHourTarget} hours`} />
+              <ProgressRow label="NSS 240 hours" value={Math.min(100, Math.round((hours / 240) * 100))} suffix={`${hours} / 240`} />
+              <ProgressRow label="Certificates" value={Math.min(100, mine.length * 20)} suffix={`${mine.length} earned`} />
+              <div className="flex flex-wrap gap-2">
+                {present >= 5 ? <Badge tone="forest">Attendance</Badge> : null}
+                {hours >= 40 ? <Badge tone="saffron">Service</Badge> : null}
+                {hours >= 120 ? <Badge tone="navy">Milestone</Badge> : null}
+                {isBest ? <Badge tone="saffron">Best volunteer</Badge> : null}
+              </div>
+            </CardContent>
+          </Card>
         </div>
 
         <div className="grid gap-4 lg:grid-cols-2">
@@ -441,9 +467,13 @@ function EditProfile({ volunteerId }: { volunteerId: string }) {
 
   async function onPhoto(file: File | undefined) {
     if (!file) return;
-    const { blob } = await compressPassport(file);
-    const url = await blobToDataUrl(blob);
-    setForm((f) => ({ ...f, photoUrl: url }));
+    try {
+      const { blob } = await compressPassport(file);
+      const url = await blobToDataUrl(blob);
+      setForm((f) => ({ ...f, photoUrl: url }));
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not read that photograph.");
+    }
   }
 
   async function save(e: React.FormEvent) {
@@ -472,12 +502,17 @@ function EditProfile({ volunteerId }: { volunteerId: string }) {
         toast.error(data.error || "Could not save the profile.");
         return;
       }
+      const photoUrl = data.volunteer?.photoUrl || form.photoUrl;
       update(volunteerId, {
         ...form,
-        photoUrl: data.volunteer?.photoUrl || form.photoUrl,
+        photoUrl,
         mobile: form.mobile || data.volunteer?.mobile || session?.mobile || "",
         email: form.email || data.volunteer?.email || "",
       });
+      rememberPhoto(
+        [volunteer?.volunteerId || "", volunteer?.id || "", (volunteer?.fullName || "").toLowerCase(), session?.volunteerId || ""],
+        photoUrl,
+      );
       toast.success("Profile saved on the college roll.");
     } catch {
       toast.error("Could not reach the college server.");
@@ -545,7 +580,21 @@ function Field({
   );
 }
 
-function ProgressRow({ label, value, suffix }: { label: string; value: number; suffix: string }) { return <div><div className="flex justify-between text-sm"><span>{label}</span><strong>{value}%</strong></div><div className="mt-2 h-2 overflow-hidden rounded-full bg-muted"><div className="h-full rounded-full bg-primary" style={{ width: `${Math.max(0, Math.min(100, value))}%` }} /></div><p className="mt-1 text-[11px] text-muted-foreground">{suffix}</p></div>; }
+function ProgressRow({ label, value, suffix }: { label: string; value: number; suffix: string }) {
+  const width = Math.max(0, Math.min(100, value));
+  return (
+    <div>
+      <div className="flex items-end justify-between gap-3">
+        <p className="text-sm font-medium text-navy">{label}</p>
+        <p className="font-display text-lg tabular-nums text-forest">{Math.round(width)}%</p>
+      </div>
+      <div className="mt-1.5 h-2.5 overflow-hidden rounded-full bg-muted">
+        <div className="h-full rounded-full bg-forest" style={{ width: `${width}%` }} />
+      </div>
+      <p className="mt-1 text-xs text-muted-foreground">{suffix}</p>
+    </div>
+  );
+}
 
 function Stat({ label, value }: { label: string; value: string }) {
   return (
