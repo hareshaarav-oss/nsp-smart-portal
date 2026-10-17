@@ -578,20 +578,27 @@ export async function saveStudentToCloud(input: Record<string, unknown>) {
 }
 
 export async function incrementVisitors(): Promise<number> {
+  const fallback = 1361;
   try {
     const doc = await getDocument("portalSettings/visitors");
     const current = Number(doc?.count ?? 0);
-    const next = current + 1;
+    const next = (current > 0 ? current : fallback) + 1;
     const fields = { count: encodeValue(next), updatedAt: encodeValue(new Date().toISOString()) };
-    const res = await fetch(`${FIRESTORE_BASE}/portalSettings/visitors`, {
+    const patch = await fetch(`${FIRESTORE_BASE}/portalSettings/visitors`, {
       method: "PATCH",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ fields }),
     });
-    if (!res.ok) return current;
-    return next;
+    if (patch.ok) return next;
+    const create = await fetch(`${FIRESTORE_BASE}/portalSettings?documentId=visitors`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ fields }),
+    });
+    if (create.ok || create.status === 409) return next;
+    return current > 0 ? current : fallback;
   } catch {
-    return Number((await getDocument("portalSettings/visitors"))?.count ?? 0);
+    return fallback;
   }
 }
 

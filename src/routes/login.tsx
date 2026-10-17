@@ -196,15 +196,16 @@ function LoginPage() {
                 </select>
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="id">{staff ? "Username" : "Username"}</Label>
+                <Label htmlFor="id">{staff ? "Username" : "Username — first name"}</Label>
                 <Input
                   id="id"
                   value={id}
                   onChange={(e) => setId(staff ? e.target.value : e.target.value.toUpperCase())}
-                  placeholder={staff ? "Username" : "Username"}
+                  placeholder={staff ? "po" : "MAHI"}
                   autoComplete="username"
                   required
                 />
+                {!staff ? <p className="text-xs text-muted-foreground">Type only your first name in CAPITAL letters. Example: MAHI</p> : null}
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="pass">
@@ -212,7 +213,7 @@ function LoginPage() {
                     ? "Password"
                     : mode === "mpin"
                       ? "4-digit MPIN"
-                      : "Password"}
+                      : "Mobile number"}
                 </Label>
                 <Input
                   id="pass"
@@ -220,10 +221,11 @@ function LoginPage() {
                   inputMode={mode === "mpin" || !staff ? "numeric" : "text"}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder={mode === "mpin" ? "MPIN" : "Password"}
+                  placeholder={mode === "mpin" ? "MPIN" : staff ? "Password" : "Registered mobile number"}
                   autoComplete="current-password"
                   required
                 />
+                {!staff && mode === "password" ? <p className="text-xs text-muted-foreground">Password is the 10-digit mobile number used at registration.</p> : null}
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="captcha">Captcha</Label>

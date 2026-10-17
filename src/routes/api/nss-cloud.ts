@@ -130,22 +130,31 @@ function matchVolunteer(volunteers: Row[], username: string, password: string) {
   const key = username.trim().toLowerCase();
   const keyDigits = digits(username);
   const passDigits = digits(password);
-  return volunteers.find((row) => {
-    const name = text(row.fullName).toLowerCase();
-    const first = name.split(/\s+/)[0] ?? "";
+  const hits = volunteers.filter((row) => {
+    const tokens = text(row.fullName)
+      .toLowerCase()
+      .split(/[^a-z0-9\u0a80-\u0aff]+/i)
+      .filter((part) => part.length > 1);
     const id = text(row.volunteerId).toLowerCase();
+    const enrollment = text(row.enrollment).toLowerCase();
     const phone = digits(row.mobile);
-    const userOk =
-      first === key ||
-      name === key ||
+    return (
+      tokens.includes(key) ||
       id === key ||
-      (keyDigits.length >= 8 && phone.endsWith(keyDigits));
-    const stored = text(row.loginPassword);
-    const passOk =
-      (stored !== "" && stored === password.trim()) ||
-      (passDigits.length >= 10 && phone.endsWith(passDigits));
-    return userOk && passOk;
+      enrollment === key ||
+      (keyDigits.length >= 8 && phone.endsWith(keyDigits))
+    );
   });
+  if (!hits.length) {
+    return { error: "Username not found. Type only your FIRST NAME in CAPITAL letters, for example MAHI." };
+  }
+  const matched = hits.filter((row) => {
+    const phone = digits(row.mobile);
+    const stored = text(row.loginPassword);
+    return (stored !== "" && stored === password.trim()) || (passDigits.length >= 10 && phone.endsWith(passDigits));
+  });
+  if (matched[0]) return { row: matched[0] };
+  return { error: "Password is the 10-digit mobile number you entered at registration." };
 }
 
 function newChatToken() {
@@ -290,7 +299,7 @@ export const Route = createFileRoute("/api/nss-cloud")({
               if (user.role !== "po" && user.role !== "admin") {
                 return Response.json({ ok: false, error: "Only the Programme Officer can change the roll." }, { status: 403 });
               }
-              const data = await loadCollegeCloud({ gallery: false });
+              const data = await loadCollegeCloud({ gallery: false, photos: false });
               const want = text(body.volunteerId).toLowerCase();
               const target = (data?.volunteers ?? []).find(
                 (row) => text(row.volunteerId).toLowerCase() === want || text(row.id).toLowerCase() === want,
@@ -351,10 +360,11 @@ export const Route = createFileRoute("/api/nss-cloud")({
             });
           }
           if (body.action === "set-password" || body.action === "update-profile") {
-            const data = await loadCollegeCloud({ gallery: false });
+            const data = await loadCollegeCloud({ gallery: false, photos: false });
             const volunteers = (data?.volunteers ?? []) as unknown as Row[];
-            const found = matchVolunteer(volunteers, body.username ?? body.volunteerId ?? "", body.password ?? "");
-            if (!found) return Response.json({ ok: false, error: "Username or mobile password did not match." }, { status: 401 });
+            const matched = matchVolunteer(volunteers, body.username ?? body.volunteerId ?? "", body.password ?? "");
+            if (!matched.row) return Response.json({ ok: false, error: matched.error }, { status: 401 });
+            const found = matched.row;
             if (body.action === "set-password") {
               const next = text(body.next);
               if (next.length < 6) {
@@ -380,7 +390,7 @@ export const Route = createFileRoute("/api/nss-cloud")({
             return Response.json({ ok: true, volunteer: selfVolunteer({ ...found, ...patch }) });
           }
           if (body.action === "lookup") {
-            const data = await loadCollegeCloud({ gallery: false });
+            const data = await loadCollegeCloud({ gallery: false, photos: false });
             const want = digits(body.mobile);
             const found = (data?.volunteers ?? []).find((row) => digits(row.mobile).endsWith(want) && want.length >= 10);
             if (!found) return Response.json({ ok: false, error: "This mobile is not on the NSS roll." }, { status: 404 });
@@ -389,7 +399,7 @@ export const Route = createFileRoute("/api/nss-cloud")({
           }
           if (body.action === "staff-login") {
             const { staffSession } = await import("@/lib/nss/staff-auth.server");
-            const data = await loadCollegeCloud({ gallery: false });
+            const data = await loadCollegeCloud({ gallery: false, photos: false });
             const session = staffSession(body.role || "po", body.username ?? "", body.password ?? "", "Dr. Hareshkumar I. Prajapati");
             if (!session) {
               return Response.json({ ok: false, error: "Invalid staff username or password." }, { status: 401 });
@@ -413,10 +423,14 @@ export const Route = createFileRoute("/api/nss-cloud")({
             });
           }
           if (body.action !== "login") return Response.json({ ok: false, error: "Unsupported action." }, { status: 400 });
-          const data = await loadCollegeCloud({ gallery: false });
+          const data = await loadCollegeCloud({ gallery: false, photos: false });
           const volunteers = (data?.volunteers ?? []) as unknown as Row[];
-          const found = matchVolunteer(volunteers, body.username ?? "", body.password ?? "");
-          if (!found) return Response.json({ ok: false, error: "Username or mobile password did not match." }, { status: 401 });
+          if (!data || volunteers.length === 0) {
+            return Response.json({ ok: false, error: "The college roll is busy. Wait a moment and sign in again." }, { status: 503 });
+          }
+          const matched = matchVolunteer(volunteers, body.username ?? "", body.password ?? "");
+          if (!matched.row) return Response.json({ ok: false, error: matched.error }, { status: 401 });
+          const found = matched.row;
           const role = text(found.nssRole) === "Leader" || knownRole(found.nssRole) !== "Volunteer" ? "leader" : "volunteer";
           const volunteer = selfVolunteer(found);
           let chatToken = "";

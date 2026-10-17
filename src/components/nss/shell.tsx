@@ -22,15 +22,15 @@ export function AppShell({
   useEffect(() => {
     try {
       if (sessionStorage.getItem(STORAGE_VISITOR_MARK)) return;
-      sessionStorage.setItem(STORAGE_VISITOR_MARK, "1");
       void fetch("/api/nss-cloud", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ action: "visit" }),
       })
         .then((res) => res.json())
-        .then((data: { visitors?: number }) => {
-          if (typeof data.visitors === "number" && data.visitors > 0) {
+        .then((data: { ok?: boolean; visitors?: number }) => {
+          if (data.ok && typeof data.visitors === "number" && data.visitors > 0) {
+            sessionStorage.setItem(STORAGE_VISITOR_MARK, "1");
             useNssStore.setState({ visitors: data.visitors });
           }
         })

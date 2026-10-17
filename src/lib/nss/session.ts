@@ -82,7 +82,13 @@ function candidatesByUsername(username: string, volunteers: Volunteer[]) {
   const keyUpper = firstNameOf(key);
   const keyLower = key.toLowerCase();
   const keyDigits = digits(key);
-  const byFirst = volunteers.filter((s) => firstNameOf(s.fullName) === keyUpper);
+  const byFirst = volunteers.filter((s) => {
+    const tokens = s.fullName
+      .toUpperCase()
+      .split(/[^A-Z0-9]+/)
+      .filter((part) => part.length > 1);
+    return tokens.includes(keyUpper) || firstNameOf(s.fullName) === keyUpper;
+  });
   if (byFirst.length) return byFirst;
   return volunteers.filter((s) => {
     const id = s.volunteerId.toLowerCase();
