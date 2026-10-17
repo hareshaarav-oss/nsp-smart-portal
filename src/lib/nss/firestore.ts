@@ -101,12 +101,15 @@ function collectionUrl(name: string, token?: string, opts?: { photos?: boolean }
   return `${FIRESTORE_BASE}/${name}?${params.toString()}`;
 }
 
-async function listCollection(name: string, opts?: { photos?: boolean }) {
+async function listCollection(name: string, opts?: { photos?: boolean; strict?: boolean }) {
   const docs: Record<string, unknown>[] = [];
   let url: string | "" = collectionUrl(name, undefined, opts);
   while (url) {
     const res = await fetch(url);
-    if (!res.ok) break;
+    if (!res.ok) {
+      if (opts?.strict) throw new Error(res.status === 429 ? "The college roll is busy. Try delete once more in a moment." : "Could not read attendance.");
+      break;
+    }
     const json = (await res.json()) as {
       documents?: { name?: string; fields?: Record<string, FsValue> }[];
       nextPageToken?: string;
@@ -592,26 +595,38 @@ export async function incrementVisitors(): Promise<number> {
   }
 }
 
-export async function clearAttendanceCloud(eventName: string) {
+export async function clearAttendanceCloud(eventName = "", opts?: { all?: boolean }) {
   const want = text(eventName).trim().toLowerCase();
-  if (!want) return { removed: 0, serviceHours: 0 };
-  const docs = await listCollection("attendance");
-  let removed = 0;
-  for (const row of docs) {
+  const wipeAll = Boolean(opts?.all) || !want;
+  const docs = await listCollection("attendance", { strict: true });
+  const targets = docs.filter((row) => {
+    if (wipeAll) return true;
     const name = (text(row.eventName) || text(row.title)).trim().toLowerCase();
-    if (name !== want) continue;
-    const id = text(row._id);
-    if (!id) continue;
-    const res = await fetch(`${FIRESTORE_BASE}/attendance/${encodeURIComponent(id)}`, { method: "DELETE" });
-    if (res.ok || res.status === 404) removed += 1;
-  }
-  const data = await loadCollegeCloud({ gallery: false, photos: false });
-  const hours = data ? computeServiceHours(data.events, data.attendance) : 0;
-  await fetch(`${FIRESTORE_BASE}/portalSettings/publicStats?updateMask.fieldPaths=serviceHours`, {
-    method: "PATCH",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ fields: { serviceHours: encodeValue(hours) } }),
+    return name === want || (want.length > 3 && (name.includes(want) || want.includes(name)));
   });
+  let removed = 0;
+  for (let i = 0; i < targets.length; i += 25) {
+    const batch = targets.slice(i, i + 25);
+    const results = await Promise.all(batch.map(async (row) => {
+      const id = text(row._id);
+      if (!id) return false;
+      const res = await fetch(`${FIRESTORE_BASE}/attendance/${encodeURIComponent(id)}`, { method: "DELETE" });
+      return res.ok || res.status === 404;
+    }));
+    removed += results.filter(Boolean).length;
+  }
+  let hours = 0;
+  try {
+    const data = await loadCollegeCloud({ gallery: false, photos: false });
+    hours = data ? computeServiceHours(data.events, data.attendance) : 0;
+    await fetch(`${FIRESTORE_BASE}/portalSettings/publicStats?updateMask.fieldPaths=serviceHours`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ fields: { serviceHours: encodeValue(hours) } }),
+    });
+  } catch {
+    hours = 0;
+  }
   return { removed, serviceHours: hours };
 }
 

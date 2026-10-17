@@ -1,4 +1,4 @@
-import { createFileRoute, Link, Navigate } from "@tanstack/react-router";
+import { createFileRoute, Navigate } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { ArrowLeft, CheckCheck, MessageCircle, Phone, Search, SendHorizonal } from "lucide-react";
 import { toast } from "sonner";
@@ -75,12 +75,37 @@ function ChatPage() {
   const scroller = useRef<HTMLDivElement>(null);
   const stick = useRef(true);
   const token = session?.chatToken || "";
+  const setSession = useSessionStore((s) => s.setSession);
   const poWhatsapp = useNssStore((s) => s.settings.poWhatsapp);
   const roll = useNssStore((s) => s.volunteers) ?? [];
 
   useEffect(() => {
     setSeen(readSeen());
   }, []);
+
+  useEffect(() => {
+    if (!session || session.chatToken) return;
+    let stop = false;
+    void fetch("/api/nss-cloud", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        action: "resume-session",
+        role: session.role,
+        name: session.name,
+        volunteerId: session.volunteerId || "",
+      }),
+    })
+      .then((res) => res.json())
+      .then((data: { ok?: boolean; chatToken?: string }) => {
+        if (stop || !data.ok || !data.chatToken) return;
+        setSession({ ...session, chatToken: data.chatToken });
+      })
+      .catch(() => undefined);
+    return () => {
+      stop = true;
+    };
+  }, [session, setSession]);
 
   useEffect(() => {
     if (!token) return;
@@ -353,12 +378,9 @@ function ChatPage() {
             </div>
           ) : null}
           {!token ? (
-            <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6 text-center">
-              <p className="font-medium text-navy">Sign in again to open chat.</p>
-              <p className="max-w-sm text-sm text-muted-foreground">Your old login does not have a chat key yet. Sign in once more and the messages will stay on the college roll.</p>
-              <Button asChild className="bg-forest text-primary-foreground">
-                <Link to="/login" search={{ role: session.role === "po" || session.role === "admin" ? "po" : "volunteer" }}>Go to login</Link>
-              </Button>
+            <div className="flex flex-1 flex-col items-center justify-center gap-2 px-6 text-center">
+              <p className="font-medium text-navy">Connecting your chat…</p>
+              <p className="max-w-sm text-sm text-muted-foreground">Your desk stays signed in. Messages open as soon as the college roll answers.</p>
             </div>
           ) : (
             <>

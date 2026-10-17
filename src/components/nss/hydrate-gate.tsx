@@ -158,6 +158,23 @@ export function HydrateGate({ children }: { children: ReactNode }) {
           Promise.resolve(useSessionStore.persist.rehydrate()),
         ]);
         applyCachedPhotos();
+        const session = useSessionStore.getState().session;
+        if (session && !session.chatToken) {
+          const renewed = await fetch("/api/nss-cloud", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              action: "resume-session",
+              role: session.role,
+              name: session.name,
+              volunteerId: session.volunteerId || "",
+              unit: "",
+            }),
+          }).then((res) => res.json() as Promise<{ ok?: boolean; chatToken?: string }>);
+          if (renewed.ok && renewed.chatToken) {
+            useSessionStore.getState().setSession({ ...session, chatToken: renewed.chatToken });
+          }
+        }
       } catch {
         /* continue */
       }

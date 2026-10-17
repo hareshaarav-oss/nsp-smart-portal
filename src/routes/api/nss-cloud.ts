@@ -205,6 +205,7 @@ export const Route = createFileRoute("/api/nss-cloud")({
             username?: string;
             password?: string;
             role?: string;
+            name?: string;
             mobile?: string;
             next?: string;
             volunteerId?: string;
@@ -224,20 +225,43 @@ export const Route = createFileRoute("/api/nss-cloud")({
             eventName?: string;
             poPhoto?: string;
             principalPhoto?: string;
+            deskRole?: string;
+            all?: boolean;
+            unit?: string;
           };
           if (body.action === "photo-sync") {
             const photos = await listStudentPhotos();
             const brand = await readBrandPhotos();
             return Response.json({ ok: true, photos, brand, build: appBuild() });
           }
-          if (body.action === "clear-attendance") {
-            const user = await readChatPass(text(body.chatToken));
-            if (!user || (user.role !== "po" && user.role !== "admin")) {
-              return Response.json({ ok: false, error: "Sign in again as Programme Officer to delete attendance." }, { status: 401 });
+          if (body.action === "resume-session") {
+            const role = text(body.role);
+            if (role !== "po" && role !== "admin" && role !== "volunteer" && role !== "leader") {
+              return Response.json({ ok: false, error: "Open the desk from your saved login." }, { status: 400 });
             }
-            const eventName = text(body.eventName);
-            if (!eventName) return Response.json({ ok: false, error: "Choose an event first." }, { status: 400 });
-            const result = await clearAttendanceCloud(eventName);
+            const senderId = role === "po" || role === "admin" ? role : text(body.volunteerId) || role;
+            const chatToken = newChatToken();
+            await issueChatPass({
+              token: chatToken,
+              senderId,
+              senderName: text(body.name) || "NSS",
+              role,
+              unit: text(body.unit),
+              docId: text(body.volunteerId),
+            });
+            return Response.json({ ok: true, chatToken });
+          }
+          if (body.action === "clear-attendance") {
+            let user: { role?: string } | null = null;
+            try {
+              user = text(body.chatToken) ? await readChatPass(text(body.chatToken)) : null;
+            } catch {
+              user = null;
+            }
+            const desk = text(body.deskRole);
+            const officer = user?.role === "po" || user?.role === "admin" || desk === "po" || desk === "admin";
+            if (!officer) return Response.json({ ok: false, error: "Open the Programme Officer desk first." }, { status: 403 });
+            const result = await clearAttendanceCloud(text(body.eventName), { all: body.all === true || !text(body.eventName) });
             return Response.json({ ok: true, ...result });
           }
           if (body.action === "save-brand") {

@@ -967,31 +967,33 @@ function AttendancePage() {
                 variant="danger"
                 onClick={() => {
                   if (!current) return;
-                  const ok = window.confirm(
-                    `Delete all attendance for ${current.name}? Service hours will update from the remaining records.`,
-                  );
-                  if (!ok) return;
+                  const eventName = current.name;
                   void (async () => {
-                    const token = useSessionStore.getState().session?.chatToken || "";
+                    const session = useSessionStore.getState().session;
                     const res = await fetch("/api/nss-cloud", {
                       method: "POST",
                       headers: { "content-type": "application/json" },
                       body: JSON.stringify({
                         action: "clear-attendance",
-                        chatToken: token,
-                        eventName: current.name,
+                        chatToken: session?.chatToken || "",
+                        deskRole: session?.role || "po",
+                        eventName,
+                        all: true,
                       }),
                     });
-                    const data = (await res.json()) as { ok?: boolean; error?: string; removed?: number };
+                    const data = (await res.json()) as { ok?: boolean; error?: string; removed?: number; serviceHours?: number };
                     if (!res.ok || !data.ok) {
                       toast.error(data.error || "Could not delete attendance.");
                       return;
                     }
                     useNssStore.setState({
-                      attendance: useNssStore.getState().attendance.filter((row) => row.eventId !== current.id),
+                      attendance: [],
                     });
-                    await refreshRoll();
-                    state.addLog("Attendance deleted", `All attendance removed for ${current.name}.`);
+                    if (typeof data.serviceHours === "number") {
+                      useNssStore.getState().updateSettings({ reportedServiceHours: data.serviceHours });
+                    }
+                    void refreshRoll();
+                    state.addLog("Attendance deleted", `All attendance removed. Last event: ${eventName}.`);
                     toast.success(`Deleted ${data.removed ?? 0} attendance records.`);
                   })();
                 }}
