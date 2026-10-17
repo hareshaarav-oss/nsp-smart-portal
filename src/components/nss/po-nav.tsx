@@ -13,7 +13,6 @@ import {
   GraduationCap,
   Images,
   LayoutDashboard,
-  MessageCircle,
   Newspaper,
   Settings,
   Users,
@@ -22,7 +21,6 @@ import { cn } from "@/lib/utils";
 
 const ITEMS = [
   { to: "/po", label: "Dashboard", icon: LayoutDashboard },
-  { to: "/chat", label: "Chat", icon: MessageCircle },
   { to: "/po/volunteers", label: "Volunteers", icon: Users },
   { to: "/po/alumni", label: "Alumni", icon: GraduationCap },
   { to: "/po/attendance", label: "Attendance", icon: ClipboardCheck },
@@ -42,7 +40,7 @@ const ITEMS = [
 
 export function PoNav({ current }: { current: string }) {
   return (
-    <nav className="mt-3 flex gap-1 overflow-x-auto rounded-xl border border-border bg-card p-1 md:flex-wrap md:overflow-visible">
+    <nav className="flex gap-1 overflow-x-auto pb-1 sm:flex-wrap">
       {ITEMS.map((item) => {
         const active = current === item.to;
         const Icon = item.icon;
@@ -51,8 +49,10 @@ export function PoNav({ current }: { current: string }) {
             key={item.to}
             to={item.to}
             className={cn(
-              "inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg px-2.5 text-xs font-medium",
-              active ? "bg-navy text-paper" : "text-foreground hover:bg-muted",
+              "inline-flex h-10 shrink-0 items-center gap-2 rounded-md px-3 text-sm font-medium",
+              active
+                ? "bg-primary text-primary-foreground"
+                : "bg-card text-foreground ring-1 ring-border hover:bg-muted",
             )}
           >
             <Icon className="size-4" />

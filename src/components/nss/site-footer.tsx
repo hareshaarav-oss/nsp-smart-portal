@@ -4,10 +4,13 @@ export function SiteFooter() {
   const settings = useNssStore((s) => s.settings);
 
   return (
-    <footer className="no-print mt-auto hidden border-t border-border bg-surface px-4 py-5 text-center md:block">
-      <p className="font-display text-sm text-navy">NSS Smart Portal</p>
-      <p className="mt-1 text-xs text-muted-foreground">{settings.collegeName}</p>
-      <p className="mt-1 text-[11px] text-muted-foreground">Dr. Hareshkumar I. Prajapati · Avyansh Tech</p>
+    <footer className="no-print mt-auto border-t border-border bg-navy-deep px-4 py-8 text-center text-paper">
+      <p className="font-display text-lg">NSS Smart Portal</p>
+      <p className="mt-1 text-sm text-paper/80">{settings.collegeName}</p>
+      <p className="mt-1 text-sm text-paper/70">
+        National Service Scheme · “{settings.sloganEn}” / {settings.sloganGu}
+      </p>
+      <p className="mt-4 text-xs text-paper/50">Created by Dr. Hareshkumar I. Prajapati · Assistant Professor</p>
     </footer>
   );
 }

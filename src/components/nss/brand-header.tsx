@@ -13,8 +13,9 @@ export function BrandHeader({
   const collegeLogo = settings.collegeLogo || COLLEGE_LOGO;
   const nssLogo = settings.nssLogo || NSS_LOGO;
   return (
-    <header className="no-print bg-surface">
-      <div className={cn("mx-auto flex max-w-6xl items-center gap-4 px-4 md:px-6", compact ? "py-2.5" : "py-4")}>
+    <header className="no-print border-b border-border bg-surface">
+      <div className={cn("mx-auto max-w-6xl px-4 md:px-6", compact ? "py-3" : "py-3 md:py-4")}>
+        <div className="flex items-center gap-3 md:gap-5">
           <img
             src={collegeLogo}
             alt="College emblem"
@@ -26,7 +27,7 @@ export function BrandHeader({
           <div className="min-w-0 flex-1 text-center">
             <p
               className={cn(
-                "truncate text-balance font-display font-semibold leading-tight text-navy",
+                "text-balance font-display font-semibold leading-tight text-navy",
                 compact ? "text-sm md:text-base" : "text-base md:text-xl",
               )}
             >
@@ -49,6 +50,7 @@ export function BrandHeader({
               compact ? "h-12 w-12 md:h-14 md:w-14" : "h-16 w-16 md:h-[5.5rem] md:w-[5.5rem]",
             )}
           />
+        </div>
       </div>
     </header>
   );

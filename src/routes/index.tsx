@@ -1,12 +1,12 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useCallback, useMemo, useState } from "react";
-import { Cake, Star } from "lucide-react";
+import { Cake, Star, Users } from "lucide-react";
 import { AppShell } from "@/components/nss/shell";
 import { PhotoCarousel } from "@/components/nss/photo-carousel";
 import { shouldShowSplash, SplashScreen } from "@/components/nss/splash";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { daysUntilBirthday, formatLongDate, isBirthdayOn, todayIso } from "@/lib/nss/format";
 import { activeVolunteers, alumniVolunteers, bestVolunteer, totalServiceHours, useNssStore, volunteerHours } from "@/lib/nss/store";
 
@@ -30,12 +30,7 @@ function Home() {
   const visitors = useNssStore((s) => s.visitors);
   const settings = useNssStore((s) => s.settings);
   const hours = useNssStore((s) => Math.max(totalServiceHours(s), s.settings.reportedServiceHours ?? 0));
-  const volunteerCount = useNssStore((s) => {
-    const live = activeVolunteers(s);
-    const seeded = live.length > 0 && live.length <= 30 && live.every((v) => v.id.startsWith("vol-"));
-    if (!seeded && live.length >= 20) return live.length;
-    return Math.max(seeded ? 0 : live.length, s.settings.publishedVolunteerCount ?? 66);
-  });
+  const volunteerCount = useNssStore((s) => activeVolunteers(s).length);
   const alumniCount = useNssStore((s) => Math.max(alumniVolunteers(s).length, s.settings.alumniCount));
   const bestId = useNssStore((s) => bestVolunteer(s)?.id ?? "");
   const bestName = useNssStore((s) => bestVolunteer(s)?.fullName ?? "");
@@ -47,30 +42,6 @@ function Home() {
   });
   const today = todayIso();
   const volunteers = useNssStore((s) => s.volunteers) ?? [];
-  const attendance = useNssStore((s) => s.attendance) ?? [];
-  const [rollQuery, setRollQuery] = useState("");
-  const roll = useMemo(() => {
-    const state = useNssStore.getState();
-    const seeded =
-      volunteers.length > 0 &&
-      volunteers.length <= 30 &&
-      volunteers.every((v) => v.id.startsWith("vol-"));
-    const q = rollQuery.trim().toLowerCase();
-    return (seeded ? [] : volunteers)
-      .filter((v) => v.status !== "alumni" && v.fullName)
-      .filter((v) => {
-        if (!q) return true;
-        return `${v.fullName} ${v.volunteerId} ${v.enrollment} ${v.course} ${v.semester} ${v.unit}`
-          .toLowerCase()
-          .includes(q);
-      })
-      .map((v) => ({ ...v, hours: volunteerHours(state, v.id) }))
-      .sort(
-        (a, b) =>
-          (b.createdAt || "").localeCompare(a.createdAt || "") ||
-          a.fullName.localeCompare(b.fullName, "en", { sensitivity: "base" }),
-      );
-  }, [volunteers, attendance, events, rollQuery]);
   const birthdayVolunteers = useMemo(
     () =>
       volunteers
@@ -121,142 +92,127 @@ function Home() {
     <>
       {splashing ? <SplashScreen onDone={dismiss} /> : null}
       <AppShell current="home" compactHeader>
-        <section className="mx-auto w-full max-w-6xl flex-1 px-4 py-5 md:px-6 md:py-6">
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
-            <Link to="/register" className="rounded-xl bg-forest px-3 py-3 text-center text-sm font-semibold text-paper">Registration</Link>
-            <Link to="/login" search={{ role: "volunteer" }} className="rounded-xl border border-border bg-card px-3 py-3 text-center text-sm font-semibold text-navy">Student</Link>
-            <Link to="/chat" className="rounded-xl border border-border bg-card px-3 py-3 text-center text-sm font-semibold text-navy">Chat</Link>
-            <Link to="/login" search={{ role: "po" }} className="rounded-xl bg-navy px-3 py-3 text-center text-sm font-semibold text-paper">Admin</Link>
-            <Link to="/verify" search={{ id: "" }} className="col-span-2 rounded-xl border border-border bg-card px-3 py-3 text-center text-sm font-semibold text-navy sm:col-span-1">Verify</Link>
-          </div>
+        <section className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 md:px-6 md:py-8">
+          <section className="flex flex-wrap justify-center gap-2">
+            <Button asChild className="h-11 bg-forest text-primary-foreground hover:bg-forest/90">
+              <Link to="/register">Student registration</Link>
+            </Button>
+            <Button asChild variant="outline" className="h-11">
+              <Link to="/login" search={{ role: "volunteer" }}>
+                Student login
+              </Link>
+            </Button>
+            <Button asChild className="h-11 bg-navy text-paper hover:bg-navy-deep">
+              <Link to="/login" search={{ role: "po" }}>
+                Admin login
+              </Link>
+            </Button>
+            <Button asChild variant="outline" className="h-11">
+              <Link to="/verify" search={{ id: "" }}>Certificate verification</Link>
+            </Button>
+          </section>
 
-          <section className="mt-4 overflow-hidden rounded-2xl border border-border bg-card">
-            <div className="grid gap-4 p-4 md:grid-cols-[180px_1fr_180px] md:items-center md:p-5">
+          <section className="mt-6 overflow-hidden rounded-3xl border border-border bg-gradient-to-br from-surface via-card to-muted shadow-md">
+            <div className="grid gap-5 p-4 md:grid-cols-[190px_1fr_190px] md:p-6 md:items-center">
               <HomeOfficer role="Programme Officer" name={settings.poName} quote={settings.poQuote} photo={settings.poPhoto} />
               <div className="order-first md:order-none">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-saffron">S.D. Arts & Shah B.R. Commerce College</p>
-                <p className="mt-1 text-sm font-semibold text-forest">{settings.sloganGu}</p>
-                <h1 className="font-display text-3xl font-semibold text-navy">NSS Smart Portal</h1>
-                <div className="mt-4"><PhotoCarousel items={gallery} /></div>
-                <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
-                  <MiniStat label="Volunteers" value={volunteerCount} />
-                  <MiniStat label="Visitors" value={visitors} />
-                  <MiniStat label="Alumni" value={alumniCount} />
-                  <MiniStat label="Hours" value={hours} />
-                </div>
+                <div className="mb-3 flex items-center justify-between gap-3"><div><p className="text-xs font-semibold uppercase tracking-[0.18em] text-saffron">Welcome to NSP</p><h1 className="font-display text-2xl font-bold text-navy md:text-3xl">NSS Smart Portal</h1></div><span className="rounded-full bg-forest/10 px-3 py-1.5 text-xs font-semibold text-forest">☁ Cloud Connected</span></div>
+                <PhotoCarousel items={gallery} />
+                <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4"><MiniStat label="Volunteers" value={volunteerCount} /><MiniStat label="Portal visitors" value={visitors} /><MiniStat label="Alumni" value={alumniCount} /><MiniStat label="Service hours" value={hours} /></div>
               </div>
               <HomeOfficer role="Principal" name={settings.principalName} quote={settings.principalQuote} photo={settings.principalPhoto} />
             </div>
           </section>
 
-          <div className="mt-4 grid gap-4 xl:grid-cols-[1.35fr_0.65fr]">
-            <Card>
-              <CardContent className="p-4">
-                <div className="flex items-center justify-between gap-3">
-                  <h2 className="font-display text-lg text-navy">Roll</h2>
-                  <span className="text-sm tabular-nums text-muted-foreground">{roll.length}</span>
+          <section className="mt-6 grid gap-4 md:grid-cols-2">
+            <Card className="border-t-4 border-t-danger shadow-md">
+              <CardContent className="p-5">
+                <h2 className="font-display text-xl text-navy">Latest news & notices</h2>
+                <div className="feed-scroll mt-3 space-y-3">
+                  {latestNotices.length === 0 ? (
+                    <p className="py-8 text-center text-sm text-muted-foreground">No notices yet.</p>
+                  ) : (
+                    latestNotices.map((notice) => (
+                      <article key={notice.id} className="rounded-md border border-border bg-bg p-3">
+                        <div className="flex items-start justify-between gap-3">
+                          <h3 className="font-medium text-navy">{notice.title}</h3>
+                          <Badge tone={notice.audience === "all" ? "muted" : "navy"}>
+                            {notice.audience === "all" ? formatLongDate(notice.date) : notice.audience}
+                          </Badge>
+                        </div>
+                        <p className="gu mt-2 text-sm leading-relaxed text-muted-foreground">{notice.body}</p>
+                      </article>
+                    ))
+                  )}
                 </div>
-                <Input value={rollQuery} onChange={(e) => setRollQuery(e.target.value)} placeholder="Search" className="mt-3" />
-                <div className="mt-3 max-h-[32rem] space-y-1.5 overflow-y-auto">
-                  {roll.length === 0 ? (
-                    <p className="rounded-lg bg-muted/70 px-3 py-3 text-sm text-muted-foreground">
-                      કોલેજ NSS યાદી રજિસ્ટર પર સુરક્ષિત છે ({volunteerCount} volunteers). થોડી વારમાં અહીં નામ દેખાશે.
-                    </p>
+              </CardContent>
+            </Card>
+            <Card className="border-t-4 border-t-forest shadow-md">
+              <CardContent className="p-5">
+                <h2 className="font-display text-xl text-navy">Upcoming activities</h2>
+                <div className="feed-scroll mt-3 space-y-2">
+                  {upcoming.length === 0 && completed.length === 0 ? (
+                    <p className="py-8 text-center text-sm text-muted-foreground">No upcoming event.</p>
                   ) : null}
-                  {roll.map((v) => (
-                    <div key={v.volunteerId || v.id} className="flex items-center gap-3 rounded-lg px-2 py-2 hover:bg-muted/70">
-                      {v.photoUrl ? (
-                        <img src={v.photoUrl} alt="" className="h-10 w-10 rounded-full object-cover" />
-                      ) : (
-                        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-navy text-[11px] font-semibold text-paper">{initials(v.fullName) || "NSS"}</div>
-                      )}
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-medium text-navy">{v.fullName}</p>
-                        <p className="truncate text-xs text-muted-foreground">{v.volunteerId} · {v.course} {v.semester} · {v.unit}</p>
+                  {upcoming.map((event) => (
+                    <div key={event.id} className="flex items-start justify-between gap-3 rounded-md border border-border bg-bg px-3 py-2">
+                      <div>
+                        <p className="font-medium text-navy">{event.name}</p>
+                        {event.description ? <p className="mt-1 text-sm leading-relaxed text-muted-foreground">{event.description}</p> : null}
+                        <p className="text-xs text-muted-foreground">
+                          {formatLongDate(event.date)}{event.endDate && event.endDate !== event.date ? ` – ${formatLongDate(event.endDate)}` : ""} · {event.location}
+                        </p>
                       </div>
-                      <p className="font-display text-lg tabular-nums text-forest">{v.hours}</p>
+                      <Badge tone="saffron">Upcoming</Badge>
+                    </div>
+                  ))}
+                  {completed.map((event) => (
+                    <div key={event.id} className="flex items-start justify-between gap-3 rounded-md border border-border bg-bg px-3 py-2">
+                      <div>
+                        <p className="font-medium text-navy">{event.name}</p>
+                        {event.description ? <p className="mt-1 text-sm leading-relaxed text-muted-foreground">{event.description}</p> : null}
+                        <p className="text-xs text-muted-foreground">
+                          {formatLongDate(event.date)}{event.endDate && event.endDate !== event.date ? ` – ${formatLongDate(event.endDate)}` : ""} · {event.location}
+                        </p>
+                      </div>
+                      <Badge tone="forest">Completed</Badge>
                     </div>
                   ))}
                 </div>
               </CardContent>
             </Card>
+          </section>
 
-            <div className="space-y-4">
-              <Card>
-                <CardContent className="p-4">
-                  <h2 className="font-display text-lg text-navy">Notices</h2>
-                  <div className="mt-3 max-h-80 space-y-2 overflow-y-auto">
-                    {latestNotices.map((notice) => (
-                      <article key={notice.id} className="rounded-lg border border-border px-3 py-2.5">
-                        <div className="flex items-start justify-between gap-3">
-                          <h3 className="text-sm font-medium text-navy">{notice.title}</h3>
-                          <span className="shrink-0 text-[11px] text-muted-foreground">{formatLongDate(notice.date)}</span>
-                        </div>
-                        {notice.body ? <p className="gu mt-1 text-sm leading-relaxed text-muted-foreground">{notice.body}</p> : null}
-                      </article>
-                    ))}
+
+          {settings.birthdayEnabled !== false && birthdayVolunteers.length ? (
+            <section className="mt-6">
+              <Card className="border-saffron/40 shadow-md">
+                <CardContent className="p-5">
+                  <div className="flex items-center gap-2"><Cake className="size-5 text-saffron" /><h2 className="font-display text-xl text-navy">NSS Birthday Wishes</h2></div>
+                  <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                    {birthdayVolunteers.map((v) => { const days = daysUntilBirthday(v.dob, today); return <div key={v.id} className="flex items-center gap-3 rounded-xl border border-border p-3">{v.photoUrl ? <img src={v.photoUrl} alt="" className="h-12 w-12 rounded-full object-cover" /> : <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted">🎂</div>}<div><p className="font-medium text-navy">{v.fullName}</p><p className="text-xs text-muted-foreground">{days === 0 ? "Today 🎉" : `${days} day${days === 1 ? "" : "s"} to go`}</p></div></div>; })}
                   </div>
                 </CardContent>
               </Card>
-              <Card>
-                <CardContent className="p-4">
-                  <div className="flex items-center gap-2"><Cake className="size-4 text-saffron" /><h2 className="font-display text-lg text-navy">Birthdays</h2></div>
-                  <div className="mt-3 space-y-2">
-                    {birthdayVolunteers.map((v) => {
-                      const days = daysUntilBirthday(v.dob, today);
-                      return (
-                        <div key={v.id} className="flex items-center gap-3">
-                          {v.photoUrl ? <img src={v.photoUrl} alt="" className="h-10 w-10 rounded-full object-cover" /> : <div className="flex h-10 w-10 items-center justify-center rounded-full bg-navy text-[11px] font-semibold text-paper">{initials(v.fullName)}</div>}
-                          <div className="min-w-0">
-                            <p className="truncate text-sm font-medium text-navy">{v.fullName}</p>
-                            <p className="text-xs text-muted-foreground">{days === 0 ? "Today" : `${days}d`}</p>
-                          </div>
-                        </div>
-                      );
-                    })}
+            </section>
+          ) : null}
+
+          {bestId ? (
+            <section className="mt-6">
+              <Card className="border-saffron/40 shadow-md">
+                <CardContent className="flex flex-wrap items-center gap-3 p-5">
+                  <Star className="size-6 text-saffron" />
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.16em] text-saffron">Best volunteer</p>
+                    <p className="font-display text-lg text-navy">{bestName}</p>
+                    <p className="text-sm text-muted-foreground">
+                      {bestVid} · {bestUnit} · {bestHours} service hours
+                    </p>
                   </div>
                 </CardContent>
               </Card>
-              {bestId ? (
-                <Card>
-                  <CardContent className="flex items-center gap-3 p-4">
-                    <Star className="size-5 text-saffron" />
-                    <div className="min-w-0">
-                      <p className="text-[11px] uppercase tracking-[0.14em] text-saffron">Best volunteer</p>
-                      <p className="truncate font-medium text-navy">{bestName}</p>
-                      <p className="text-xs text-muted-foreground">{bestVid} · {bestHours} hours</p>
-                    </div>
-                  </CardContent>
-                </Card>
-              ) : null}
-            </div>
-          </div>
-
-          <Card className="mt-4">
-            <CardContent className="p-4">
-              <h2 className="font-display text-lg text-navy">Activities</h2>
-              <div className="mt-3 grid gap-2 md:grid-cols-2">
-                {upcoming.map((event) => (
-                  <div key={event.id} className="rounded-lg border border-border px-3 py-3">
-                    <div className="flex items-start justify-between gap-3">
-                      <p className="font-medium text-navy">{event.name}</p>
-                      <Badge tone="saffron">Upcoming</Badge>
-                    </div>
-                    <p className="mt-1 text-xs text-muted-foreground">{formatLongDate(event.date)} · {event.location}</p>
-                  </div>
-                ))}
-                {completed.map((event) => (
-                  <div key={event.id} className="rounded-lg border border-border px-3 py-3">
-                    <div className="flex items-start justify-between gap-3">
-                      <p className="font-medium text-navy">{event.name}</p>
-                      <Badge tone="forest">Done</Badge>
-                    </div>
-                    <p className="mt-1 text-xs text-muted-foreground">{formatLongDate(event.date)} · {event.location}</p>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
+            </section>
+          ) : null}
         </section>
       </AppShell>
     </>
@@ -264,22 +220,64 @@ function Home() {
 }
 
 function MiniStat({ label, value }: { label: string; value: number }) {
-  return (
-    <div className="rounded-xl border border-border bg-card px-3 py-3 text-center">
-      <p className="font-display text-2xl font-semibold tabular-nums text-navy">{value}</p>
-      <p className="mt-0.5 text-[11px] uppercase tracking-wide text-muted-foreground">{label}</p>
-    </div>
-  );
+  return <div className="rounded-xl border border-border bg-card p-3 text-center"><p className="font-display text-xl font-bold text-navy">{value}</p><p className="text-[11px] text-muted-foreground">{label}</p></div>;
 }
 
 function HomeOfficer({ role, name, quote, photo }: { role: string; name: string; quote: string; photo?: string }) {
+  return <div className="rounded-2xl border border-border bg-card p-4 text-center shadow-sm"><p className="text-xs font-bold uppercase tracking-[0.14em] text-forest">{role}</p>{photo ? <img src={photo} alt={name} className="mx-auto mt-3 h-28 w-24 rounded-2xl object-cover" /> : <div className="mx-auto mt-3 flex h-28 w-24 items-center justify-center rounded-2xl bg-navy text-3xl text-paper">👤</div>}<p className="mt-3 text-sm font-semibold text-navy">{name}</p><p className="gu mt-2 line-clamp-4 text-xs leading-relaxed text-muted-foreground">“{quote}”</p></div>;
+}
+
+function OfficerCard({
+  role,
+  name,
+  quote,
+  photo,
+  fallback,
+  gujarati,
+}: {
+  role: string;
+  name: string;
+  quote: string;
+  photo?: string;
+  fallback: string;
+  gujarati?: boolean;
+}) {
   return (
-    <div className="rounded-xl bg-bg p-3 text-center">
-      <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-forest">{role}</p>
-      {photo ? <img src={photo} alt={name} className="mx-auto mt-2 h-24 w-20 rounded-lg object-cover" /> : <div className="mx-auto mt-2 flex h-24 w-20 items-center justify-center rounded-lg bg-navy text-sm font-semibold text-paper">{initials(name) || "NSS"}</div>}
-      <p className="mt-2 text-sm font-semibold text-navy">{name}</p>
-      {quote ? <p className="gu mt-1 line-clamp-3 text-xs leading-relaxed text-muted-foreground">“{quote}”</p> : null}
-    </div>
+    <Card className="shadow-md">
+      <CardContent className="flex flex-col gap-4 p-5 sm:flex-row sm:items-start">
+        <div className="mx-auto h-36 w-28 shrink-0 overflow-hidden rounded-md border-4 border-navy/15 bg-navy sm:mx-0">
+          {photo ? (
+            <img src={photo} alt={name} className="h-full w-full object-cover" />
+          ) : (
+            <div className="flex h-full items-center justify-center font-display text-paper">{fallback}</div>
+          )}
+        </div>
+        <div>
+          <p className="text-xs uppercase tracking-[0.16em] text-forest">{role}</p>
+          <p className="font-display text-lg text-navy">{name}</p>
+          <p className={`${gujarati ? "gu " : ""}mt-2 text-sm leading-relaxed text-muted-foreground`}>“{quote}”</p>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 
+function Stat({
+  icon: Icon,
+  label,
+  value,
+}: {
+  icon: typeof Users;
+  label: string;
+  value: number;
+}) {
+  return (
+    <Card className="shadow-md">
+      <CardContent className="p-4 text-center md:p-5">
+        <Icon className="mx-auto size-4 text-forest" />
+        <p className="mt-2 font-display text-3xl tabular-nums text-navy">{value}</p>
+        <p className="mt-1 text-xs uppercase tracking-wider text-muted-foreground">{label}</p>
+      </CardContent>
+    </Card>
+  );
+}

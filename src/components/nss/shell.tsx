@@ -22,15 +22,15 @@ export function AppShell({
   useEffect(() => {
     try {
       if (sessionStorage.getItem(STORAGE_VISITOR_MARK)) return;
+      sessionStorage.setItem(STORAGE_VISITOR_MARK, "1");
       void fetch("/api/nss-cloud", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ action: "visit" }),
       })
         .then((res) => res.json())
-        .then((data: { ok?: boolean; visitors?: number }) => {
-          if (data.ok && typeof data.visitors === "number" && data.visitors > 0) {
-            sessionStorage.setItem(STORAGE_VISITOR_MARK, "1");
+        .then((data: { visitors?: number }) => {
+          if (typeof data.visitors === "number" && data.visitors > 0) {
             useNssStore.setState({ visitors: data.visitors });
           }
         })
@@ -45,7 +45,7 @@ export function AppShell({
       <BrandHeader eyebrow={eyebrow} compact={compactHeader} />
       <TricolourStrip />
       <PageNav showDashboard={showDashboard} current={current} />
-      <main className="min-w-0 flex-1 pb-20 md:pb-0">{children}</main>
+      <main className="flex-1">{children}</main>
       <SiteFooter />
     </div>
   );

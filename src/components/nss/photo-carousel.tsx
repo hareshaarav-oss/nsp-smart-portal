@@ -3,24 +3,10 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import { MediaThumb } from "@/components/nss/media-thumb";
 import type { GalleryItem } from "@/lib/nss/types";
 
-const CAMPUS_PHOTOS: GalleryItem[] = [
-  { id: "gal-plantation", src: "/images/gallery-plantation.jpg", caption: "Tree Plantation", date: "2026-08-05", eventName: "Tree Plantation", kind: "photo" },
-  { id: "gal-plantation-2", src: "/images/gallery-plantation-2.jpg", caption: "Plantation drive", date: "2026-08-05", eventName: "Tree Plantation", kind: "photo" },
-  { id: "gal-swachhata", src: "/images/gallery-swachhata.jpg", caption: "Swachhata Abhiyan", date: "2026-10-02", eventName: "Swachhata Abhiyan", kind: "photo" },
-];
-
 export function PhotoCarousel({ items }: { items: GalleryItem[] }) {
-  const live = items.filter((item) => item.src || item.mediaKey);
-  const photos = (live.length ? live : CAMPUS_PHOTOS).slice(0, 16);
+  const photos = items.filter((item) => item.src || item.mediaKey).slice(0, 16);
   const [index, setIndex] = useState(0);
   const [paused, setPaused] = useState(false);
-  const [gaveUp, setGaveUp] = useState(false);
-
-  useEffect(() => {
-    if (photos.length > 0) return;
-    const timer = window.setTimeout(() => setGaveUp(true), 8000);
-    return () => window.clearTimeout(timer);
-  }, [photos.length]);
 
   useEffect(() => {
     if (photos.length < 2 || paused) return;
@@ -37,9 +23,7 @@ export function PhotoCarousel({ items }: { items: GalleryItem[] }) {
   if (photos.length === 0) {
     return (
       <div className="flex h-56 items-center justify-center rounded-lg bg-navy text-sm text-paper/80 md:h-80">
-        {gaveUp
-          ? "Photographs appear here after they are uploaded from the gallery desk."
-          : "Loading photographs…"}
+        Photographs appear here after they are uploaded from the gallery desk.
       </div>
     );
   }

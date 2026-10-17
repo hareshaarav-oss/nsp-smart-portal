@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { COLLEGE_LOGO, NSS_LOGO } from "@/lib/nss/constants";
 import { useNssStore } from "@/lib/nss/store";
 
-const DURATION_MS = 1200;
+const DURATION_MS = 10000;
 export const SPLASH_SEEN_KEY = "nsp-splash-seen";
 
 export function markSplashSeen() {
@@ -44,12 +44,17 @@ export function SplashScreen({ onDone }: { onDone: () => void }) {
           <OfficerMini title="Programme Officer" name={settings.poName} photo={settings.poPhoto} />
           <div className="text-center">
             <div className="flex items-center justify-center gap-4"><img src={settings.collegeLogo || COLLEGE_LOGO} alt="College emblem" className="h-20 w-20 object-contain rounded-full bg-white/90 p-1 md:h-24 md:w-24" /><img src={settings.nssLogo || NSS_LOGO} alt="NSS emblem" className="h-28 w-28 object-contain md:h-36 md:w-36" /></div>
-            <p className="mt-5 text-sm font-semibold uppercase tracking-[0.22em] text-saffron">NSS Smart Portal</p>
+            <p className="mt-5 text-sm font-semibold uppercase tracking-[0.22em] text-saffron">Welcome message</p>
             <h1 className="mt-1 font-display text-4xl font-bold md:text-6xl">NSS Smart Portal</h1>
             <p className="mt-3 text-lg font-semibold md:text-xl">{settings.portalName}</p>
             <p className="mt-2 text-sm text-paper/75">Created by Dr. Hareshkumar I. Prajapati</p>
             <p className="mt-4 text-base font-semibold md:text-lg">{settings.collegeName}</p>
-            <p className="mt-4 text-sm text-paper/70">{settings.sloganEn}</p>
+            <p className="mt-2 text-sm text-paper/70">{settings.sloganEn} · {settings.sloganGu}</p>
+            <div className="mt-6 flex flex-wrap justify-center gap-2 text-xs">
+              <span className="rounded-full border border-white/20 px-3 py-1.5">☁ Cloud Ready</span>
+              <span className="rounded-full border border-white/20 px-3 py-1.5">📱 Installable PWA</span>
+              <span className="rounded-full border border-white/20 px-3 py-1.5">🧠 Smart Portal</span>
+            </div>
           </div>
         </div>
         <div className="mx-auto mt-8 w-full max-w-md">
@@ -62,5 +67,5 @@ export function SplashScreen({ onDone }: { onDone: () => void }) {
 }
 
 function OfficerMini({ title, name, photo }: { title: string; name: string; photo?: string }) {
-  return <div className="rounded-2xl border border-white/15 bg-white/5 p-4 text-center backdrop-blur-sm"><p className="text-xs font-semibold uppercase tracking-[0.14em] text-saffron">{title}</p>{photo ? <img src={photo} alt={name} className="mx-auto mt-3 h-24 w-20 rounded-xl object-cover" /> : <div className="mx-auto mt-3 flex h-24 w-20 items-center justify-center rounded-xl bg-white/10 text-sm font-semibold">{name.slice(0, 1)}</div>}<p className="mt-3 text-sm font-semibold">{name}</p></div>;
+  return <div className="rounded-2xl border border-white/15 bg-white/5 p-4 text-center backdrop-blur-sm"><p className="text-xs font-semibold uppercase tracking-[0.14em] text-saffron">{title}</p>{photo ? <img src={photo} alt={name} className="mx-auto mt-3 h-24 w-20 rounded-xl object-cover" /> : <div className="mx-auto mt-3 flex h-24 w-20 items-center justify-center rounded-xl bg-white/10 text-2xl">👤</div>}<p className="mt-3 text-sm font-semibold">{name}</p></div>;
 }
