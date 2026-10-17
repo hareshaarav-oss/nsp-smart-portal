@@ -3,8 +3,15 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import { MediaThumb } from "@/components/nss/media-thumb";
 import type { GalleryItem } from "@/lib/nss/types";
 
+const CAMPUS_PHOTOS: GalleryItem[] = [
+  { id: "gal-plantation", src: "/images/gallery-plantation.jpg", caption: "Tree Plantation", date: "2026-08-05", eventName: "Tree Plantation", kind: "photo" },
+  { id: "gal-plantation-2", src: "/images/gallery-plantation-2.jpg", caption: "Plantation drive", date: "2026-08-05", eventName: "Tree Plantation", kind: "photo" },
+  { id: "gal-swachhata", src: "/images/gallery-swachhata.jpg", caption: "Swachhata Abhiyan", date: "2026-10-02", eventName: "Swachhata Abhiyan", kind: "photo" },
+];
+
 export function PhotoCarousel({ items }: { items: GalleryItem[] }) {
-  const photos = items.filter((item) => item.src || item.mediaKey).slice(0, 16);
+  const live = items.filter((item) => item.src || item.mediaKey);
+  const photos = (live.length ? live : CAMPUS_PHOTOS).slice(0, 16);
   const [index, setIndex] = useState(0);
   const [paused, setPaused] = useState(false);
   const [gaveUp, setGaveUp] = useState(false);

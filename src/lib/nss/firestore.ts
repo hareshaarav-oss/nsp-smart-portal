@@ -17,6 +17,15 @@ const CLOUD_FRESH_MS = 30 * 60 * 1000;
 let cloudCache: { at: number; data: CloudPortal; withGallery: boolean } | null = null;
 let cloudInflight: Promise<CloudPortal | null> | null = null;
 let cloudInflightGallery = false;
+let quotaBlockedUntil = 0;
+
+function noteQuota() {
+  quotaBlockedUntil = Date.now() + 10 * 60 * 1000;
+}
+
+export function collegeQuotaBlocked() {
+  return Date.now() < quotaBlockedUntil;
+}
 
 function invalidateCollegeCache() {
   cloudCache = null;
@@ -110,13 +119,16 @@ function collectionUrl(name: string, token?: string, opts?: { photos?: boolean }
   return `${FIRESTORE_BASE}/${name}?${params.toString()}`;
 }
 
-async function listCollection(name: string, opts?: { photos?: boolean; strict?: boolean }) {
+async function listCollection(name: string, opts?: { photos?: boolean; strict?: boolean; maxDocs?: number }) {
+  if (collegeQuotaBlocked()) throw new Error("The college register is busy. Try again in a little while.");
   const docs: Record<string, unknown>[] = [];
+  const maxDocs = opts?.maxDocs ?? (name === "attendance" ? 2500 : name === "gallery" ? 60 : 400);
   let url: string | "" = collectionUrl(name, undefined, opts);
-  while (url) {
+  while (url && docs.length < maxDocs) {
     const res = await fetch(url);
     if (!res.ok) {
       if (res.status === 429 || res.status === 503) {
+        noteQuota();
         throw new Error("The college register is busy. Try again in a little while.");
       }
       if (opts?.strict) throw new Error(res.status === 429 ? "The college roll is busy. Try delete once more in a moment." : "Could not read attendance.");
@@ -133,8 +145,10 @@ async function listCollection(name: string, opts?: { photos?: boolean; strict?: 
 }
 
 async function getDocument(path: string) {
+  if (collegeQuotaBlocked()) throw new Error("The college register is busy. Try again in a little while.");
   const res = await fetch(`${FIRESTORE_BASE}/${path}`);
   if (res.status === 429 || res.status === 503) {
+    noteQuota();
     throw new Error("The college register is busy. Try again in a little while.");
   }
   if (!res.ok) return null;
@@ -180,14 +194,69 @@ export type CloudPortal = Pick<
   "volunteers" | "events" | "attendance" | "notices" | "gallery" | "visitors"
 > & { alumniCount: number; serviceHours: number };
 
+async function runQuery(structuredQuery: Record<string, unknown>) {
+  if (collegeQuotaBlocked()) throw new Error("The college register is busy. Try again in a little while.");
+  const res = await fetch(`${FIRESTORE_BASE}:runQuery`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ structuredQuery }),
+  });
+  if (res.status === 429 || res.status === 503) {
+    noteQuota();
+    throw new Error("The college register is busy. Try again in a little while.");
+  }
+  if (!res.ok) return null;
+  const rows = (await res.json()) as { document?: { name?: string; fields?: Record<string, FsValue> } }[];
+  const docs: Record<string, unknown>[] = [];
+  for (const row of rows) {
+    if (row.document?.fields || row.document?.name) docs.push(decodeDoc(row.document));
+  }
+  return docs;
+}
+
+async function listPublicNotices() {
+  try {
+    const queried = await runQuery({
+      from: [{ collectionId: "notices" }],
+      where: {
+        fieldFilter: {
+          field: { fieldPath: "title" },
+          op: "NOT_IN",
+          value: {
+            arrayValue: {
+              values: [{ stringValue: "NSS_CHAT_INTERNAL" }, { stringValue: "NSS_CHAT_AUTH" }],
+            },
+          },
+        },
+      },
+      limit: 80,
+    });
+    if (queried) {
+      return queried.filter((n) => {
+        const kind = text(n.kind);
+        const title = text(n.title);
+        return kind !== "chat" && kind !== "chat-auth" && title !== "NSS_CHAT_INTERNAL" && title !== "NSS_CHAT_AUTH";
+      });
+    }
+  } catch (error) {
+    if (collegeQuotaBlocked()) throw error;
+  }
+  const docs = await listCollection("notices", { maxDocs: 80 });
+  return docs.filter((n) => {
+    const kind = text(n.kind);
+    const title = text(n.title);
+    return kind !== "chat" && kind !== "chat-auth" && title !== "NSS_CHAT_INTERNAL" && title !== "NSS_CHAT_AUTH";
+  });
+}
+
 async function loadCollegeCloudFresh(opts: { gallery?: boolean; photos?: boolean } = {}): Promise<CloudPortal | null> {
   const [students, eventDocs, noticeDocs, attendanceDocs, galleryDocs, stats, visitorsDoc] =
     await Promise.all([
       listCollection("students", { photos: opts.photos !== false }),
       listCollection("events"),
-      listCollection("notices"),
-      listCollection("attendance"),
-      opts.gallery === false ? Promise.resolve([]) : listCollection("gallery"),
+      listPublicNotices(),
+      listCollection("attendance", { maxDocs: 2500 }),
+      opts.gallery === false ? Promise.resolve([]) : listCollection("gallery", { maxDocs: 60 }),
       getDocument("portalSettings/publicStats"),
       getDocument("portalSettings/visitors"),
     ]);
@@ -375,6 +444,10 @@ async function loadCollegeCloudFresh(opts: { gallery?: boolean; photos?: boolean
 }
 
 export async function loadCollegeCloud(opts: { gallery?: boolean; photos?: boolean } = {}): Promise<CloudPortal | null> {
+  if (collegeQuotaBlocked()) {
+    if (cloudCache) return cloudCache.data;
+    throw new Error("The college register is busy. Try again in a little while.");
+  }
   const wantGallery = opts.gallery !== false;
   const now = Date.now();
   if (cloudCache && now - cloudCache.at < CLOUD_FRESH_MS && (cloudCache.withGallery || !wantGallery)) {
@@ -410,6 +483,188 @@ export async function loadCollegeCloud(opts: { gallery?: boolean; photos?: boole
   return cloudInflight;
 }
 
+const BOARD_TTL_MS = 12 * 60 * 60 * 1000;
+const PUBLIC_MEMORY_MS = 10 * 60 * 1000;
+let publicCache: { at: number; data: CloudPortal } | null = null;
+let officerCache: { at: number; data: CloudPortal } | null = null;
+
+function publicVolunteerId(v: { id: string; volunteerId?: string }) {
+  const phone = digits(v.id);
+  if (phone.length >= 8 && v.volunteerId) return v.volunteerId;
+  return v.id || v.volunteerId || "";
+}
+
+function publicBoardShape(data: CloudPortal): CloudPortal {
+  const gallery: CloudPortal["gallery"] = [];
+  let galleryBytes = 0;
+  for (const item of data.gallery) {
+    if (!item.src || item.src.length > 120000) continue;
+    galleryBytes += item.src.length;
+    if (galleryBytes > 700000) break;
+    gallery.push(item);
+  }
+  const idMap = new Map(data.volunteers.map((v) => [v.id, publicVolunteerId(v)]));
+  return {
+    ...data,
+    gallery,
+    attendance: data.attendance.map((row) => ({
+      ...row,
+      volunteerId: idMap.get(row.volunteerId) || "",
+    })).filter((row) => row.volunteerId && digits(row.volunteerId).length < 8),
+    volunteers: data.volunteers.map((v) => ({
+      ...v,
+      id: publicVolunteerId(v),
+      mobile: "",
+      email: "",
+      loginPassword: "",
+      address: "",
+      bloodGroup: "",
+      parentMobile: "",
+      fatherName: "",
+      emergencyContact: "",
+      abcId: "",
+      myBharatId: "",
+      photoUrl: v.photoUrl && v.photoUrl.startsWith("https://") && v.photoUrl.length < 8000 ? v.photoUrl : "",
+    })),
+  };
+}
+
+export async function markBoardStale() {
+  invalidateCollegeCache();
+  publicCache = null;
+  officerCache = null;
+  if (collegeQuotaBlocked()) return;
+  try {
+    await fetch(`${FIRESTORE_BASE}/portalSettings/board?updateMask.fieldPaths=stale`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ fields: { stale: { booleanValue: true } } }),
+    });
+  } catch {
+    /* the board expires on its own */
+  }
+}
+
+async function readBoard(): Promise<CloudPortal | null> {
+  if (collegeQuotaBlocked()) return publicCache?.data ?? null;
+  let doc: Record<string, unknown> | null = null;
+  try {
+    doc = await getDocument("portalSettings/board");
+  } catch {
+    return publicCache?.data ?? null;
+  }
+  if (!doc || doc.stale === true) return null;
+  const updatedAt = Date.parse(text(doc.updatedAt));
+  if (!Number.isFinite(updatedAt) || Date.now() - updatedAt > BOARD_TTL_MS) return null;
+  try {
+    const parsed = JSON.parse(text(doc.payload)) as CloudPortal;
+    if (!parsed || !Array.isArray(parsed.volunteers) || parsed.volunteers.length < 20) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+async function writeBoard(data: CloudPortal) {
+  if (data.volunteers.length < 20 || collegeQuotaBlocked()) return;
+  const payload = JSON.stringify(publicBoardShape(data));
+  if (payload.length > 900000) return;
+  const fields = {
+    payload: { stringValue: payload },
+    stale: { booleanValue: false },
+    updatedAt: { stringValue: new Date().toISOString() },
+    volunteers: { integerValue: String(data.volunteers.length) },
+  };
+  const patch = await fetch(
+    `${FIRESTORE_BASE}/portalSettings/board?updateMask.fieldPaths=payload&updateMask.fieldPaths=stale&updateMask.fieldPaths=updatedAt&updateMask.fieldPaths=volunteers`,
+    {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ fields }),
+    },
+  );
+  if (patch.status === 429 || patch.status === 503) {
+    noteQuota();
+    return;
+  }
+  if (patch.ok) return;
+  await fetch(`${FIRESTORE_BASE}/portalSettings?documentId=board`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ fields }),
+  });
+}
+
+export async function loadPublicBoard(opts: { gallery?: boolean } = {}): Promise<CloudPortal | null> {
+  const now = Date.now();
+  if (publicCache && now - publicCache.at < PUBLIC_MEMORY_MS) return publicCache.data;
+  if (!collegeQuotaBlocked()) {
+    const board = await readBoard();
+    if (board) {
+      publicCache = { at: Date.now(), data: board };
+      return board;
+    }
+  }
+  if (collegeQuotaBlocked()) return publicCache?.data ?? null;
+  const fresh = await loadCollegeCloud({ gallery: opts.gallery !== false, photos: false });
+  if (fresh && fresh.volunteers.length >= 20) {
+    publicCache = { at: Date.now(), data: fresh };
+    void writeBoard(fresh).catch(() => undefined);
+  }
+  return fresh && fresh.volunteers.length > 0 ? fresh : publicCache?.data ?? null;
+}
+
+export async function loadOfficerRoll(): Promise<CloudPortal | null> {
+  if (officerCache && Date.now() - officerCache.at < CLOUD_FRESH_MS) return officerCache.data;
+  const board = await loadPublicBoard({ gallery: false });
+  if (board && board.volunteers.length >= 20 && !collegeQuotaBlocked()) {
+    try {
+      const students = await listCollection("students", { photos: false, maxDocs: 400 });
+      if (students.length >= 20) {
+        const byVid = new Map(students.map((s) => [text(s.volunteerId).toLowerCase(), s]));
+        const byName = new Map(students.map((s) => [text(s.fullName).toLowerCase(), s]));
+        const volunteers = board.volunteers.map((v) => {
+          const raw = byVid.get(v.volunteerId.toLowerCase()) || byName.get(v.fullName.toLowerCase());
+          if (!raw) return v;
+          const mobile = digits(raw.mobile);
+          return {
+            ...v,
+            mobile,
+            email: text(raw.email),
+            fatherName: text(raw.fatherName),
+            address: text(raw.address),
+            bloodGroup: text(raw.bloodGroup),
+            parentMobile: text(raw.parentMobile),
+            emergencyContact: text(raw.emergencyContact),
+            abcId: text(raw.abcId),
+            myBharatId: text(raw.myBharatId),
+            loginPassword: text(raw.password),
+          };
+        });
+        const merged = { ...board, volunteers };
+        officerCache = { at: Date.now(), data: merged };
+        return merged;
+      }
+    } catch (error) {
+      if (!collegeQuotaBlocked() && !(error instanceof Error && /busy|quota|429/i.test(error.message))) throw error;
+    }
+  }
+  if (board && board.volunteers.length >= 20) return board;
+  if (collegeQuotaBlocked()) return board;
+  try {
+    const full = await loadCollegeCloud({ gallery: false, photos: false });
+    if (full && full.volunteers.length >= 20) {
+      officerCache = { at: Date.now(), data: full };
+      void writeBoard(full).catch(() => undefined);
+      return full;
+    }
+    if (full && full.volunteers.length > 0) return full;
+  } catch (error) {
+    if (!collegeQuotaBlocked() && !(error instanceof Error && /busy|quota|429/i.test(error.message))) throw error;
+  }
+  return board;
+}
+
 function encodeValue(value: unknown): Record<string, unknown> {
   if (value === null || value === undefined || value === "") return { nullValue: null };
   if (typeof value === "boolean") return { booleanValue: value };
@@ -423,15 +678,21 @@ export function safePhoto(value: unknown) {
   return "";
 }
 
+let brandCache: { at: number; value: { poPhoto: string; principalPhoto: string } } | null = null;
+
 export async function readBrandPhotos() {
+  if (brandCache && Date.now() - brandCache.at < CLOUD_FRESH_MS) return brandCache.value;
+  if (collegeQuotaBlocked()) return brandCache?.value ?? { poPhoto: "", principalPhoto: "" };
   try {
     const doc = await getDocument("portalSettings/brand");
-    return {
+    const value = {
       poPhoto: safePhoto(doc?.poPhoto),
       principalPhoto: safePhoto(doc?.principalPhoto),
     };
+    brandCache = { at: Date.now(), value };
+    return value;
   } catch {
-    return { poPhoto: "", principalPhoto: "" };
+    return brandCache?.value ?? { poPhoto: "", principalPhoto: "" };
   }
 }
 
@@ -463,6 +724,7 @@ let rosterCache: { at: number; rows: { docId: string; volunteerId: string; name:
 let rosterInflight: Promise<{ docId: string; volunteerId: string; name: string }[]> | null = null;
 
 export async function listPhotoRoster() {
+  if (collegeQuotaBlocked()) return rosterCache?.rows ?? [];
   const now = Date.now();
   if (rosterCache && now - rosterCache.at < CLOUD_FRESH_MS) return rosterCache.rows;
   if (rosterInflight) return rosterInflight;
@@ -612,6 +874,7 @@ export async function patchStudent(docId: string, values: Record<string, unknown
     const body = await res.text();
     throw new Error(body.slice(0, 180) || "Could not update the student record");
   }
+  void markBoardStale();
 }
 
 export async function saveStudentToCloud(input: Record<string, unknown>) {
@@ -666,6 +929,7 @@ export async function saveStudentToCloud(input: Record<string, unknown>) {
     if (res.status === 409) throw new Error("This mobile number is already on the NSS roll.");
     throw new Error(body.slice(0, 180) || "Could not save registration to cloud");
   }
+  void markBoardStale();
   return {
     ok: true,
     id: mobile,
@@ -779,6 +1043,7 @@ export async function clearAttendanceCloud(eventName = "", opts?: { all?: boolea
   } catch {
     hours = 0;
   }
+  void markBoardStale();
   return { removed, serviceHours: hours };
 }
 
@@ -830,6 +1095,7 @@ export async function saveAttendanceMarks(rows: { mobile: string; name: string; 
     const results = await Promise.all(batch.map((row) => saveAttendanceMark(row).catch(() => false)));
     saved += results.filter(Boolean).length;
   }
+  if (saved > 0) void markBoardStale();
   return saved;
 }
 
@@ -885,15 +1151,26 @@ export async function readChatPass(token: string) {
   };
 }
 
+let peopleCache: { at: number; key: string; rows: ChatPerson[] } | null = null;
+
 export async function listChatPeople(opts?: { includeMobile?: boolean }): Promise<ChatPerson[]> {
+  const key = opts?.includeMobile ? "private" : "public";
+  if (peopleCache && peopleCache.key === key && Date.now() - peopleCache.at < 10 * 60 * 1000) return peopleCache.rows;
+  if (collegeQuotaBlocked()) return peopleCache?.rows ?? [];
   const params = new URLSearchParams({ pageSize: "300" });
   const fields = ["fullName", "firstName", "middleName", "surname", "volunteerId", "unit", "nssRole", "status", "createdAt"];
   if (opts?.includeMobile) fields.push("mobile");
   for (const field of fields) params.append("mask.fieldPaths", field);
   const docs: Record<string, unknown>[] = [];
   let url: string | "" = `${FIRESTORE_BASE}/students?${params}`;
-  while (url) {
+  let page = 0;
+  while (url && page < 2) {
+    page += 1;
     const res = await fetch(url);
+    if (res.status === 429 || res.status === 503) {
+      noteQuota();
+      return peopleCache?.rows ?? [];
+    }
     if (!res.ok) break;
     const json = (await res.json()) as { documents?: { name?: string; fields?: Record<string, FsValue> }[]; nextPageToken?: string };
     for (const doc of json.documents ?? []) docs.push(decodeDoc(doc));
@@ -907,7 +1184,7 @@ export async function listChatPeople(opts?: { includeMobile?: boolean }): Promis
     (a, b) => isoDate(a.createdAt).localeCompare(isoDate(b.createdAt)) || text(a.fullName).localeCompare(text(b.fullName), "en", { sensitivity: "base" }),
   );
   const numbers = rollNumbers(sorted);
-  return sorted
+  const rows = sorted
     .map((s) => {
       const n = numbers.get(s) ?? 1;
       const assembled = [s.firstName, s.middleName, s.surname].map(text).filter(Boolean).join(" ");
@@ -925,22 +1202,58 @@ export async function listChatPeople(opts?: { includeMobile?: boolean }): Promis
       return person;
     })
     .filter((person) => person.name);
+  if (rows.length) peopleCache = { at: Date.now(), key, rows };
+  return rows;
 }
 
-export async function listRecentChatMessages(limit = 300): Promise<ChatRow[]> {
-  const docs = await listCollection("notices");
-  return docs
-    .filter((row) => text(row.kind) === "chat" && text(row.threadId) && text(row.text))
-    .map((row) => ({
-      id: text(row._id),
-      threadId: text(row.threadId),
-      text: text(row.text).slice(0, 1000),
-      senderId: text(row.senderId),
-      senderName: text(row.senderName).slice(0, 80),
-      createdAt: text(row.createdAt),
-    }))
-    .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
-    .slice(-limit);
+let chatCache: { at: number; rows: ChatRow[] } | null = null;
+
+export async function listRecentChatMessages(limit = 80): Promise<ChatRow[]> {
+  if (chatCache && Date.now() - chatCache.at < 3 * 60 * 1000) return chatCache.rows.slice(-limit);
+  if (collegeQuotaBlocked()) return chatCache?.rows.slice(-limit) ?? [];
+  const mapRows = (docs: Record<string, unknown>[]) =>
+    docs
+      .filter((row) => text(row.kind) === "chat" && text(row.threadId) && text(row.text))
+      .map((row) => ({
+        id: text(row._id),
+        threadId: text(row.threadId),
+        text: text(row.text).slice(0, 1000),
+        senderId: text(row.senderId),
+        senderName: text(row.senderName).slice(0, 80),
+        createdAt: text(row.createdAt),
+      }))
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+      .slice(-limit);
+  try {
+    const ordered = await runQuery({
+      from: [{ collectionId: "notices" }],
+      where: {
+        fieldFilter: {
+          field: { fieldPath: "kind" },
+          op: "EQUAL",
+          value: { stringValue: "chat" },
+        },
+      },
+      orderBy: [{ field: { fieldPath: "createdAt" }, direction: "DESCENDING" }],
+      limit,
+    });
+    const docs = ordered ?? (await runQuery({
+      from: [{ collectionId: "notices" }],
+      where: {
+        fieldFilter: {
+          field: { fieldPath: "kind" },
+          op: "EQUAL",
+          value: { stringValue: "chat" },
+        },
+      },
+      limit,
+    })) ?? [];
+    const rows = mapRows(docs);
+    if (rows.length) chatCache = { at: Date.now(), rows };
+    return rows.length ? rows : chatCache?.rows.slice(-limit) ?? [];
+  } catch {
+    return chatCache?.rows.slice(-limit) ?? [];
+  }
 }
 
 export async function saveChatMessage(input: { threadId: string; text: string; senderId: string; senderName: string }) {
@@ -955,5 +1268,6 @@ export async function saveChatMessage(input: { threadId: string; text: string; s
     senderName: input.senderName.slice(0, 80),
     createdAt,
   });
+  chatCache = null;
   return { id, ...input, text: input.text.slice(0, 1000), createdAt };
 }

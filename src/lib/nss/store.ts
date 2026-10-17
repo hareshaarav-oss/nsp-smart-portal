@@ -42,6 +42,7 @@ type CloudSlice =
     alumniCount?: number;
     serviceHours?: number;
     keepPrivate?: boolean;
+    degraded?: boolean;
     brand?: { poPhoto?: string; principalPhoto?: string };
   };
 
@@ -695,6 +696,15 @@ export const useNssStore =
 
         applyCloud: (cloud) => {
           const current = get();
+          if (cloud.degraded) {
+            const next: Partial<PortalState> = {};
+            if (typeof cloud.visitors === "number" && cloud.visitors > current.visitors) next.visitors = cloud.visitors;
+            if (typeof cloud.serviceHours === "number" && cloud.serviceHours > (current.settings.reportedServiceHours ?? 0)) {
+              next.settings = { ...current.settings, reportedServiceHours: cloud.serviceHours };
+            }
+            if (Object.keys(next).length) set(next);
+            return;
+          }
           const officer =
             Boolean(cloud.keepPrivate) ||
             isOfficer(
@@ -1047,30 +1057,6 @@ export const useNssStore =
                     g.src,
                 ),
               ]);
-          } else if (
-            (
-              current.gallery ??
-              []
-            ).some((g) =>
-              g.src?.startsWith(
-                "/images/gallery-",
-              ),
-            )
-          ) {
-            next.gallery =
-              (
-                current.gallery ??
-                []
-              ).filter(
-                (g) =>
-                  g.mediaKey ||
-                  (
-                    g.src &&
-                    !g.src.startsWith(
-                      "/images/gallery-",
-                    )
-                  ),
-              );
           }
 
           if (

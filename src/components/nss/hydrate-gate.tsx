@@ -184,6 +184,7 @@ type CloudBody = {
   alumniCount?: number;
   serviceHours?: number;
   brand?: { poPhoto?: string; principalPhoto?: string };
+  degraded?: boolean;
 };
 
 function applyBody(cloud: CloudBody) {
@@ -199,6 +200,7 @@ function applyBody(cloud: CloudBody) {
     alumniCount: cloud.alumniCount,
     serviceHours: cloud.serviceHours,
     keepPrivate: Boolean(cloud.private),
+    degraded: Boolean(cloud.degraded),
     brand: cloud.brand,
   });
   return Array.isArray(cloud.volunteers) && cloud.volunteers.length >= 20;
@@ -210,29 +212,37 @@ export function HydrateGate({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let cancelled = false;
+    let nextPull = 0;
+    let photosStarted = false;
 
     async function pullLive() {
-      if (cancelled || document.hidden) return;
+      if (cancelled || document.hidden || Date.now() < nextPull) return;
       const token = useSessionStore.getState().session?.chatToken || "";
-      const res = await fetch("/api/nss-cloud", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        cache: "no-store",
-        body: JSON.stringify({ action: "roll-sync", ...(token ? { chatToken: token } : {}) }),
-      });
+      const res = token
+        ? await fetch("/api/nss-cloud", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ action: "roll-sync", chatToken: token }),
+          })
+        : await fetch("/api/nss-cloud");
       const cloud = (await res.json()) as CloudBody;
+      if (cloud.degraded || !res.ok) nextPull = Date.now() + 10 * 60 * 1000;
+      else nextPull = Date.now() + 3 * 60 * 1000;
       if (!cancelled) {
         applyBody(cloud);
         applyCachedPhotos();
+        if (!photosStarted && useNssStore.getState().volunteers.length >= 20) {
+          photosStarted = true;
+          void pullPhotos().catch(() => undefined);
+        }
       }
     }
 
     async function pullVisitors() {
-      if (cancelled || document.hidden) return;
+      if (cancelled || document.hidden || useNssStore.getState().visitors > 0) return;
       const res = await fetch("/api/nss-cloud", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        cache: "no-store",
         body: JSON.stringify({ action: "visitors" }),
       });
       const data = (await res.json()) as { ok?: boolean; visitors?: number };
@@ -285,35 +295,17 @@ export function HydrateGate({ children }: { children: ReactNode }) {
       } catch {
         setStatus("Could not reach the college roll. Showing saved data.");
       }
-      if (useNssStore.getState().volunteers.length >= 20) {
+      if (useNssStore.getState().volunteers.length >= 20 && !photosStarted) {
+        photosStarted = true;
         void pullPhotos().catch(() => undefined);
       }
       void pullVisitors().catch(() => undefined);
-      void fetch("/api/nss-cloud?gallery=1", { cache: "no-store" })
-        .then((res) => res.json())
-        .then((cloud: CloudBody) => {
-          if (!cancelled) {
-            applyBody(cloud);
-            applyCachedPhotos();
-          }
-        })
-        .catch(() => undefined);
     })();
 
-    let ticks = 0;
     const timer = window.setInterval(() => {
-      if (document.hidden) return;
-      ticks += 1;
-      void pullVisitors().catch(() => undefined);
-      void pullLive()
-        .catch(() => undefined)
-        .then(() => {
-          if (document.hidden || ticks % 5 !== 0) return;
-          if (useNssStore.getState().volunteers.length >= 20) void pullPhotos().catch(() => undefined);
-        });
+      void pullLive().catch(() => undefined);
     }, 60000);
     const wake = () => {
-      void pullVisitors().catch(() => undefined);
       void pullLive().catch(() => undefined);
     };
     document.addEventListener("visibilitychange", wake);

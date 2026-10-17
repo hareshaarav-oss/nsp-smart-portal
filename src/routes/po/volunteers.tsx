@@ -271,7 +271,7 @@ function SmartRecord({ volunteerId, onClose }: { volunteerId: string; onClose: (
       if (!stop && ok) setSyncedAt(Date.now());
     }
     void pull();
-    const timer = window.setInterval(() => void pull(), 30000);
+    const timer = window.setInterval(() => void pull(), 180000);
     const tick = window.setInterval(() => setTick((n) => n + 1), 1000);
     return () => {
       stop = true;

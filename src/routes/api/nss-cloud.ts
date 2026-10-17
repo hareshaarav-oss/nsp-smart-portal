@@ -1,6 +1,5 @@
+import { loadCollegeCloud, loadPublicBoard, loadOfficerRoll, collegeQuotaBlocked, saveStudentToCloud, incrementVisitors, readVisitorCount, patchStudent, safePhoto, knownRole, issueChatPass, readChatPass, listRecentChatMessages, saveChatMessage, listChatPeople, clearAttendanceCloud, readBrandPhotos, saveBrandPhotos, listPhotoRoster, readPhotoBatch, saveAttendanceMarks } from "@/lib/nss/firestore";
 import { createFileRoute } from "@tanstack/react-router";
-import { loadCollegeCloud, saveStudentToCloud, incrementVisitors, readVisitorCount, patchStudent, safePhoto, knownRole, issueChatPass, readChatPass, listRecentChatMessages, saveChatMessage, listChatPeople, clearAttendanceCloud, readBrandPhotos, saveBrandPhotos, listPhotoRoster, readPhotoBatch, saveAttendanceMarks } from "@/lib/nss/firestore";
-import { createSeedState } from "@/lib/nss/seed";
 
 type Row = Record<string, unknown>;
 
@@ -8,19 +7,19 @@ function appBuild() {
   return process.env.VERCEL_GIT_COMMIT_SHA || "";
 }
 
-function registerFallback(includeGallery: boolean) {
-  const seed = createSeedState();
+function cacheHeaders(seconds: number) {
+  return {
+    "cache-control": `public, max-age=30, s-maxage=${seconds}`,
+    "cdn-cache-control": `public, s-maxage=${seconds}`,
+  };
+}
+
+function degradedBody() {
   return {
     ok: true as const,
     degraded: true,
     volunteers: [] as unknown[],
-    events: seed.events,
-    notices: seed.notices,
-    attendance: [] as unknown[],
-    gallery: includeGallery ? seed.gallery : [],
-    visitors: seed.visitors,
-    alumniCount: seed.settings.alumniCount ?? 0,
-    serviceHours: seed.settings.reportedServiceHours ?? 576,
+    serviceHours: 576,
     build: appBuild(),
   };
 }
@@ -220,35 +219,20 @@ export const Route = createFileRoute("/api/nss-cloud")({
   server: {
     handlers: {
       GET: async ({ request }) => {
+        const includeGallery = new URL(request.url).searchParams.get("gallery") === "1";
         try {
-          const url = new URL(request.url);
-          const includeGallery = url.searchParams.get("gallery") === "1";
-          const includePhotos = url.searchParams.get("photos") === "1";
-          const data = await loadCollegeCloud({ gallery: includeGallery, photos: includePhotos });
+          const data = await loadPublicBoard({ gallery: true });
           if (!data || data.volunteers.length < 20) {
-            const fallback = registerFallback(includeGallery);
-            if (!data) return Response.json(fallback, { headers: { "cache-control": "no-store" } });
-            return Response.json(
-              {
-                ...publicPayload(data as unknown as Row, includeGallery),
-                volunteers: data.volunteers.length ? publicPayload(data as unknown as Row, includeGallery).volunteers : fallback.volunteers,
-                serviceHours: Math.max(Number(data.serviceHours) || 0, fallback.serviceHours),
-                visitors: Math.max(Number(data.visitors) || 0, fallback.visitors),
-                gallery: includeGallery && Array.isArray(data.gallery) && data.gallery.length ? data.gallery : fallback.gallery,
-                events: Array.isArray(data.events) && data.events.length ? data.events : fallback.events,
-                notices: Array.isArray(data.notices) && data.notices.length ? data.notices : fallback.notices,
-              },
-              { headers: { "cache-control": "no-store" } },
-            );
+            return Response.json(degradedBody(), { headers: cacheHeaders(120) });
           }
-          const brand = await readBrandPhotos();
-          return Response.json({ ...publicPayload(data as unknown as Row, includeGallery), brand }, {
-            headers: { "cache-control": "no-store" },
-          });
+          const brand = collegeQuotaBlocked() ? { poPhoto: "", principalPhoto: "" } : await readBrandPhotos();
+          return Response.json(
+            { ...publicPayload(data as unknown as Row, includeGallery || Boolean(data.gallery?.length)), brand, degraded: false },
+            { headers: cacheHeaders(600) },
+          );
         } catch (error) {
-          if (busyError(error)) {
-            const includeGallery = new URL(request.url).searchParams.get("gallery") === "1";
-            return Response.json(registerFallback(includeGallery), { headers: { "cache-control": "no-store" } });
+          if (busyError(error) || collegeQuotaBlocked()) {
+            return Response.json(degradedBody(), { headers: cacheHeaders(120) });
           }
           const message = error instanceof Error ? error.message : "cloud load failed";
           return Response.json({ ok: false, error: message }, { status: 500 });
@@ -433,21 +417,18 @@ export const Route = createFileRoute("/api/nss-cloud")({
             }
             let data: Awaited<ReturnType<typeof loadCollegeCloud>> = null;
             try {
-              data = await loadCollegeCloud({ gallery: false, photos: false });
+              const officer = user?.role === "po" || user?.role === "admin";
+              data = officer ? await loadOfficerRoll() : await loadPublicBoard({ gallery: false });
             } catch (error) {
               if (!busyError(error)) throw error;
             }
             if (!data || data.volunteers.length < 20) {
-              const fallback = registerFallback(false);
               return Response.json({
                 ok: true,
                 degraded: true,
                 volunteers: [],
-                events: data?.events?.length ? data.events : fallback.events,
-                attendance: [],
-                notices: data?.notices?.length ? data.notices : fallback.notices,
-                serviceHours: Math.max(data?.serviceHours ?? 0, fallback.serviceHours),
-                visitors: Math.max(data?.visitors ?? 0, fallback.visitors),
+                serviceHours: Math.max(data?.serviceHours ?? 0, 576),
+                visitors: data?.visitors ?? 0,
                 build: appBuild(),
               });
             }

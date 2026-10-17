@@ -29,8 +29,10 @@ export async function refreshRoll() {
     notices?: [];
     serviceHours?: number;
     visitors?: number;
+    degraded?: boolean;
+    brand?: { poPhoto?: string; principalPhoto?: string };
   };
-  if (!res.ok || !data.ok) return false;
+  if (!res.ok || !data.ok || data.degraded) return false;
   useNssStore.getState().applyCloud({
     volunteers: data.volunteers,
     events: data.events,
@@ -39,6 +41,8 @@ export async function refreshRoll() {
     serviceHours: data.serviceHours,
     visitors: data.visitors,
     keepPrivate: Boolean(data.private),
+    degraded: Boolean(data.degraded),
+    brand: data.brand,
   });
   return true;
 }
