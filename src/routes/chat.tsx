@@ -302,7 +302,7 @@ function ChatPage() {
 
   return (
     <AppShell eyebrow="NSS CHAT" current="page">
-      <div className="mx-auto flex h-[calc(100dvh-8.5rem)] max-w-6xl overflow-hidden border-y border-border bg-[#efe7d6] md:my-4 md:rounded-2xl md:border">
+      <div className="mx-auto flex h-[calc(100dvh-13.5rem)] w-full max-w-6xl overflow-hidden border-y border-border bg-[#efe7d6] md:my-4 md:h-[calc(100dvh-8.5rem)] md:rounded-2xl md:border">
         <aside className={`${mobileList ? "flex" : "hidden"} w-full flex-col bg-card md:flex md:w-80 md:border-r md:border-border`}>
           <div className="bg-navy px-4 py-3 text-paper">
             <p className="font-display text-lg">NSS Chat</p>

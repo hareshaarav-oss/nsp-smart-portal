@@ -45,7 +45,7 @@ export function AppShell({
       <BrandHeader eyebrow={eyebrow} compact={compactHeader} />
       <TricolourStrip />
       <PageNav showDashboard={showDashboard} current={current} />
-      <main className="flex-1">{children}</main>
+      <main className="min-w-0 flex-1 pb-20 md:pb-0">{children}</main>
       <SiteFooter />
     </div>
   );

@@ -49,6 +49,7 @@
     background: var(--color-bg);
     color: var(--color-foreground);
     font-family: var(--font-sans);
+    overflow-x: clip;
   }
   h1, h2, h3, .font-display {
     font-family: var(--font-display);

@@ -26,7 +26,7 @@ export function BrandHeader({
           <div className="min-w-0 flex-1 text-center">
             <p
               className={cn(
-                "text-balance font-display font-semibold leading-tight text-navy",
+                "truncate text-balance font-display font-semibold leading-tight text-navy",
                 compact ? "text-sm md:text-base" : "text-base md:text-xl",
               )}
             >

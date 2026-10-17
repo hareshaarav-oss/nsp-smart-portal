@@ -133,10 +133,10 @@ function VolunteerDash() {
 
   return (
     <AppShell eyebrow="NSS STUDENT DASHBOARD" current="dashboard">
-      <div className="mx-auto max-w-5xl space-y-6 px-4 pb-16">
+      <div className="mx-auto w-full max-w-6xl space-y-4 px-3 pb-4 sm:space-y-6 sm:px-4 md:px-6">
         <div className="overflow-hidden rounded-2xl bg-navy p-5 text-paper shadow-md md:p-7">
           <div className="flex flex-wrap items-start justify-between gap-3">
-            <div className="flex flex-wrap gap-2">
+          <div className="grid w-full grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-5 [&>*]:w-full">
               <Button variant="saffron" onClick={() => void openIdCard(me, settings)}>
                 <CreditCard />
                 Digital ID Card
@@ -164,7 +164,13 @@ function VolunteerDash() {
               <Button
                 variant="danger"
                 onClick={() => {
+                  try {
+                    localStorage.setItem("nsp-view", "portal");
+                  } catch {
+                    /* ignore */
+                  }
                   setSession(null);
+                  window.location.href = "/";
                 }}
               >
                 <LogOut />
@@ -192,7 +198,7 @@ function VolunteerDash() {
                   </span>
                 ) : null}
               </div>
-              <h1 className="font-display text-3xl font-semibold">{idCardName(me.fullName)}</h1>
+              <h1 className="font-display text-2xl font-semibold sm:text-3xl">{idCardName(me.fullName)}</h1>
               <p className="text-sm text-paper/70">
                 {me.volunteerId} · {me.enrollment} · {me.unit}
               </p>

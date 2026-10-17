@@ -42,7 +42,7 @@ const ITEMS = [
 
 export function PoNav({ current }: { current: string }) {
   return (
-    <nav className="mt-4 flex gap-1 overflow-x-auto rounded-xl border border-border bg-card p-1">
+    <nav className="mt-3 flex gap-1 overflow-x-auto rounded-xl border border-border bg-card p-1 md:flex-wrap md:overflow-visible">
       {ITEMS.map((item) => {
         const active = current === item.to;
         const Icon = item.icon;
