@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { loadCollegeCloud, saveStudentToCloud, incrementVisitors, patchStudent, safePhoto, knownRole, issueChatPass, readChatPass, listRecentChatMessages, saveChatMessage, listChatPeople, clearAttendanceCloud, readBrandPhotos, saveBrandPhotos, listPhotoRoster, readPhotoBatch, saveAttendanceMarks } from "@/lib/nss/firestore";
+import { loadCollegeCloud, saveStudentToCloud, incrementVisitors, readVisitorCount, patchStudent, safePhoto, knownRole, issueChatPass, readChatPass, listRecentChatMessages, saveChatMessage, listChatPeople, clearAttendanceCloud, readBrandPhotos, saveBrandPhotos, listPhotoRoster, readPhotoBatch, saveAttendanceMarks } from "@/lib/nss/firestore";
 
 type Row = Record<string, unknown>;
 
@@ -315,7 +315,11 @@ export const Route = createFileRoute("/api/nss-cloud")({
           }
           if (body.action === "visit") {
             const visitors = await incrementVisitors();
-            return Response.json({ ok: true, visitors });
+            return Response.json({ ok: visitors > 0, visitors });
+          }
+          if (body.action === "visitors") {
+            const visitors = await readVisitorCount();
+            return Response.json({ ok: visitors > 0, visitors });
           }
           if (body.action === "register") {
             const saved = await saveStudentToCloud({ ...body, nssRole: "Volunteer" });

@@ -774,7 +774,7 @@ export const useNssStore =
                     const cloudPhoto =
                       row.photoUrl &&
                       row.photoUrl.length <
-                        700000
+                        1200000
                         ? row.photoUrl
                         : "";
 
@@ -824,7 +824,7 @@ export const useNssStore =
                         cloudPhoto ||
                         (prev?.photoUrl &&
                         prev.photoUrl.length <
-                          700000
+                          1200000
                           ? prev.photoUrl
                           : ""),
 
@@ -1077,8 +1077,7 @@ export const useNssStore =
               "number" &&
             cloud.visitors > 0
           ) {
-            next.visitors =
-              cloud.visitors;
+            next.visitors = Math.max(current.visitors, cloud.visitors);
           }
 
           const computedAlumni =
@@ -2492,7 +2491,7 @@ export const useNssStore =
         partialize: (s) => ({
           volunteers: (s.volunteers ?? []).map((v) => ({
             ...v,
-            photoUrl: v.photoUrl && v.photoUrl.length < 700000 ? v.photoUrl : "",
+            photoUrl: v.photoUrl && v.photoUrl.length < 1200000 ? v.photoUrl : "",
           })),
 
           events:

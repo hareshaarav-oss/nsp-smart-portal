@@ -58,7 +58,12 @@ function applyPhotoMap(map: Map<string, string>) {
   const state = useNssStore.getState();
   useNssStore.setState({
     volunteers: state.volunteers.map((volunteer) => {
-      const photo = map.get(volunteer.volunteerId) || map.get(volunteer.id) || volunteer.photoUrl || "";
+      const photo =
+        map.get(volunteer.volunteerId) ||
+        map.get(volunteer.id) ||
+        map.get(volunteer.fullName.toLowerCase()) ||
+        volunteer.photoUrl ||
+        "";
       return photo ? { ...volunteer, photoUrl: photo } : volunteer;
     }),
   });
@@ -80,7 +85,7 @@ async function pullPhotos() {
   });
   const data = (await res.json()) as {
     ok?: boolean;
-    roster?: { docId: string; volunteerId: string }[];
+    roster?: { docId: string; volunteerId: string; name?: string }[];
     brand?: { poPhoto?: string; principalPhoto?: string };
   };
   if (!res.ok || !data.ok || !Array.isArray(data.roster)) return;
@@ -94,7 +99,10 @@ async function pullPhotos() {
       },
     });
   }
-  const pending = data.roster.filter((row) => row.docId && !(row.docId in cached));
+  const pending = data.roster.filter((row) => {
+    const known = cached[row.docId] || cached[row.volunteerId] || "";
+    return row.docId && !known.startsWith("data:image/") && !known.startsWith("https://") && known !== "0";
+  });
   for (let i = 0; i < pending.length; i += 4) {
     const slice = pending.slice(i, i + 4);
     const ids = slice.map((row) => row.docId);
@@ -104,24 +112,28 @@ async function pullPhotos() {
       cache: "no-store",
       body: JSON.stringify({ action: "photo-sync", ids }),
     });
-    const batch = (await batchRes.json()) as { ok?: boolean; photos?: { id: string; docId: string; photoUrl: string }[] };
+    const batch = (await batchRes.json()) as { ok?: boolean; photos?: { id: string; docId: string; photoUrl: string; name?: string }[] };
     if (!batchRes.ok || !batch.ok || !Array.isArray(batch.photos)) break;
     const map = new Map<string, string>();
-    for (const id of ids) cached[id] = cached[id] || "";
+    const found = new Set(batch.photos.map((photo) => photo.docId));
+    for (const row of slice) {
+      if (!found.has(row.docId)) cached[row.docId] = "0";
+    }
     for (const photo of batch.photos) {
       if (!photo.photoUrl) continue;
-      if (photo.id) {
-        cached[photo.id] = photo.photoUrl;
-        map.set(photo.id, photo.photoUrl);
-      }
-      if (photo.docId) {
-        cached[photo.docId] = photo.photoUrl;
-        map.set(photo.docId, photo.photoUrl);
+      const keys = [photo.id, photo.docId, photo.name || ""].filter(Boolean);
+      for (const key of keys) {
+        cached[key] = photo.photoUrl;
+        map.set(key, photo.photoUrl);
       }
       const roster = slice.find((row) => row.docId === photo.docId);
       if (roster?.volunteerId) {
         cached[roster.volunteerId] = photo.photoUrl;
         map.set(roster.volunteerId, photo.photoUrl);
+      }
+      if (roster?.name) {
+        cached[roster.name] = photo.photoUrl;
+        map.set(roster.name, photo.photoUrl);
       }
     }
     applyPhotoMap(map);
@@ -195,7 +207,24 @@ export function HydrateGate({ children }: { children: ReactNode }) {
         body: JSON.stringify({ action: "roll-sync", ...(token ? { chatToken: token } : {}) }),
       });
       const cloud = (await res.json()) as CloudBody;
-      if (!cancelled) applyBody(cloud);
+      if (!cancelled) {
+        applyBody(cloud);
+        applyCachedPhotos();
+      }
+    }
+
+    async function pullVisitors() {
+      if (cancelled || document.hidden) return;
+      const res = await fetch("/api/nss-cloud", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        cache: "no-store",
+        body: JSON.stringify({ action: "visitors" }),
+      });
+      const data = (await res.json()) as { ok?: boolean; visitors?: number };
+      if (!data.ok || typeof data.visitors !== "number" || data.visitors < 1) return;
+      const current = useNssStore.getState().visitors;
+      useNssStore.setState({ visitors: Math.max(current, data.visitors) });
     }
 
     void (async () => {
@@ -236,6 +265,7 @@ export function HydrateGate({ children }: { children: ReactNode }) {
         setStatus("Could not reach the college roll. Showing saved data.");
       }
       finish();
+      void pullVisitors().catch(() => undefined);
       void pullPhotos()
         .catch(() => undefined)
         .finally(() => {
@@ -243,7 +273,10 @@ export function HydrateGate({ children }: { children: ReactNode }) {
           void fetch("/api/nss-cloud?gallery=1", { cache: "no-store" })
             .then((res) => res.json())
             .then((cloud: CloudBody) => {
-              if (!cancelled) applyBody(cloud);
+              if (!cancelled) {
+                applyBody(cloud);
+                applyCachedPhotos();
+              }
             })
             .catch(() => undefined);
         });
@@ -252,6 +285,7 @@ export function HydrateGate({ children }: { children: ReactNode }) {
     let ticks = 0;
     const timer = window.setInterval(() => {
       ticks += 1;
+      void pullVisitors().catch(() => undefined);
       void pullLive()
         .catch(() => undefined)
         .then(() => {
@@ -260,6 +294,7 @@ export function HydrateGate({ children }: { children: ReactNode }) {
         });
     }, 15000);
     const wake = () => {
+      void pullVisitors().catch(() => undefined);
       void pullLive().catch(() => undefined);
     };
     document.addEventListener("visibilitychange", wake);

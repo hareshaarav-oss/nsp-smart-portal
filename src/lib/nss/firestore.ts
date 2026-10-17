@@ -368,7 +368,7 @@ function encodeValue(value: unknown): Record<string, unknown> {
 
 export function safePhoto(value: unknown) {
   const src = text(value);
-  if ((src.startsWith("data:image/") || src.startsWith("https://")) && src.length < 700000) return src;
+  if ((src.startsWith("data:image/") || src.startsWith("https://")) && src.length < 1200000) return src;
   return "";
 }
 
@@ -435,26 +435,30 @@ export async function listPhotoRoster() {
     return {
       docId: text(row._id),
       volunteerId: text(row.volunteerId) || `NSS${padId(n)}`,
+      name: text(row.fullName).toLowerCase(),
     };
   }).filter((row) => row.docId);
 }
 
 export async function readPhotoBatch(docIds: string[]) {
-  const photos: { id: string; docId: string; photoUrl: string }[] = [];
+  const photos: { id: string; docId: string; photoUrl: string; name: string }[] = [];
   await Promise.all(docIds.slice(0, 4).map(async (docId) => {
     const id = text(docId);
     if (!id) return;
     const params = new URLSearchParams();
     params.append("mask.fieldPaths", "photoUrl");
+    params.append("mask.fieldPaths", "photo");
+    params.append("mask.fieldPaths", "image");
     params.append("mask.fieldPaths", "volunteerId");
+    params.append("mask.fieldPaths", "fullName");
     const res = await fetch(`${FIRESTORE_BASE}/students/${encodeURIComponent(id)}?${params}`);
     if (res.status === 429) throw new Error("The college roll is busy. Photographs will load again shortly.");
     if (!res.ok) return;
     const json = (await res.json()) as { fields?: Record<string, FsValue> };
     const row = decodeDoc({ name: `students/${id}`, fields: json.fields });
-    const photoUrl = safePhoto(row.photoUrl);
+    const photoUrl = safePhoto(row.photoUrl) || safePhoto(row.photo) || safePhoto(row.image);
     if (!photoUrl) return;
-    photos.push({ id: text(row.volunteerId) || id, docId: id, photoUrl });
+    photos.push({ id: text(row.volunteerId) || id, docId: id, photoUrl, name: text(row.fullName).toLowerCase() });
   }));
   return photos;
 }
@@ -616,29 +620,45 @@ export async function saveStudentToCloud(input: Record<string, unknown>) {
   };
 }
 
+export async function readVisitorCount(): Promise<number> {
+  const doc = await getDocument("portalSettings/visitors");
+  return Number(doc?.count ?? 0);
+}
+
 export async function incrementVisitors(): Promise<number> {
-  const fallback = 1361;
-  try {
-    const doc = await getDocument("portalSettings/visitors");
-    const current = Number(doc?.count ?? 0);
-    const next = (current > 0 ? current : fallback) + 1;
-    const fields = { count: encodeValue(next), updatedAt: encodeValue(new Date().toISOString()) };
-    const patch = await fetch(`${FIRESTORE_BASE}/portalSettings/visitors`, {
-      method: "PATCH",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ fields }),
-    });
-    if (patch.ok) return next;
-    const create = await fetch(`${FIRESTORE_BASE}/portalSettings?documentId=visitors`, {
+  const project = process.env.NSS_FIRESTORE_PROJECT_ID?.trim() || "studio-8504026975-1fdbc";
+  const existing = await getDocument("portalSettings/visitors");
+  const current = Number(existing?.count ?? 0);
+  if (!existing || current < 1) {
+    await fetch(`${FIRESTORE_BASE}/portalSettings?documentId=visitors`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ fields }),
+      body: JSON.stringify({
+        fields: {
+          count: encodeValue(1361),
+          updatedAt: encodeValue(new Date().toISOString()),
+        },
+      }),
     });
-    if (create.ok || create.status === 409) return next;
-    return 0;
-  } catch {
-    return 0;
   }
+  const res = await fetch(`${FIRESTORE_BASE}:commit`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      writes: [
+        {
+          transform: {
+            document: `projects/${project}/databases/(default)/documents/portalSettings/visitors`,
+            fieldTransforms: [{ fieldPath: "count", increment: { integerValue: "1" } }],
+          },
+        },
+      ],
+    }),
+  });
+  if (!res.ok) return current > 0 ? current : 0;
+  const json = (await res.json()) as { writeResults?: { transformResults?: { integerValue?: string }[] }[] };
+  const value = Number(json.writeResults?.[0]?.transformResults?.[0]?.integerValue ?? 0);
+  return value || (current > 0 ? current + 1 : 1362);
 }
 
 export async function clearAttendanceCloud(eventName = "", opts?: { all?: boolean }) {
