@@ -149,7 +149,9 @@ function Home() {
             </Card>
             <Card className="border-t-4 border-t-forest shadow-md">
               <CardContent className="p-5">
-                <h2 className="font-display text-xl text-navy">Upcoming activities</h2>
+                <h2 className="font-display text-xl text-navy">
+                  {upcoming.length ? "Upcoming activities" : "Recent activities"}
+                </h2>
                 <div className="feed-scroll mt-3 space-y-2">
                   {upcoming.length === 0 && completed.length === 0 ? (
                     <p className="py-8 text-center text-sm text-muted-foreground">No upcoming event.</p>

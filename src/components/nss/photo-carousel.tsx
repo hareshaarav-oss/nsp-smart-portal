@@ -7,6 +7,13 @@ export function PhotoCarousel({ items }: { items: GalleryItem[] }) {
   const photos = items.filter((item) => item.src || item.mediaKey).slice(0, 16);
   const [index, setIndex] = useState(0);
   const [paused, setPaused] = useState(false);
+  const [gaveUp, setGaveUp] = useState(false);
+
+  useEffect(() => {
+    if (photos.length > 0) return;
+    const timer = window.setTimeout(() => setGaveUp(true), 8000);
+    return () => window.clearTimeout(timer);
+  }, [photos.length]);
 
   useEffect(() => {
     if (photos.length < 2 || paused) return;
@@ -23,7 +30,9 @@ export function PhotoCarousel({ items }: { items: GalleryItem[] }) {
   if (photos.length === 0) {
     return (
       <div className="flex h-56 items-center justify-center rounded-lg bg-navy text-sm text-paper/80 md:h-80">
-        Photographs appear here after they are uploaded from the gallery desk.
+        {gaveUp
+          ? "Photographs appear here after they are uploaded from the gallery desk."
+          : "Loading photographs…"}
       </div>
     );
   }

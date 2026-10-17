@@ -19,7 +19,6 @@ function RegisterPage() {
   const [form, setForm] = useState({
     fullName: "",
     mobile: "",
-    aadhaarNumber: "",
     email: "",
     course: "B.A." as Course,
     semester: "1",
@@ -60,7 +59,7 @@ function RegisterPage() {
       const res = await fetch("/api/nss-cloud", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ action: "register", ...form }),
+        body: JSON.stringify({ action: "register", ...form, photoUrl }),
       });
       const data = (await res.json()) as { ok?: boolean; error?: string; volunteer?: Volunteer };
       if (!res.ok || !data.ok || !data.volunteer) throw new Error(data.error || "Cloud save failed");
@@ -140,9 +139,6 @@ function RegisterPage() {
                 </Field>
                 <Field label="Mobile number">
                   <Input required inputMode="numeric" value={form.mobile} onChange={(e) => set("mobile", e.target.value)} />
-                </Field>
-                <Field label="Aadhaar number">
-                  <Input inputMode="numeric" maxLength={12} value={form.aadhaarNumber} onChange={(e) => set("aadhaarNumber", e.target.value.replace(/\D/g, "").slice(0, 12))} />
                 </Field>
                 <Field label="Email">
                   <Input type="email" required value={form.email} onChange={(e) => set("email", e.target.value)} />

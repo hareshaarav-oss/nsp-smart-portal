@@ -68,6 +68,8 @@ const STUDENT_FIELDS = [
   "enrollment",
   "volunteerId",
   "unit",
+  "photoUrl",
+  "password",
   "createdAt",
   "updatedAt",
 ];
@@ -214,6 +216,8 @@ export async function loadCollegeCloud(opts: { gallery?: boolean } = {}): Promis
       emergencyContact: text(s.emergencyContact),
       abcId: text(s.abcId),
       myBharatId: text(s.myBharatId),
+      photoUrl: safePhoto(s.photoUrl),
+      loginPassword: text(s.password),
       createdAt: isoDate(s.createdAt) || isoDate(s.updatedAt),
       status: isAlumni ? "alumni" : "active",
     };
@@ -293,7 +297,7 @@ export async function loadCollegeCloud(opts: { gallery?: boolean } = {}): Promis
   const notices: Notice[] = noticeDocs.map((n) => {
     const body = text(n.text) || text(n.body);
     const title = text(n.title) || "Notice";
-    const leaders = /leader/i.test(`${title} ${body}`);
+    const leaders = /^leaders\b/i.test(title);
     return {
       id: text(n._id),
       title,
@@ -349,6 +353,41 @@ function encodeValue(value: unknown): Record<string, unknown> {
   return { stringValue: String(value) };
 }
 
+export function safePhoto(value: unknown) {
+  const src = text(value);
+  if ((src.startsWith("data:image/") || src.startsWith("https://")) && src.length < 120000) return src;
+  return "";
+}
+
+function nextVolunteerNumber(students: Record<string, unknown>[]) {
+  let max = 0;
+  for (const row of students) {
+    const match = /NSS(\d+)/i.exec(text(row.volunteerId));
+    if (match) max = Math.max(max, Number(match[1]));
+  }
+  return max + 1;
+}
+
+export async function patchStudent(docId: string, values: Record<string, unknown>) {
+  const id = text(docId);
+  if (!id) throw new Error("Student record was not found.");
+  const fields: Record<string, unknown> = {};
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(values)) {
+    fields[key] = encodeValue(value);
+    params.append("updateMask.fieldPaths", key);
+  }
+  const res = await fetch(`${FIRESTORE_BASE}/students/${encodeURIComponent(id)}?${params}`, {
+    method: "PATCH",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ fields }),
+  });
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(body.slice(0, 180) || "Could not update the student record");
+  }
+}
+
 export async function saveStudentToCloud(input: Record<string, unknown>) {
   const mobile = digits(input.mobile);
   if (mobile.length < 10) throw new Error("Mobile must be 10 digits");
@@ -357,11 +396,7 @@ export async function saveStudentToCloud(input: Record<string, unknown>) {
     throw new Error("This mobile number is already on the NSS roll.");
   }
   const students = await listCollection("students");
-  const activeCount = students.filter((row) => {
-    const status = text(row.status).toLowerCase();
-    return status !== "inactive" && status !== "deleted";
-  }).length;
-  const n = activeCount + 1;
+  const n = nextVolunteerNumber(students);
   const semester = latinDigits(text(input.semester) || "1");
   const volunteerId = `NSS${padId(n)}`;
   const enrollment = latinDigits(text(input.enrollment)) || `2026-${semester}-${padId(n)}`;
@@ -391,6 +426,8 @@ export async function saveStudentToCloud(input: Record<string, unknown>) {
     createdAt: encodeValue(now.slice(0, 10)),
     updatedAt: encodeValue(now),
   };
+  const photo = safePhoto(input.photoUrl);
+  if (photo) fields.photoUrl = encodeValue(photo);
   const res = await fetch(`${FIRESTORE_BASE}/students?documentId=${mobile}`, {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -421,6 +458,7 @@ export async function saveStudentToCloud(input: Record<string, unknown>) {
       bloodGroup: "",
       address: "",
       parentMobile: "",
+      photoUrl: photo,
       status: "active" as const,
       createdAt: now.slice(0, 10),
     },

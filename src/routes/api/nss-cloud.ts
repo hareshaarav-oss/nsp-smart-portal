@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { loadCollegeCloud, saveStudentToCloud, incrementVisitors } from "@/lib/nss/firestore";
+import { loadCollegeCloud, saveStudentToCloud, incrementVisitors, patchStudent, safePhoto } from "@/lib/nss/firestore";
 
 type Row = Record<string, unknown>;
 
@@ -11,11 +11,23 @@ function digits(value: unknown) {
   return text(value).replace(/\D/g, "");
 }
 
+function looksLikePhoneId(value: string) {
+  const raw = text(value);
+  if (raw.startsWith("+")) return true;
+  return digits(raw).length >= 8;
+}
+
 function publicId(row: Row) {
-  const phone = digits(row.mobile);
   const rawId = text(row.id);
-  const idIsPhone = digits(rawId).length >= 10 && (digits(rawId) === phone || digits(rawId).endsWith(phone));
-  return idIsPhone ? text(row.volunteerId) || rawId : rawId || text(row.volunteerId);
+  const vid = text(row.volunteerId);
+  if (/^NSS\d+$/i.test(vid) && looksLikePhoneId(rawId)) return vid;
+  const phone = digits(row.mobile);
+  const rawDigits = digits(rawId);
+  const idIsPhone =
+    rawDigits.length >= 8 &&
+    Boolean(phone) &&
+    (rawDigits === phone || phone.endsWith(rawDigits) || rawDigits.endsWith(phone));
+  return idIsPhone ? vid || rawId : rawId || vid;
 }
 
 function publicVolunteer(row: Row) {
@@ -36,6 +48,7 @@ function publicVolunteer(row: Row) {
     bloodGroup: "",
     address: "",
     parentMobile: "",
+    photoUrl: safePhoto(row.photoUrl),
     status: text(row.status) === "alumni" ? "alumni" : "active",
     createdAt: text(row.createdAt),
   };
@@ -52,6 +65,22 @@ function officerVolunteer(row: Row) {
     parentMobile: text(row.parentMobile),
     emergencyContact: text(row.emergencyContact),
     abcId: text(row.abcId),
+    myBharatId: text(row.myBharatId),
+  };
+}
+
+function selfVolunteer(row: Row) {
+  return {
+    ...publicVolunteer(row),
+    mobile: digits(row.mobile),
+    email: text(row.email),
+    fatherName: text(row.fatherName),
+    address: text(row.address),
+    bloodGroup: text(row.bloodGroup),
+    parentMobile: text(row.parentMobile),
+    emergencyContact: text(row.emergencyContact),
+    abcId: text(row.abcId),
+    myBharatId: text(row.myBharatId),
   };
 }
 
@@ -73,7 +102,7 @@ function publicAttendance(volunteers: Row[], attendance: Row[]) {
         present: row.present === true,
       };
     })
-    .filter((row) => row.volunteerId && row.eventId && !/^\d{8,}$/.test(row.volunteerId));
+    .filter((row) => row.volunteerId && row.eventId && !looksLikePhoneId(row.volunteerId));
 }
 
 function publicPayload(data: Row, includeGallery: boolean) {
@@ -106,9 +135,10 @@ function matchVolunteer(volunteers: Row[], username: string, password: string) {
       name === key ||
       id === key ||
       (keyDigits.length >= 8 && phone.endsWith(keyDigits));
+    const stored = text(row.loginPassword);
     const passOk =
-      (passDigits.length >= 10 && phone.endsWith(passDigits)) ||
-      (text(row.loginPassword) !== "" && text(row.loginPassword) === password.trim());
+      (stored !== "" && stored === password.trim()) ||
+      (passDigits.length >= 10 && phone.endsWith(passDigits));
     return userOk && passOk;
   });
 }
@@ -135,6 +165,16 @@ export const Route = createFileRoute("/api/nss-cloud")({
             password?: string;
             role?: string;
             mobile?: string;
+            next?: string;
+            volunteerId?: string;
+            photoUrl?: string;
+            email?: string;
+            address?: string;
+            bloodGroup?: string;
+            abcId?: string;
+            myBharatId?: string;
+            emergencyContact?: string;
+            fatherName?: string;
           };
           if (body.action === "visit") {
             const visitors = await incrementVisitors();
@@ -143,6 +183,35 @@ export const Route = createFileRoute("/api/nss-cloud")({
           if (body.action === "register") {
             const saved = await saveStudentToCloud(body as Record<string, unknown>);
             return Response.json(saved);
+          }
+          if (body.action === "set-password" || body.action === "update-profile") {
+            const data = await loadCollegeCloud({ gallery: false });
+            const volunteers = (data?.volunteers ?? []) as unknown as Row[];
+            const found = matchVolunteer(volunteers, body.username ?? body.volunteerId ?? "", body.password ?? "");
+            if (!found) return Response.json({ ok: false, error: "Username or mobile password did not match." }, { status: 401 });
+            if (body.action === "set-password") {
+              const next = text(body.next);
+              if (next.length < 6) {
+                return Response.json({ ok: false, error: "New password must be at least 6 characters." }, { status: 400 });
+              }
+              await patchStudent(text(found.id), {
+                password: next,
+                passwordHasBeenChanged: true,
+                updatedAt: new Date().toISOString(),
+              });
+              return Response.json({ ok: true });
+            }
+            const photo = text(body.photoUrl);
+            if (photo && (!photo.startsWith("data:image/") || photo.length >= 120000)) {
+              return Response.json({ ok: false, error: "Photograph is too large. Use a smaller JPG or PNG." }, { status: 400 });
+            }
+            const patch: Record<string, unknown> = { updatedAt: new Date().toISOString() };
+            for (const key of ["email", "address", "bloodGroup", "abcId", "myBharatId", "emergencyContact", "fatherName"] as const) {
+              if (typeof body[key] === "string") patch[key] = text(body[key]);
+            }
+            if (photo) patch.photoUrl = photo;
+            await patchStudent(text(found.id), patch);
+            return Response.json({ ok: true, volunteer: selfVolunteer({ ...found, ...patch }) });
           }
           if (body.action === "lookup") {
             const data = await loadCollegeCloud({ gallery: false });
@@ -176,7 +245,7 @@ export const Route = createFileRoute("/api/nss-cloud")({
           const found = matchVolunteer(volunteers, body.username ?? "", body.password ?? "");
           if (!found) return Response.json({ ok: false, error: "Username or mobile password did not match." }, { status: 401 });
           const role = text(found.nssRole) === "Leader" ? "leader" : "volunteer";
-          const volunteer = publicVolunteer(found);
+          const volunteer = selfVolunteer(found);
           return Response.json({
             ok: true,
             session: {

@@ -720,6 +720,18 @@ export const useNssStore =
                 ),
               );
 
+            const localByVid =
+              new Map(
+                current.volunteers.map(
+                  (v) =>
+                    [v.volunteerId, v] as const,
+                ),
+              );
+
+            const session =
+              useSessionStore.getState()
+                .session;
+
             next.volunteers =
               dedupeVolunteers(
                 cloud.volunteers
@@ -728,11 +740,34 @@ export const useNssStore =
                       localById.get(
                         row.id,
                       ) ||
+                      localByVid.get(
+                        row.volunteerId,
+                      ) ||
                       localByMobile.get(
                         digits(
                           row.mobile,
                         ).slice(-10),
                       );
+
+                    const self =
+                      !officer &&
+                      Boolean(
+                        session &&
+                          (row.id ===
+                            session.volunteerId ||
+                            row.volunteerId ===
+                              session.volunteerId ||
+                            (session.enrollment &&
+                              row.enrollment ===
+                                session.enrollment)),
+                      );
+
+                    const cloudPhoto =
+                      row.photoUrl &&
+                      row.photoUrl.length <
+                        120000
+                        ? row.photoUrl
+                        : "";
 
                     return {
                       ...row,
@@ -776,17 +811,15 @@ export const useNssStore =
                         row.alumniNotes,
 
                       photoUrl:
-                        prev?.photoUrl ||
-                        (
-                          row.photoUrl &&
-                          row.photoUrl
-                            .length < 120000
-                        )
-                          ? row.photoUrl
-                          : "",
+                        cloudPhoto ||
+                        (prev?.photoUrl &&
+                        prev.photoUrl.length <
+                          120000
+                          ? prev.photoUrl
+                          : ""),
 
                       emergencyContact:
-                        officer
+                        officer || self
                           ? row.emergencyContact ||
                             prev?.emergencyContact ||
                             ""
@@ -794,47 +827,59 @@ export const useNssStore =
 
                       loginPassword: "",
 
-                      mobile: officer
-                        ? row.mobile ||
-                          prev?.mobile ||
-                          ""
-                        : "",
+                      mobile:
+                        officer
+                          ? row.mobile ||
+                            prev?.mobile ||
+                            ""
+                          : self
+                            ? row.mobile ||
+                              prev?.mobile ||
+                              session?.mobile ||
+                              ""
+                            : "",
 
-                      email: officer
-                        ? row.email ||
-                          prev?.email ||
-                          ""
-                        : "",
+                      email:
+                        officer || self
+                          ? row.email ||
+                            prev?.email ||
+                            ""
+                          : "",
 
-                      address: officer
-                        ? row.address ||
-                          prev?.address ||
-                          ""
-                        : "",
+                      address:
+                        officer || self
+                          ? row.address ||
+                            prev?.address ||
+                            ""
+                          : "",
 
-                      bloodGroup: officer
-                        ? row.bloodGroup ||
-                          prev?.bloodGroup ||
-                          ""
-                        : "",
+                      bloodGroup:
+                        officer || self
+                          ? row.bloodGroup ||
+                            prev?.bloodGroup ||
+                            ""
+                          : "",
 
-                      fatherName: officer
-                        ? row.fatherName ||
-                          prev?.fatherName ||
-                          ""
-                        : "",
+                      fatherName:
+                        officer || self
+                          ? row.fatherName ||
+                            prev?.fatherName ||
+                            ""
+                          : "",
 
-                      parentMobile: officer
-                        ? row.parentMobile ||
-                          prev?.parentMobile ||
-                          ""
-                        : "",
+                      parentMobile:
+                        officer || self
+                          ? row.parentMobile ||
+                            prev?.parentMobile ||
+                            ""
+                          : "",
 
-                      abcId: officer
-                        ? row.abcId ||
-                          prev?.abcId ||
-                          ""
-                        : "",
+                      abcId:
+                        officer || self
+                          ? row.abcId ||
+                            prev?.abcId ||
+                            ""
+                          : "",
 
                       mpin:
                         prev?.mpin,
@@ -869,12 +914,22 @@ export const useNssStore =
                   ) ||
                   next.volunteers?.find(
                     (v) =>
+                      Boolean(
+                        old.volunteerId,
+                      ) &&
+                      v.volunteerId ===
+                        old.volunteerId,
+                  ) ||
+                  next.volunteers?.find(
+                    (v) =>
                       digits(
                         v.mobile,
                       ).slice(-10) ===
-                      digits(
-                        old.mobile,
-                      ).slice(-10),
+                        digits(
+                          old.mobile,
+                        ).slice(-10) &&
+                      digits(old.mobile)
+                        .length >= 10,
                   );
 
                 if (neu) {

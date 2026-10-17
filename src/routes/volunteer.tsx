@@ -93,14 +93,9 @@ function VolunteerDash() {
   const myBirthday = parseDob(me.dob);
   const birthdayDays = myBirthday ? daysUntilBirthday(myBirthday, todayIso()) : null;
 
-  function changePassword(e: React.FormEvent) {
+  async function changePassword(e: React.FormEvent) {
     e.preventDefault();
     if (!me) return;
-    const expected = me.loginPassword || me.mobile;
-    if (cur.trim() !== expected && cur.trim() !== me.mobile) {
-      toast.error("Current password is incorrect.");
-      return;
-    }
     if (next.trim().length < 6) {
       toast.error("New password must be at least 6 characters.");
       return;
@@ -109,12 +104,30 @@ function VolunteerDash() {
       toast.error("New password and confirm password do not match.");
       return;
     }
-    updateVolunteer(me.id, { loginPassword: next.trim() });
-    toast.success("Password updated. Use it the next time you sign in.");
-    setCur("");
-    setNext("");
-    setConfirm("");
-    setPanel("none");
+    try {
+      const res = await fetch("/api/nss-cloud", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          action: "set-password",
+          username: me.volunteerId || me.fullName,
+          password: cur,
+          next: next.trim(),
+        }),
+      });
+      const data = (await res.json()) as { ok?: boolean; error?: string };
+      if (!res.ok || !data.ok) {
+        toast.error(data.error || "Could not update the password.");
+        return;
+      }
+      toast.success("Password updated on the college roll. Use it the next time you sign in.");
+      setCur("");
+      setNext("");
+      setConfirm("");
+      setPanel("none");
+    } catch {
+      toast.error("Could not reach the college server.");
+    }
   }
 
   return (
@@ -425,10 +438,42 @@ function EditProfile({ volunteerId }: { volunteerId: string }) {
     setForm((f) => ({ ...f, photoUrl: url }));
   }
 
-  function save(e: React.FormEvent) {
+  async function save(e: React.FormEvent) {
     e.preventDefault();
-    update(volunteerId, form);
-    toast.success("Profile saved");
+    const session = useSessionStore.getState().session;
+    try {
+      const res = await fetch("/api/nss-cloud", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          action: "update-profile",
+          username: session?.volunteerId || volunteerId,
+          password: session?.mobile || form.mobile,
+          volunteerId,
+          email: form.email,
+          address: form.address,
+          bloodGroup: form.bloodGroup,
+          abcId: form.abcId,
+          myBharatId: form.myBharatId,
+          emergencyContact: form.emergencyContact,
+          photoUrl: form.photoUrl,
+        }),
+      });
+      const data = (await res.json()) as { ok?: boolean; error?: string; volunteer?: { photoUrl?: string; mobile?: string; email?: string } };
+      if (!res.ok || !data.ok) {
+        toast.error(data.error || "Could not save the profile.");
+        return;
+      }
+      update(volunteerId, {
+        ...form,
+        photoUrl: data.volunteer?.photoUrl || form.photoUrl,
+        mobile: form.mobile || data.volunteer?.mobile || session?.mobile || "",
+        email: form.email || data.volunteer?.email || "",
+      });
+      toast.success("Profile saved on the college roll.");
+    } catch {
+      toast.error("Could not reach the college server.");
+    }
   }
 
   return (
