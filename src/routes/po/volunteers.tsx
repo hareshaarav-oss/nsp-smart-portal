@@ -14,6 +14,7 @@ import { blobToDataUrl, compressPassport } from "@/lib/nss/media";
 import { downloadVolunteerExcel } from "@/lib/nss/reports";
 import { qrSvg } from "@/lib/nss/qr";
 import { htmlForCertificate, openPreparedCertificate, preparedCertificate } from "@/lib/nss/certificates";
+import { officerCloud } from "@/lib/nss/desk-save";
 import {
   activeVolunteers,
   attendanceOf,
@@ -183,7 +184,15 @@ function VolunteersPage() {
                     <select
                       className="rounded-md border border-border bg-card px-2 py-1 text-xs"
                       value={v.nssRole}
-                      onChange={(e) => state.updateVolunteer(v.id, { nssRole: e.target.value as NssRole })}
+                      onChange={(e) => {
+                        const nssRole = e.target.value as NssRole;
+                        const previous = v.nssRole;
+                        state.updateVolunteer(v.id, { nssRole });
+                        void officerCloud("set-role", { volunteerId: v.volunteerId, nssRole }).catch((error) => {
+                          state.updateVolunteer(v.id, { nssRole: previous });
+                          toast.error(error instanceof Error ? error.message : "Role was not saved.");
+                        });
+                      }}
                     >
                       <option>Volunteer</option>
                       <option>Leader</option>
@@ -210,7 +219,9 @@ function VolunteersPage() {
                         variant="outline"
                         onClick={() => {
                           state.moveToAlumni(v.id, `Moved ${academicYear()}`);
-                          toast.success(`${v.fullName} sent to Alumni file`);
+                          void officerCloud("set-status", { volunteerId: v.volunteerId, status: "alumni" })
+                            .then(() => toast.success(`${v.fullName} sent to Alumni file`))
+                            .catch((error) => toast.error(error instanceof Error ? error.message : "Alumni move was not saved."));
                         }}
                       >
                         Alumni
@@ -219,10 +230,13 @@ function VolunteersPage() {
                         size="sm"
                         variant="ghost"
                         onClick={() => {
-                          if (confirm(`Delete ${v.fullName}?`)) {
-                            state.deleteVolunteer(v.id);
-                            toast.success("Removed");
-                          }
+                          if (!confirm(`Delete ${v.fullName} from the college roll?`)) return;
+                          void officerCloud("set-status", { volunteerId: v.volunteerId, status: "deleted" })
+                            .then(() => {
+                              state.deleteVolunteer(v.id);
+                              toast.success("Removed from the college roll");
+                            })
+                            .catch((error) => toast.error(error instanceof Error ? error.message : "Could not remove this volunteer."));
                         }}
                       >
                         Delete

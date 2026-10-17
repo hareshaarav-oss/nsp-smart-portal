@@ -93,7 +93,7 @@ function LoginPage() {
       const data = (await res.json()) as {
         ok?: boolean;
         error?: string;
-        session?: { role: "po" | "admin" | "volunteer" | "leader"; name: string; volunteerId?: string; enrollment?: string; mobile?: string };
+        session?: { role: "po" | "admin" | "volunteer" | "leader"; name: string; volunteerId?: string; enrollment?: string; mobile?: string; chatToken?: string };
         volunteer?: Parameters<typeof rememberVolunteer>[0];
         volunteers?: unknown[];
         attendance?: unknown[];

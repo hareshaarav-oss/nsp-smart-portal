@@ -1,8 +1,8 @@
-import { createFileRoute, Navigate } from "@tanstack/react-router";
+import { createFileRoute, Link, Navigate } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { BarChart, Bar, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { toast } from "sonner";
-import { Award, Cake, CreditCard, Fingerprint, KeyRound, Lock, LogOut, Pencil, Star } from "lucide-react";
+import { Award, Cake, CreditCard, Fingerprint, KeyRound, Lock, LogOut, MessageCircle, Pencil, Star } from "lucide-react";
 import { AppShell } from "@/components/nss/shell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -146,6 +146,12 @@ function VolunteerDash() {
               >
                 <Pencil />
                 Edit Profile
+              </Button>
+              <Button asChild className="bg-forest text-primary-foreground hover:bg-forest/90">
+                <Link to="/chat">
+                  <MessageCircle />
+                  NSS Chat
+                </Link>
               </Button>
               <Button
                 className="bg-forest text-primary-foreground hover:bg-forest/90"

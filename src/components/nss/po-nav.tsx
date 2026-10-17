@@ -13,6 +13,7 @@ import {
   GraduationCap,
   Images,
   LayoutDashboard,
+  MessageCircle,
   Newspaper,
   Settings,
   Users,
@@ -21,6 +22,7 @@ import { cn } from "@/lib/utils";
 
 const ITEMS = [
   { to: "/po", label: "Dashboard", icon: LayoutDashboard },
+  { to: "/chat", label: "Chat", icon: MessageCircle },
   { to: "/po/volunteers", label: "Volunteers", icon: Users },
   { to: "/po/alumni", label: "Alumni", icon: GraduationCap },
   { to: "/po/attendance", label: "Attendance", icon: ClipboardCheck },

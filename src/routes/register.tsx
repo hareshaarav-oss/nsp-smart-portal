@@ -191,10 +191,7 @@ function RegisterPage() {
                   </select>
                 </Field>
                 <Field label="Role">
-                  <select className="h-10 w-full rounded-md border border-border bg-card px-3 text-sm" value={form.nssRole} onChange={(e) => set("nssRole", e.target.value as NssRole)}>
-                    <option>Volunteer</option>
-                    <option>Leader</option>
-                  </select>
+                  <Input value="Volunteer" readOnly />
                 </Field>
                 <Field label="Date of birth">
                   <Input type="date" value={form.dob} onChange={(e) => set("dob", e.target.value)} />

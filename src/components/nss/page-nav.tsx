@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { Download } from "lucide-react";
+import { Download, MessageCircle } from "lucide-react";
 import { dashboardPath, isOfficer, useSessionStore } from "@/lib/nss/session";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -35,6 +35,12 @@ export function PageNav({
           <Link to="/contact" className="rounded-sm px-3 py-2 hover:bg-white/10">
             Contact
           </Link>
+          {session ? (
+            <Link to="/chat" className="inline-flex items-center gap-1 rounded-sm px-3 py-2 hover:bg-white/10">
+              <MessageCircle className="size-4" />
+              Chat
+            </Link>
+          ) : null}
           {showDashboard && session ? (
             <Link
               to={session ? dash : "/login"}

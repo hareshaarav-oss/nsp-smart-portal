@@ -22,6 +22,7 @@ import { Route as StudentDashboardRouteImport } from './routes/student-dashboard
 import { Route as StudentRegisterRouteImport } from './routes/student-register'
 import { Route as VerifyRouteImport } from './routes/verify'
 import { Route as VolunteerRouteImport } from './routes/volunteer'
+import { Route as ChatRouteImport } from './routes/chat'
 import { Route as AdminSplatRouteImport } from './routes/admin.$'
 import { Route as ApiNssCloudRouteImport } from './routes/api/nss-cloud'
 import { Route as PoIndexRouteImport } from './routes/po/index'
@@ -104,6 +105,11 @@ const VerifyRoute = VerifyRouteImport.update({
 const VolunteerRoute = VolunteerRouteImport.update({
   id: '/volunteer',
   path: '/volunteer',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ChatRoute = ChatRouteImport.update({
+  id: '/chat',
+  path: '/chat',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdminSplatRoute = AdminSplatRouteImport.update({
@@ -211,6 +217,7 @@ export interface FileRoutesByFullPath {
   '/student-register': typeof StudentRegisterRoute
   '/verify': typeof VerifyRoute
   '/volunteer': typeof VolunteerRoute
+  '/chat': typeof ChatRoute
   '/admin/$': typeof AdminSplatRoute
   '/api/nss-cloud': typeof ApiNssCloudRoute
   '/po/ai': typeof PoAiRoute
@@ -243,6 +250,7 @@ export interface FileRoutesByTo {
   '/student-register': typeof StudentRegisterRoute
   '/verify': typeof VerifyRoute
   '/volunteer': typeof VolunteerRoute
+  '/chat': typeof ChatRoute
   '/admin/$': typeof AdminSplatRoute
   '/api/nss-cloud': typeof ApiNssCloudRoute
   '/po/ai': typeof PoAiRoute
@@ -277,6 +285,7 @@ export interface FileRoutesById {
   '/student-register': typeof StudentRegisterRoute
   '/verify': typeof VerifyRoute
   '/volunteer': typeof VolunteerRoute
+  '/chat': typeof ChatRoute
   '/admin/$': typeof AdminSplatRoute
   '/api/nss-cloud': typeof ApiNssCloudRoute
   '/po/ai': typeof PoAiRoute
@@ -312,6 +321,7 @@ export interface FileRouteTypes {
     | '/student-register'
     | '/verify'
     | '/volunteer'
+    | '/chat'
     | '/admin/$'
     | '/api/nss-cloud'
     | '/po/ai'
@@ -344,6 +354,7 @@ export interface FileRouteTypes {
     | '/student-register'
     | '/verify'
     | '/volunteer'
+    | '/chat'
     | '/admin/$'
     | '/api/nss-cloud'
     | '/po/ai'
@@ -377,6 +388,7 @@ export interface FileRouteTypes {
     | '/student-register'
     | '/verify'
     | '/volunteer'
+    | '/chat'
     | '/admin/$'
     | '/api/nss-cloud'
     | '/po/ai'
@@ -411,6 +423,7 @@ export interface RootRouteChildren {
   StudentRegisterRoute: typeof StudentRegisterRoute
   VerifyRoute: typeof VerifyRoute
   VolunteerRoute: typeof VolunteerRoute
+  ChatRoute: typeof ChatRoute
   ApiNssCloudRoute: typeof ApiNssCloudRoute
 }
 
@@ -505,6 +518,13 @@ declare module '@tanstack/react-router' {
       path: '/volunteer'
       fullPath: '/volunteer'
       preLoaderRoute: typeof VolunteerRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/chat': {
+      id: '/chat'
+      path: '/chat'
+      fullPath: '/chat'
+      preLoaderRoute: typeof ChatRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/admin/$': {
@@ -700,6 +720,7 @@ const rootRouteChildren: RootRouteChildren = {
   StudentRegisterRoute: StudentRegisterRoute,
   VerifyRoute: VerifyRoute,
   VolunteerRoute: VolunteerRoute,
+  ChatRoute: ChatRoute,
   ApiNssCloudRoute: ApiNssCloudRoute,
 }
 export const routeTree = rootRouteImport

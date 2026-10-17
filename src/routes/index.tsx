@@ -116,6 +116,9 @@ function Home() {
                 Student login
               </Link>
             </Button>
+            <Button asChild className="h-11 bg-forest text-primary-foreground hover:bg-forest/90">
+              <Link to="/chat">NSS Chat</Link>
+            </Button>
             <Button asChild className="h-11 bg-navy text-paper hover:bg-navy-deep">
               <Link to="/login" search={{ role: "po" }}>
                 Admin login

@@ -189,7 +189,7 @@ export async function loadCollegeCloud(opts: { gallery?: boolean } = {}): Promis
     const semester = latinDigits(text(s.semester) || "1");
     const mobileDigits = mobileKey(s.mobile) || mobileKey(s._id);
     const mobile = mobileDigits.length >= 10 ? mobileDigits : latinDigits(text(s.mobile));
-    const role = /leader/i.test(text(s.nssRole)) ? "Leader" : "Volunteer";
+    const role = knownRole(s.nssRole);
     const statusRaw = text(s.status).toLowerCase();
     const roleRaw = text(s.nssRole).toLowerCase();
     const isAlumni = statusRaw === "alumni" || roleRaw === "alumni";
@@ -295,7 +295,13 @@ export async function loadCollegeCloud(opts: { gallery?: boolean } = {}): Promis
     attendance.push({ volunteerId: volunteer.id, eventId: event.id, present: isPresent(row) });
   }
 
-  const notices: Notice[] = noticeDocs.map((n) => {
+  const notices: Notice[] = noticeDocs
+    .filter((n) => {
+      const kind = text(n.kind);
+      const title = text(n.title);
+      return kind !== "chat" && kind !== "chat-auth" && title !== "NSS_CHAT_INTERNAL" && title !== "NSS_CHAT_AUTH";
+    })
+    .map((n) => {
     const body = text(n.text) || text(n.body);
     const title = text(n.title) || "Notice";
     const leaders = /^leaders\b/i.test(title);
@@ -358,6 +364,15 @@ export function safePhoto(value: unknown) {
   const src = text(value);
   if ((src.startsWith("data:image/") || src.startsWith("https://")) && src.length < 120000) return src;
   return "";
+}
+
+const KNOWN_ROLES = ["Volunteer", "Leader", "Group Leader", "Discipline Head", "Camp Coordinator"] as const;
+
+export function knownRole(value: unknown): (typeof KNOWN_ROLES)[number] {
+  const raw = text(value);
+  const found = KNOWN_ROLES.find((role) => role.toLowerCase() === raw.toLowerCase());
+  if (found) return found;
+  return /leader/i.test(raw) ? "Leader" : "Volunteer";
 }
 
 function storedNssNumber(value: unknown) {
@@ -443,7 +458,7 @@ export async function saveStudentToCloud(input: Record<string, unknown>) {
     unit: encodeValue(unit),
     volunteerId: encodeValue(volunteerId),
     enrollment: encodeValue(enrollment),
-    nssRole: encodeValue(input.nssRole || "Volunteer"),
+    nssRole: encodeValue("Volunteer"),
     status: encodeValue("active"),
     fatherName: encodeValue(input.fatherName),
     dob: encodeValue(input.dob),
@@ -521,4 +536,115 @@ export function computeServiceHours(events: { id: string; hours?: number }[], at
     if (row.present) total += hoursMap.get(row.eventId) ?? 4;
   }
   return total;
+}
+
+export type ChatPerson = { id: string; name: string; unit: string; role: string };
+export type ChatRow = { id: string; threadId: string; text: string; senderId: string; senderName: string; createdAt: string };
+
+async function createDocument(collection: string, id: string, values: Record<string, unknown>) {
+  const fields: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(values)) fields[key] = encodeValue(value);
+  const res = await fetch(`${FIRESTORE_BASE}/${collection}?documentId=${encodeURIComponent(id)}`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ fields }),
+  });
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(body.slice(0, 180) || "Could not save");
+  }
+}
+
+export async function issueChatPass(pass: { token: string; senderId: string; senderName: string; role: string; unit: string; docId: string }) {
+  await createDocument("notices", pass.token, {
+    kind: "chat-auth",
+    title: "NSS_CHAT_AUTH",
+    senderId: pass.senderId,
+    senderName: pass.senderName,
+    role: pass.role,
+    unit: pass.unit,
+    docId: pass.docId,
+    createdAt: new Date().toISOString(),
+  });
+}
+
+export async function readChatPass(token: string) {
+  if (!/^[a-f0-9]{32,64}$/.test(token)) return null;
+  const row = await getDocument(`notices/${token}`);
+  if (!row || text(row.kind) !== "chat-auth" || !text(row.senderId)) return null;
+  return {
+    id: text(row.senderId),
+    name: text(row.senderName) || "NSS",
+    role: text(row.role) || "volunteer",
+    unit: text(row.unit),
+    docId: text(row.docId),
+  };
+}
+
+export async function listChatPeople(): Promise<ChatPerson[]> {
+  const params = new URLSearchParams({ pageSize: "300" });
+  for (const field of ["fullName", "firstName", "middleName", "surname", "volunteerId", "unit", "nssRole", "status", "createdAt"]) {
+    params.append("mask.fieldPaths", field);
+  }
+  const docs: Record<string, unknown>[] = [];
+  let url: string | "" = `${FIRESTORE_BASE}/students?${params}`;
+  while (url) {
+    const res = await fetch(url);
+    if (!res.ok) break;
+    const json = (await res.json()) as { documents?: { name?: string; fields?: Record<string, FsValue> }[]; nextPageToken?: string };
+    for (const doc of json.documents ?? []) docs.push(decodeDoc(doc));
+    url = json.nextPageToken ? `${FIRESTORE_BASE}/students?${params}&pageToken=${encodeURIComponent(json.nextPageToken)}` : "";
+  }
+  const keep = docs.filter((s) => {
+    const status = text(s.status).toLowerCase();
+    return status !== "inactive" && status !== "deleted";
+  });
+  const sorted = [...keep].sort(
+    (a, b) => isoDate(a.createdAt).localeCompare(isoDate(b.createdAt)) || text(a.fullName).localeCompare(text(b.fullName), "en", { sensitivity: "base" }),
+  );
+  const numbers = rollNumbers(sorted);
+  return sorted
+    .map((s) => {
+      const n = numbers.get(s) ?? 1;
+      const assembled = [s.firstName, s.middleName, s.surname].map(text).filter(Boolean).join(" ");
+      const unit = text(s.unit) === "Unit 2" ? "Unit 2" : "Unit 1";
+      return {
+        id: text(s.volunteerId) || `NSS${padId(n)}`,
+        name: titleFirstName(cleanPersonName(text(s.fullName) || assembled)),
+        unit,
+        role: knownRole(s.nssRole),
+      };
+    })
+    .filter((person) => person.name);
+}
+
+export async function listRecentChatMessages(limit = 300): Promise<ChatRow[]> {
+  const docs = await listCollection("notices");
+  return docs
+    .filter((row) => text(row.kind) === "chat" && text(row.threadId) && text(row.text))
+    .map((row) => ({
+      id: text(row._id),
+      threadId: text(row.threadId),
+      text: text(row.text).slice(0, 1000),
+      senderId: text(row.senderId),
+      senderName: text(row.senderName).slice(0, 80),
+      createdAt: text(row.createdAt),
+    }))
+    .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+    .slice(-limit);
+}
+
+export async function saveChatMessage(input: { threadId: string; text: string; senderId: string; senderName: string }) {
+  const createdAt = new Date().toISOString();
+  const id = `chat${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
+  await createDocument("notices", id, {
+    kind: "chat",
+    title: "NSS_CHAT_INTERNAL",
+    threadId: input.threadId,
+    text: input.text.slice(0, 1000),
+    senderId: input.senderId,
+    senderName: input.senderName.slice(0, 80),
+    createdAt,
+  });
+  return { id, ...input, text: input.text.slice(0, 1000), createdAt };
 }
