@@ -45,7 +45,6 @@ function Home() {
   const volunteers = useNssStore((s) => s.volunteers) ?? [];
   const attendance = useNssStore((s) => s.attendance) ?? [];
   const [rollQuery, setRollQuery] = useState("");
-  const [panel, setPanel] = useState<"roll" | "notices" | "activities" | "birthdays" | "officers">("roll");
   const roll = useMemo(() => {
     const state = useNssStore.getState();
     const q = rollQuery.trim().toLowerCase();
@@ -145,51 +144,22 @@ function Home() {
               <div className="order-first md:order-none">
                 <div className="mb-3 flex items-center justify-between gap-3"><div><p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-saffron">S.D. Arts & Shah B.R. Commerce College</p><p className="mt-1 text-sm font-semibold text-saffron">Welcome to Avyansh Tech</p><h1 className="font-display text-2xl font-bold text-navy md:text-3xl">NSS Smart Portal</h1></div><span className="inline-flex items-center gap-1.5 rounded-full border border-forest/20 bg-forest/10 px-3 py-1 text-xs font-semibold text-forest"><span className="size-1.5 rounded-full bg-forest" />Live</span></div>
                 <PhotoCarousel items={gallery} />
-                <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4"><MiniStat label="Volunteers" value={volunteerCount} /><MiniStat label="Portal visitors" value={visitors} /><MiniStat label="Alumni" value={alumniCount} /><MiniStat label="Service hours · live" value={hours} /></div>
+                <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4"><MiniStat label="Volunteers" value={volunteerCount} /><MiniStat label="Visitors" value={visitors} /><MiniStat label="Alumni" value={alumniCount} /><MiniStat label="Service hours" value={hours} /></div>
               </div>
               <HomeOfficer role="Principal" name={settings.principalName} quote={settings.principalQuote} photo={settings.principalPhoto} />
             </div>
           </section>
 
-          <section className="mt-6">
-            <div className="flex gap-2 overflow-x-auto pb-2" role="tablist" aria-label="Portal sections">
-              {(
-                [
-                  ["roll", `Roll (${roll.length})`],
-                  ["notices", `Notices (${latestNotices.length})`],
-                  ["activities", `Activities (${upcoming.length + completed.length})`],
-                  ["birthdays", `Birthdays (${birthdayVolunteers.length})`],
-                  ["officers", "Officers"],
-                ] as const
-              ).map(([id, label]) => (
-                <button
-                  key={id}
-                  type="button"
-                  role="tab"
-                  aria-selected={panel === id}
-                  onClick={() => setPanel(id)}
-                  className={
-                    panel === id
-                      ? "h-11 shrink-0 rounded-full bg-navy px-4 text-sm font-semibold text-paper"
-                      : "h-11 shrink-0 rounded-full bg-card px-4 text-sm font-medium text-navy ring-1 ring-border"
-                  }
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-
-            {panel === "roll" ? (
-              <Card className="mt-3 shadow-md">
+          <section className="mt-6 space-y-4">
+              <Card className="shadow-md">
                 <CardContent className="p-5">
                   <div className="flex flex-wrap items-end justify-between gap-3">
                     <div>
                       <h2 className="font-display text-xl text-navy">NSS roll</h2>
-                      <p className="text-sm text-muted-foreground">{roll.length} volunteers · newest first · hours update on their own</p>
                     </div>
                     <Input value={rollQuery} onChange={(e) => setRollQuery(e.target.value)} placeholder="Search name or NSS ID" className="max-w-xs" />
                   </div>
-                  <div className="mt-4 max-h-[28rem] space-y-2 overflow-y-auto pr-1">
+                  <div className="mt-4 space-y-2">
                     {roll.length === 0 ? (
                       <p className="py-8 text-center text-sm text-muted-foreground">No volunteer matches that search.</p>
                     ) : (
@@ -218,10 +188,8 @@ function Home() {
                   </div>
                 </CardContent>
               </Card>
-            ) : null}
 
-            {panel === "notices" ? (
-              <Card className="mt-3 border-t-4 border-t-danger shadow-md">
+              <Card className="border-t-4 border-t-danger shadow-md">
                 <CardContent className="p-5">
                   <h2 className="font-display text-xl text-navy">Latest news & notices</h2>
                   <div className="mt-3 space-y-3">
@@ -241,10 +209,8 @@ function Home() {
                   </div>
                 </CardContent>
               </Card>
-            ) : null}
 
-            {panel === "activities" ? (
-              <Card className="mt-3 border-t-4 border-t-forest shadow-md">
+              <Card className="border-t-4 border-t-forest shadow-md">
                 <CardContent className="p-5">
                   <h2 className="font-display text-xl text-navy">{upcoming.length ? "Upcoming activities" : "Recent activities"}</h2>
                   <div className="mt-3 space-y-2">
@@ -272,10 +238,8 @@ function Home() {
                   </div>
                 </CardContent>
               </Card>
-            ) : null}
 
-            {panel === "birthdays" ? (
-              <Card className="mt-3 border-saffron/40 shadow-md">
+              <Card className="border-saffron/40 shadow-md">
                 <CardContent className="p-5">
                   <div className="flex items-center gap-2"><Cake className="size-5 text-saffron" /><h2 className="font-display text-xl text-navy">NSS Birthday Wishes</h2></div>
                   {settings.birthdayEnabled === false || birthdayVolunteers.length === 0 ? (
@@ -298,26 +262,19 @@ function Home() {
                   )}
                 </CardContent>
               </Card>
-            ) : null}
 
-            {panel === "officers" ? (
-              <div className="mt-3 grid gap-3 md:grid-cols-2">
-                <HomeOfficer role="Programme Officer" name={settings.poName} quote={settings.poQuote} photo={settings.poPhoto} />
-                <HomeOfficer role="Principal" name={settings.principalName} quote={settings.principalQuote} photo={settings.principalPhoto} />
-                {bestId ? (
-                  <Card className="border-saffron/40 shadow-md md:col-span-2">
-                    <CardContent className="flex flex-wrap items-center gap-3 p-5">
-                      <Star className="size-6 text-saffron" />
-                      <div>
-                        <p className="text-xs uppercase tracking-[0.16em] text-saffron">Best volunteer</p>
-                        <p className="font-display text-lg text-navy">{bestName}</p>
-                        <p className="text-sm text-muted-foreground">{bestVid} · {bestUnit} · {bestHours} service hours</p>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ) : null}
-              </div>
-            ) : null}
+              {bestId ? (
+                <Card className="border-saffron/40 shadow-md">
+                  <CardContent className="flex flex-wrap items-center gap-3 p-5">
+                    <Star className="size-6 text-saffron" />
+                    <div>
+                      <p className="text-xs uppercase tracking-[0.16em] text-saffron">Best volunteer</p>
+                      <p className="font-display text-lg text-navy">{bestName}</p>
+                      <p className="text-sm text-muted-foreground">{bestVid} · {bestUnit} · {bestHours} service hours</p>
+                    </div>
+                  </CardContent>
+                </Card>
+              ) : null}
           </section>
         </section>
       </AppShell>

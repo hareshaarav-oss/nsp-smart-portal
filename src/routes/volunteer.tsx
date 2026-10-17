@@ -252,11 +252,6 @@ function VolunteerDash() {
             <CardTitle className="text-base">MPIN and fingerprint</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            <p className="text-sm text-muted-foreground">
-              Username is your first name in CAPITAL letters. Password is your registered mobile until you change
-              it here — the new password is saved at once. You can also set a 4-digit MPIN or enable this phone’s
-              fingerprint.
-            </p>
             <form
               className="flex flex-wrap items-end gap-2"
               onSubmit={(e) => {
