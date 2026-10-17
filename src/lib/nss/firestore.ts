@@ -365,8 +365,44 @@ function encodeValue(value: unknown): Record<string, unknown> {
 
 export function safePhoto(value: unknown) {
   const src = text(value);
-  if ((src.startsWith("data:image/") || src.startsWith("https://")) && src.length < 120000) return src;
+  if ((src.startsWith("data:image/") || src.startsWith("https://")) && src.length < 420000) return src;
   return "";
+}
+
+export async function readBrandPhotos() {
+  try {
+    const doc = await getDocument("portalSettings/brand");
+    return {
+      poPhoto: safePhoto(doc?.poPhoto),
+      principalPhoto: safePhoto(doc?.principalPhoto),
+    };
+  } catch {
+    return { poPhoto: "", principalPhoto: "" };
+  }
+}
+
+export async function saveBrandPhotos(patch: { poPhoto?: string; principalPhoto?: string }) {
+  const current = await readBrandPhotos();
+  const poPhoto = patch.poPhoto !== undefined ? safePhoto(patch.poPhoto) : current.poPhoto;
+  const principalPhoto = patch.principalPhoto !== undefined ? safePhoto(patch.principalPhoto) : current.principalPhoto;
+  const fields = {
+    poPhoto: encodeValue(poPhoto),
+    principalPhoto: encodeValue(principalPhoto),
+    updatedAt: encodeValue(new Date().toISOString()),
+  };
+  const patchRes = await fetch(`${FIRESTORE_BASE}/portalSettings/brand`, {
+    method: "PATCH",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ fields }),
+  });
+  if (patchRes.ok) return { poPhoto, principalPhoto };
+  const createRes = await fetch(`${FIRESTORE_BASE}/portalSettings?documentId=brand`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ fields }),
+  });
+  if (!createRes.ok) throw new Error("Could not save the photographs.");
+  return { poPhoto, principalPhoto };
 }
 
 const KNOWN_ROLES = ["Volunteer", "Leader", "Group Leader", "Discipline Head", "Camp Coordinator"] as const;

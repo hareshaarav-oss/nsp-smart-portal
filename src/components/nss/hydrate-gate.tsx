@@ -18,6 +18,24 @@ function noteBuild(build: unknown) {
   }
 }
 
+function rescueOfficerPhotos() {
+  try {
+    for (const key of ["nsp-portal-data-v1", STORAGE_DATA]) {
+      const raw = localStorage.getItem(key);
+      if (!raw || !raw.includes("data:image")) continue;
+      const parsed = JSON.parse(raw) as { state?: { settings?: { poPhoto?: string; principalPhoto?: string } }; settings?: { poPhoto?: string; principalPhoto?: string } };
+      const settings = parsed.state?.settings || parsed.settings;
+      const poPhoto = settings?.poPhoto || "";
+      const principalPhoto = settings?.principalPhoto || "";
+      if (!poPhoto.startsWith("data:image") && !principalPhoto.startsWith("data:image")) continue;
+      sessionStorage.setItem("nsp-rescued-photos", JSON.stringify({ poPhoto, principalPhoto }));
+      return;
+    }
+  } catch {
+    /* keep going */
+  }
+}
+
 function dropStalePortalCache() {
   try {
     const drop: string[] = [];
@@ -43,6 +61,7 @@ type CloudBody = {
   visitors?: number;
   alumniCount?: number;
   serviceHours?: number;
+  brand?: { poPhoto?: string; principalPhoto?: string };
 };
 
 function applyBody(cloud: CloudBody) {
@@ -58,6 +77,7 @@ function applyBody(cloud: CloudBody) {
     alumniCount: cloud.alumniCount,
     serviceHours: cloud.serviceHours,
     keepPrivate: Boolean(cloud.private),
+    brand: cloud.brand,
   });
   return Array.isArray(cloud.volunteers) && cloud.volunteers.length >= 20;
 }
@@ -86,6 +106,7 @@ export function HydrateGate({ children }: { children: ReactNode }) {
     }
 
     void (async () => {
+      rescueOfficerPhotos();
       dropStalePortalCache();
       try {
         await Promise.all([
@@ -104,6 +125,18 @@ export function HydrateGate({ children }: { children: ReactNode }) {
         setStatus("Could not reach the college roll. Showing saved data.");
       }
       finish();
+      void fetch("/api/nss-cloud", { cache: "no-store" })
+        .then((res) => res.json())
+        .then((cloud: CloudBody) => {
+          if (!cancelled) applyBody(cloud);
+          const saved = sessionStorage.getItem("nsp-rescued-photos");
+          if (!saved) return;
+          const photos = JSON.parse(saved) as { poPhoto?: string; principalPhoto?: string };
+          const settings = useNssStore.getState().settings;
+          if (!settings.poPhoto && photos.poPhoto) useNssStore.getState().updateSettings({ poPhoto: photos.poPhoto });
+          if (!settings.principalPhoto && photos.principalPhoto) useNssStore.getState().updateSettings({ principalPhoto: photos.principalPhoto });
+        })
+        .catch(() => undefined);
       void fetch("/api/nss-cloud?gallery=1", { cache: "no-store" })
         .then((res) => res.json())
         .then((cloud: CloudBody) => {

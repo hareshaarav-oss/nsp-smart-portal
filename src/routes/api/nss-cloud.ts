@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { loadCollegeCloud, saveStudentToCloud, incrementVisitors, patchStudent, safePhoto, knownRole, issueChatPass, readChatPass, listRecentChatMessages, saveChatMessage, listChatPeople, clearAttendanceCloud } from "@/lib/nss/firestore";
+import { loadCollegeCloud, saveStudentToCloud, incrementVisitors, patchStudent, safePhoto, knownRole, issueChatPass, readChatPass, listRecentChatMessages, saveChatMessage, listChatPeople, clearAttendanceCloud, readBrandPhotos, saveBrandPhotos } from "@/lib/nss/firestore";
 
 type Row = Record<string, unknown>;
 
@@ -187,7 +187,8 @@ export const Route = createFileRoute("/api/nss-cloud")({
           const includeGallery = new URL(request.url).searchParams.get("gallery") === "1";
           const data = await loadCollegeCloud({ gallery: includeGallery });
           if (!data) return Response.json({ ok: false }, { status: 404, headers: { "cache-control": "no-store" } });
-          return Response.json(publicPayload(data as unknown as Row, includeGallery), {
+          const brand = await readBrandPhotos();
+          return Response.json({ ...publicPayload(data as unknown as Row, includeGallery), brand }, {
             headers: { "cache-control": "no-store" },
           });
         } catch (error) {
@@ -219,6 +220,8 @@ export const Route = createFileRoute("/api/nss-cloud")({
             nssRole?: string;
             status?: string;
             eventName?: string;
+            poPhoto?: string;
+            principalPhoto?: string;
           };
           if (body.action === "clear-attendance") {
             const user = await readChatPass(text(body.chatToken));
@@ -229,6 +232,17 @@ export const Route = createFileRoute("/api/nss-cloud")({
             if (!eventName) return Response.json({ ok: false, error: "Choose an event first." }, { status: 400 });
             const result = await clearAttendanceCloud(eventName);
             return Response.json({ ok: true, ...result });
+          }
+          if (body.action === "save-brand") {
+            const user = await readChatPass(text(body.chatToken));
+            if (!user || (user.role !== "po" && user.role !== "admin")) {
+              return Response.json({ ok: false, error: "Sign in again to save photographs." }, { status: 401 });
+            }
+            const saved = await saveBrandPhotos({
+              poPhoto: typeof body.poPhoto === "string" ? body.poPhoto : undefined,
+              principalPhoto: typeof body.principalPhoto === "string" ? body.principalPhoto : undefined,
+            });
+            return Response.json({ ok: true, brand: saved });
           }
           if (body.action === "visit") {
             const visitors = await incrementVisitors();
@@ -286,8 +300,12 @@ export const Route = createFileRoute("/api/nss-cloud")({
             if (!data) return Response.json({ ok: false }, { status: 404 });
             const officer = user?.role === "po" || user?.role === "admin";
             const rows = (data.volunteers ?? []) as unknown as Row[];
-            const volunteers = rows.map((row) => ({ ...(officer ? officerVolunteer(row) : publicVolunteer(row)), photoUrl: "" }));
+            const volunteers = rows.map((row) => {
+              const shaped = officer ? officerVolunteer(row) : publicVolunteer(row);
+              return { ...shaped, photoUrl: undefined };
+            });
             const attendance = publicAttendance(rows, (data.attendance ?? []) as unknown as Row[]);
+            const brand = await readBrandPhotos();
             return Response.json({
               ok: true,
               private: officer,
@@ -298,6 +316,7 @@ export const Route = createFileRoute("/api/nss-cloud")({
               serviceHours: data.serviceHours,
               visitors: data.visitors,
               build: appBuild(),
+              brand,
             });
           }
           if (body.action === "set-password" || body.action === "update-profile") {
@@ -318,7 +337,7 @@ export const Route = createFileRoute("/api/nss-cloud")({
               return Response.json({ ok: true });
             }
             const photo = text(body.photoUrl);
-            if (photo && (!photo.startsWith("data:image/") || photo.length >= 120000)) {
+            if (photo && (!photo.startsWith("data:image/") || photo.length >= 420000)) {
               return Response.json({ ok: false, error: "Photograph is too large. Use a smaller JPG or PNG." }, { status: 400 });
             }
             const patch: Record<string, unknown> = { updatedAt: new Date().toISOString() };

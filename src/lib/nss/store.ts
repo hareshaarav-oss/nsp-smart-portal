@@ -42,6 +42,7 @@ type CloudSlice =
     alumniCount?: number;
     serviceHours?: number;
     keepPrivate?: boolean;
+    brand?: { poPhoto?: string; principalPhoto?: string };
   };
 
 type Actions = {
@@ -757,7 +758,7 @@ export const useNssStore =
                     const cloudPhoto =
                       row.photoUrl &&
                       row.photoUrl.length <
-                        120000
+                        420000
                         ? row.photoUrl
                         : "";
 
@@ -807,7 +808,7 @@ export const useNssStore =
                         cloudPhoto ||
                         (prev?.photoUrl &&
                         prev.photoUrl.length <
-                          120000
+                          420000
                           ? prev.photoUrl
                           : ""),
 
@@ -1131,6 +1132,14 @@ export const useNssStore =
 
             poPassword: "",
             adminPassword: "",
+            poPhoto:
+              cloud.brand?.poPhoto ||
+              current.settings.poPhoto ||
+              "",
+            principalPhoto:
+              cloud.brand?.principalPhoto ||
+              current.settings.principalPhoto ||
+              "",
           };
 
           if (
@@ -2486,7 +2495,7 @@ export const useNssStore =
         partialize: (s) => ({
           volunteers: (s.volunteers ?? []).map((v) => ({
             ...v,
-            photoUrl: v.photoUrl?.startsWith("data:") ? "" : v.photoUrl,
+            photoUrl: v.photoUrl && v.photoUrl.length < 420000 ? v.photoUrl : "",
           })),
 
           events:

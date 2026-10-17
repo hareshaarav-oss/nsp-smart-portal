@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
+import { useSessionStore } from "@/lib/nss/session";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -22,7 +23,30 @@ function SettingsPage() {
   const [draft, setDraft] = useState(settings);
   useEffect(() => setDraft(settings), [settings]);
   const updateDraft = (patch: Partial<typeof settings>) => setDraft((prev) => ({ ...prev, ...patch }));
-  const saveSettings = () => { update(draft); toast.success("Settings saved successfully."); };
+  const saveSettings = () => {
+    update(draft);
+    const token = useSessionStore.getState().session?.chatToken || "";
+    if (token && (draft.poPhoto || draft.principalPhoto)) {
+      void fetch("/api/nss-cloud", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          action: "save-brand",
+          chatToken: token,
+          poPhoto: draft.poPhoto || "",
+          principalPhoto: draft.principalPhoto || "",
+        }),
+      })
+        .then((res) => res.json())
+        .then((data: { ok?: boolean; error?: string }) => {
+          if (!data.ok) toast.error(data.error || "Photograph stayed on this phone only.");
+          else toast.success("Settings and photographs saved.");
+        })
+        .catch(() => toast.error("Photograph stayed on this phone only."));
+      return;
+    }
+    toast.success("Settings saved successfully.");
+  };
   const [busy, setBusy] = useState<"principal" | "po" | null>(null);
 
   async function onLogo(kind: "college" | "nss", file: File | undefined) {
