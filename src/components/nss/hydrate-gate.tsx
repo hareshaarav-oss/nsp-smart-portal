@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { useNssStore } from "@/lib/nss/store";
+import { rememberVolunteer, useNssStore } from "@/lib/nss/store";
 import { useSessionStore } from "@/lib/nss/session";
 import { COLLEGE_LOGO, NSS_LOGO, STORAGE_DATA } from "@/lib/nss/constants";
 
@@ -250,7 +250,7 @@ export function HydrateGate({ children }: { children: ReactNode }) {
     }
 
     async function pullVisitors() {
-      if (cancelled || document.hidden || useNssStore.getState().visitors > 0) return;
+      if (cancelled || document.hidden) return;
       const res = await fetch("/api/nss-cloud", {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -259,7 +259,73 @@ export function HydrateGate({ children }: { children: ReactNode }) {
       const data = (await res.json()) as { ok?: boolean; visitors?: number };
       if (!data.ok || typeof data.visitors !== "number" || data.visitors < 1) return;
       const current = useNssStore.getState().visitors;
-      useNssStore.setState({ visitors: Math.max(current, data.visitors) });
+      if (data.visitors !== current) useNssStore.setState({ visitors: Math.max(current, data.visitors) });
+    }
+
+    async function pullPulse() {
+      if (cancelled || document.hidden) return;
+      const res = await fetch("/api/nss-cloud", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ action: "live" }),
+      });
+      const data = (await res.json()) as {
+        ok?: boolean;
+        live?: {
+          visitors?: number;
+          volunteerCount?: number;
+          latest?: { id?: string; volunteerId?: string; fullName?: string; unit?: string; createdAt?: string };
+          best?: { id?: string; volunteerId?: string; fullName?: string; unit?: string; hours?: number };
+        };
+      };
+      if (!data.ok || !data.live) return;
+      const state = useNssStore.getState();
+      const patch: { visitors?: number; liveVolunteerCount?: number; liveBest?: NonNullable<typeof state.liveBest> } = {};
+      if (typeof data.live.visitors === "number" && data.live.visitors > state.visitors) patch.visitors = data.live.visitors;
+      if (typeof data.live.volunteerCount === "number" && data.live.volunteerCount > (state.liveVolunteerCount ?? 0)) {
+        patch.liveVolunteerCount = data.live.volunteerCount;
+      }
+      const best = data.live.best;
+      if (best?.fullName && typeof best.hours === "number") {
+        const currentHours = state.liveBest?.hours ?? -1;
+        if (best.hours !== currentHours || best.fullName !== state.liveBest?.fullName) {
+          patch.liveBest = {
+            id: best.id || best.volunteerId || best.fullName,
+            volunteerId: best.volunteerId || "",
+            fullName: best.fullName,
+            unit: best.unit === "Unit 2" ? "Unit 2" : "Unit 1",
+            hours: best.hours,
+          };
+        }
+      }
+      if (Object.keys(patch).length) useNssStore.setState(patch);
+      const latest = data.live.latest;
+      const known = latest?.volunteerId
+        ? (state.volunteers ?? []).some((row) => row.volunteerId === latest.volunteerId || row.id === latest.volunteerId)
+        : true;
+      if (latest?.fullName && latest.volunteerId && !known) {
+        rememberVolunteer({
+          id: latest.volunteerId,
+          volunteerId: latest.volunteerId,
+          enrollment: "",
+          fullName: latest.fullName,
+          mobile: "",
+          email: "",
+          course: "B.Com.",
+          semester: "1",
+          unit: latest.unit === "Unit 2" ? "Unit 2" : "Unit 1",
+          nssRole: "Volunteer",
+          fatherName: "",
+          dob: "",
+          gender: "Other",
+          bloodGroup: "",
+          address: "",
+          parentMobile: "",
+          photoUrl: "",
+          status: "active",
+          createdAt: latest.createdAt || "",
+        });
+      }
     }
 
     void (async () => {
@@ -308,14 +374,19 @@ export function HydrateGate({ children }: { children: ReactNode }) {
       }
       if (!photosLoaded) void ensurePhotos();
       void pullVisitors().catch(() => undefined);
+      void pullPulse().catch(() => undefined);
     })();
 
     const timer = window.setInterval(() => {
       void pullLive().catch(() => undefined);
+      void pullVisitors().catch(() => undefined);
+      void pullPulse().catch(() => undefined);
       void ensurePhotos();
-    }, 60000);
+    }, 20000);
     const wake = () => {
       void pullLive().catch(() => undefined);
+      void pullVisitors().catch(() => undefined);
+      void pullPulse().catch(() => undefined);
       void ensurePhotos();
     };
     document.addEventListener("visibilitychange", wake);

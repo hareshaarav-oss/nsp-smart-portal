@@ -1,4 +1,4 @@
-import { loadCollegeCloud, loadPublicBoard, loadOfficerRoll, collegeQuotaBlocked, saveStudentToCloud, incrementVisitors, readVisitorCount, patchStudent, safePhoto, knownRole, issueChatPass, readChatPass, listRecentChatMessages, saveChatMessage, listChatPeople, clearAttendanceCloud, readBrandPhotos, saveBrandPhotos, listPhotoRoster, readPhotoBatch, saveAttendanceMarks } from "@/lib/nss/firestore";
+import { loadCollegeCloud, loadPublicBoard, loadOfficerRoll, collegeQuotaBlocked, saveStudentToCloud, incrementVisitors, readVisitorCount, patchStudent, safePhoto, knownRole, issueChatPass, readChatPass, listRecentChatMessages, saveChatMessage, listChatPeople, clearAttendanceCloud, readBrandPhotos, saveBrandPhotos, listPhotoRoster, readPhotoBatch, saveAttendanceMarks, readLive, publishBestVolunteer } from "@/lib/nss/firestore";
 import { createFileRoute } from "@tanstack/react-router";
 
 type Row = Record<string, unknown>;
@@ -268,6 +268,7 @@ export const Route = createFileRoute("/api/nss-cloud")({
             deskRole?: string;
             all?: boolean;
             unit?: string;
+            hours?: number;
             rows?: { mobile?: string; name?: string; eventName?: string; present?: boolean; date?: string }[];
             ids?: string[];
           };
@@ -361,6 +362,26 @@ export const Route = createFileRoute("/api/nss-cloud")({
           if (body.action === "visitors") {
             const visitors = await readVisitorCount();
             return Response.json({ ok: visitors > 0, visitors });
+          }
+          if (body.action === "live") {
+            const live = await readLive();
+            return Response.json({ ok: Boolean(live), live });
+          }
+          if (body.action === "live-best") {
+            const desk = text(body.deskRole);
+            const user = text(body.chatToken) ? await readChatPass(text(body.chatToken)).catch(() => null) : null;
+            const officer = user?.role === "po" || user?.role === "admin" || desk === "po" || desk === "admin";
+            if (!officer) return Response.json({ ok: false }, { status: 403 });
+            const name = text(body.name);
+            if (!name) return Response.json({ ok: false }, { status: 400 });
+            await publishBestVolunteer({
+              id: text(body.volunteerId),
+              volunteerId: text(body.volunteerId),
+              fullName: name,
+              unit: text(body.unit) === "Unit 2" ? "Unit 2" : "Unit 1",
+              hours: Number(body.hours ?? 0),
+            });
+            return Response.json({ ok: true });
           }
           if (body.action === "register") {
             const saved = await saveStudentToCloud({ ...body, nssRole: "Volunteer" });

@@ -31,7 +31,10 @@ function Home() {
   const settings = useNssStore((s) => s.settings);
   const hours = useNssStore((s) => Math.max(totalServiceHours(s), s.settings.reportedServiceHours ?? 0));
   const volunteerCount = useNssStore((s) => activeVolunteers(s).length);
+  const liveVolunteerCount = useNssStore((s) => s.liveVolunteerCount ?? 0);
+  const shownVolunteers = Math.max(volunteerCount, liveVolunteerCount);
   const alumniCount = useNssStore((s) => Math.max(alumniVolunteers(s).length, s.settings.alumniCount));
+  const liveBest = useNssStore((s) => s.liveBest);
   const bestId = useNssStore((s) => bestVolunteer(s)?.id ?? "");
   const bestName = useNssStore((s) => bestVolunteer(s)?.fullName ?? "");
   const bestUnit = useNssStore((s) => bestVolunteer(s)?.unit ?? "");
@@ -41,6 +44,11 @@ function Home() {
     const v = bestVolunteer(s);
     return v ? volunteerHours(s, v.id) : 0;
   });
+  const showLiveBest = Boolean(liveBest && liveBest.hours > bestHours);
+  const cardName = showLiveBest && liveBest ? liveBest.fullName : bestName;
+  const cardUnit = showLiveBest && liveBest ? liveBest.unit : bestUnit;
+  const cardVid = showLiveBest && liveBest ? liveBest.volunteerId : bestVid;
+  const cardHours = showLiveBest && liveBest ? liveBest.hours : bestHours;
   const today = todayIso();
   const volunteers = useNssStore((s) => s.volunteers) ?? [];
   const rollPhotos = useMemo(
@@ -123,7 +131,7 @@ function Home() {
               <div className="order-first md:order-none">
                 <div className="mb-3 flex items-center justify-between gap-3"><div><p className="text-xs font-semibold uppercase tracking-[0.18em] text-saffron">Welcome to NSP</p><h1 className="font-display text-2xl font-bold text-navy md:text-3xl">NSS Smart Portal</h1></div><span className="rounded-full bg-forest/10 px-3 py-1.5 text-xs font-semibold text-forest">☁ Cloud Connected</span></div>
                 <PhotoCarousel items={gallery} />
-                <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4"><MiniStat label="Volunteers" value={volunteerCount} /><MiniStat label="Portal visitors" value={visitors} /><MiniStat label="Alumni" value={alumniCount} /><MiniStat label="Service hours" value={hours} /></div>
+                <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4"><MiniStat label="Volunteers" value={shownVolunteers} /><MiniStat label="Portal visitors" value={visitors} /><MiniStat label="Alumni" value={alumniCount} /><MiniStat label="Service hours" value={hours} /></div>
               </div>
               <HomeOfficer role="Principal" name={settings.principalName} quote={settings.principalQuote} photo={settings.principalPhoto} />
             </div>
@@ -220,16 +228,16 @@ function Home() {
             </section>
           ) : null}
 
-          {bestId ? (
+          {bestId || liveBest ? (
             <section className="mt-6">
               <Card className="border-saffron/40 shadow-md">
                 <CardContent className="flex flex-wrap items-center gap-3 p-5">
-                  {bestPhoto ? <img src={bestPhoto} alt="" className="h-16 w-14 rounded-md object-cover" /> : <Star className="size-6 text-saffron" />}
+                  {bestPhoto && !showLiveBest ? <img src={bestPhoto} alt="" className="h-16 w-14 rounded-md object-cover" /> : <Star className="size-6 text-saffron" />}
                   <div>
                     <p className="text-xs uppercase tracking-[0.16em] text-saffron">Best volunteer</p>
-                    <p className="font-display text-lg text-navy">{bestName}</p>
+                    <p className="font-display text-lg text-navy">{cardName}</p>
                     <p className="text-sm text-muted-foreground">
-                      {bestVid} · {bestUnit} · {bestHours} service hours
+                      {cardVid} · {cardUnit} · {cardHours} service hours
                     </p>
                   </div>
                 </CardContent>

@@ -684,6 +684,16 @@ export type PortalState = {
 
   visitors: number;
 
+  liveVolunteerCount?: number;
+
+  liveBest?: {
+    id: string;
+    volunteerId: string;
+    fullName: string;
+    unit: string;
+    hours: number;
+  };
+
   recycleBin: DeletedItem[];
 
   notifications?: PortalNotification[];

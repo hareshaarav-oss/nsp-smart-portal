@@ -933,6 +933,13 @@ export async function saveStudentToCloud(input: Record<string, unknown>) {
     throw new Error(body.slice(0, 180) || "Could not save registration to cloud");
   }
   void markBoardStale();
+  void publishLatestVolunteer({
+    id: volunteerId,
+    volunteerId,
+    fullName,
+    unit,
+    createdAt: now.slice(0, 10),
+  });
   return {
     ok: true,
     id: mobile,
@@ -1010,7 +1017,130 @@ async function incrementVisitorsFresh(): Promise<number> {
   if (!res.ok) return current > 0 ? current : 0;
   const json = (await res.json()) as { writeResults?: { transformResults?: { integerValue?: string }[] }[] };
   const value = Number(json.writeResults?.[0]?.transformResults?.[0]?.integerValue ?? 0);
-  return value || (current > 0 ? current + 1 : 1362);
+  const count = value || (current > 0 ? current + 1 : 1362);
+  void publishVisitors(count);
+  return count;
+}
+
+export type LivePulse = {
+  visitors: number;
+  volunteerCount: number;
+  latest?: { id: string; volunteerId: string; fullName: string; unit: string; createdAt: string };
+  best?: { id: string; volunteerId: string; fullName: string; unit: string; hours: number };
+};
+
+async function writeLive(fields: Record<string, unknown>) {
+  if (collegeQuotaBlocked()) return;
+  const params = new URLSearchParams();
+  for (const key of Object.keys(fields)) params.append("updateMask.fieldPaths", key);
+  const patch = await fetch(`${FIRESTORE_BASE}/portalSettings/live?${params}`, {
+    method: "PATCH",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ fields }),
+  });
+  if (patch.ok) return;
+  if (patch.status === 429 || patch.status === 503) {
+    noteQuota();
+    return;
+  }
+  await fetch(`${FIRESTORE_BASE}/portalSettings?documentId=live`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ fields }),
+  });
+}
+
+export async function readLive(): Promise<LivePulse | null> {
+  try {
+    const doc = await getDocument("portalSettings/live");
+    if (!doc) return null;
+    const latestName = text(doc.latestName);
+    const bestName = text(doc.bestName);
+    return {
+      visitors: Number(doc.visitors ?? 0),
+      volunteerCount: Number(doc.volunteerCount ?? 0),
+      latest: latestName
+        ? {
+            id: text(doc.latestId),
+            volunteerId: text(doc.latestVid),
+            fullName: latestName,
+            unit: text(doc.latestUnit) === "Unit 2" ? "Unit 2" : "Unit 1",
+            createdAt: text(doc.latestAt),
+          }
+        : undefined,
+      best: bestName
+        ? {
+            id: text(doc.bestId),
+            volunteerId: text(doc.bestVid),
+            fullName: bestName,
+            unit: text(doc.bestUnit) === "Unit 2" ? "Unit 2" : "Unit 1",
+            hours: Number(doc.bestHours ?? 0),
+          }
+        : undefined,
+    };
+  } catch {
+    return null;
+  }
+}
+
+export async function publishVisitors(count: number) {
+  if (count < 1) return;
+  await writeLive({
+    visitors: encodeValue(count),
+    updatedAt: encodeValue(new Date().toISOString()),
+  });
+}
+
+export async function publishLatestVolunteer(volunteer: {
+  id: string;
+  volunteerId: string;
+  fullName: string;
+  unit: string;
+  createdAt: string;
+}) {
+  const project = process.env.NSS_FIRESTORE_PROJECT_ID?.trim() || "studio-8504026975-1fdbc";
+  const document = `projects/${project}/databases/(default)/documents/portalSettings/live`;
+  if (!collegeQuotaBlocked()) {
+    await fetch(`${FIRESTORE_BASE}:commit`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        writes: [
+          {
+            transform: {
+              document,
+              fieldTransforms: [{ fieldPath: "volunteerCount", increment: { integerValue: "1" } }],
+            },
+          },
+        ],
+      }),
+    }).catch(() => undefined);
+  }
+  await writeLive({
+    latestId: encodeValue(volunteer.volunteerId || volunteer.id),
+    latestVid: encodeValue(volunteer.volunteerId),
+    latestName: encodeValue(volunteer.fullName),
+    latestUnit: encodeValue(volunteer.unit),
+    latestAt: encodeValue(volunteer.createdAt),
+    updatedAt: encodeValue(new Date().toISOString()),
+  });
+}
+
+export async function publishBestVolunteer(best: {
+  id: string;
+  volunteerId: string;
+  fullName: string;
+  unit: string;
+  hours: number;
+}) {
+  await writeLive({
+    bestId: encodeValue(best.id),
+    bestVid: encodeValue(best.volunteerId),
+    bestName: encodeValue(best.fullName),
+    bestUnit: encodeValue(best.unit),
+    bestHours: encodeValue(Math.max(0, Math.round(best.hours))),
+    updatedAt: encodeValue(new Date().toISOString()),
+  });
 }
 
 export async function clearAttendanceCloud(eventName = "", opts?: { all?: boolean }) {

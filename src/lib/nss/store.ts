@@ -335,6 +335,23 @@ function persistAttendance(rows: { mobile: string; name: string; eventName: stri
       deskRole: session?.role === "admin" ? "admin" : "po",
       rows: ready,
     }),
+  }).then(() => {
+    const state = useNssStore.getState();
+    const best = bestVolunteer(state);
+    if (!best) return;
+    void fetch("/api/nss-cloud", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        action: "live-best",
+        chatToken: session?.chatToken || "",
+        deskRole: session?.role === "admin" ? "admin" : "po",
+        volunteerId: best.volunteerId || best.id,
+        name: best.fullName,
+        unit: best.unit,
+        hours: volunteerHours(state, best.id),
+      }),
+    }).catch(() => undefined);
   }).catch(() => undefined);
 }
 
@@ -2565,6 +2582,12 @@ export const useNssStore =
           visitors:
             s.visitors,
 
+          liveVolunteerCount:
+            s.liveVolunteerCount ?? 0,
+
+          liveBest:
+            s.liveBest,
+
           recycleBin:
             s.recycleBin ?? [],
         }),
@@ -2937,6 +2960,10 @@ export function rememberVolunteer(volunteer: Volunteer) {
       fullName: titleFirstName(volunteer.fullName),
     });
     volunteers.sort(byFullName);
-    return { volunteers };
+    const active = volunteers.filter((row) => row.status !== "alumni").length;
+    return {
+      volunteers,
+      liveVolunteerCount: Math.max(state.liveVolunteerCount ?? 0, active),
+    };
   });
 }
