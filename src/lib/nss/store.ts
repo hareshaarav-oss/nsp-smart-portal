@@ -337,6 +337,20 @@ function persistAttendance(rows: { mobile: string; name: string; eventName: stri
     }),
   }).then(() => {
     const state = useNssStore.getState();
+    const hours = totalServiceHours(state);
+    if (hours > 0) {
+      void fetch("/api/nss-cloud", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          action: "live-hours",
+          chatToken: session?.chatToken || "",
+          deskRole: session?.role === "admin" ? "admin" : "po",
+          hours,
+        }),
+      }).catch(() => undefined);
+      useNssStore.setState({ liveHours: hours });
+    }
     const best = bestVolunteer(state);
     if (!best) return;
     void fetch("/api/nss-cloud", {
@@ -2585,6 +2599,9 @@ export const useNssStore =
           liveVolunteerCount:
             s.liveVolunteerCount ?? 0,
 
+          liveHours:
+            s.liveHours ?? 0,
+
           liveBest:
             s.liveBest,
 
@@ -2663,9 +2680,9 @@ export function volunteerHours(
 export function liveServiceHours(state: PortalState) {
   const computed = totalServiceHours(state);
   const reported = state.settings?.reportedServiceHours ?? 0;
+  const live = state.liveHours ?? 0;
   const dummyFloor = reported === 576 && (state.attendance?.length ?? 0) === 0 && computed === 0;
-  if (dummyFloor) return computed;
-  return Math.max(computed, reported);
+  return Math.max(computed, live, dummyFloor ? 0 : reported);
 }
 
 export function totalServiceHours(

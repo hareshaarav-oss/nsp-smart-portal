@@ -1,4 +1,4 @@
-import { loadCollegeCloud, loadPublicBoard, loadOfficerRoll, collegeQuotaBlocked, saveStudentToCloud, incrementVisitors, readVisitorCount, patchStudent, safePhoto, knownRole, issueChatPass, readChatPass, listRecentChatMessages, saveChatMessage, listChatPeople, clearAttendanceCloud, readBrandPhotos, saveBrandPhotos, listPhotoRoster, readPhotoBatch, saveAttendanceMarks, readLive, publishBestVolunteer } from "@/lib/nss/firestore";
+import { loadCollegeCloud, loadPublicBoard, loadOfficerRoll, collegeQuotaBlocked, saveStudentToCloud, incrementVisitors, readVisitorCount, knownVisitorCount, patchStudent, safePhoto, knownRole, issueChatPass, readChatPass, listRecentChatMessages, saveChatMessage, listChatPeople, clearAttendanceCloud, readBrandPhotos, saveBrandPhotos, listPhotoRoster, readPhotoBatch, saveAttendanceMarks, readLive, publishBestVolunteer, publishServiceHours } from "@/lib/nss/firestore";
 import { createFileRoute } from "@tanstack/react-router";
 
 type Row = Record<string, unknown>;
@@ -15,10 +15,12 @@ function cacheHeaders(seconds: number) {
 }
 
 function degradedBody() {
+  const visitors = knownVisitorCount();
   return {
     ok: true as const,
     degraded: true,
     volunteers: [] as unknown[],
+    ...(visitors > 0 ? { visitors } : {}),
     build: appBuild(),
   };
 }
@@ -365,6 +367,15 @@ export const Route = createFileRoute("/api/nss-cloud")({
           if (body.action === "live") {
             const live = await readLive();
             return Response.json({ ok: Boolean(live), live });
+          }
+          if (body.action === "live-hours") {
+            const desk = text(body.deskRole);
+            const user = text(body.chatToken) ? await readChatPass(text(body.chatToken)).catch(() => null) : null;
+            const officer = user?.role === "po" || user?.role === "admin" || desk === "po" || desk === "admin";
+            if (!officer) return Response.json({ ok: false }, { status: 403 });
+            const hours = Number(body.hours ?? 0);
+            if (hours > 0) await publishServiceHours(hours);
+            return Response.json({ ok: true, hours });
           }
           if (body.action === "live-best") {
             const desk = text(body.deskRole);

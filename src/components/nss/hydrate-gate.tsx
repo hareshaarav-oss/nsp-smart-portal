@@ -274,14 +274,18 @@ export function HydrateGate({ children }: { children: ReactNode }) {
         live?: {
           visitors?: number;
           volunteerCount?: number;
+          hours?: number;
           latest?: { id?: string; volunteerId?: string; fullName?: string; unit?: string; createdAt?: string };
           best?: { id?: string; volunteerId?: string; fullName?: string; unit?: string; hours?: number };
         };
       };
       if (!data.ok || !data.live) return;
       const state = useNssStore.getState();
-      const patch: { visitors?: number; liveVolunteerCount?: number; liveBest?: NonNullable<typeof state.liveBest> } = {};
+      const patch: { visitors?: number; liveVolunteerCount?: number; liveHours?: number; liveBest?: NonNullable<typeof state.liveBest> } = {};
       if (typeof data.live.visitors === "number" && data.live.visitors > state.visitors) patch.visitors = data.live.visitors;
+      if (typeof data.live.hours === "number" && data.live.hours > (state.liveHours ?? 0)) {
+        patch.liveHours = data.live.hours;
+      }
       if (typeof data.live.volunteerCount === "number" && data.live.volunteerCount > (state.liveVolunteerCount ?? 0)) {
         patch.liveVolunteerCount = data.live.volunteerCount;
       }
@@ -382,7 +386,7 @@ export function HydrateGate({ children }: { children: ReactNode }) {
       void pullVisitors().catch(() => undefined);
       void pullPulse().catch(() => undefined);
       void ensurePhotos();
-    }, 20000);
+    }, 45000);
     const wake = () => {
       void pullLive().catch(() => undefined);
       void pullVisitors().catch(() => undefined);

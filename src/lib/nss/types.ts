@@ -684,6 +684,8 @@ export type PortalState = {
 
   visitors: number;
 
+  liveHours?: number;
+
   liveVolunteerCount?: number;
 
   liveBest?: {

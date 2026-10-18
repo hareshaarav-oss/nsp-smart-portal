@@ -101,6 +101,13 @@ function LoginPage() {
         serviceHours?: number;
       };
       if (!res.ok || !data.ok || !data.session) {
+        if (role === "volunteer") {
+          const local = loginVolunteer(id, password, volunteers);
+          if (local.ok) {
+            enter(local.session);
+            return;
+          }
+        }
         toast.error(data.error || "Sign in failed.");
         refreshCaptcha();
         return;

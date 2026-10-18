@@ -968,12 +968,21 @@ export async function saveStudentToCloud(input: Record<string, unknown>) {
 }
 
 let lastVisitorCount = 0;
+let visitorFreshUntil = 0;
+
+export function knownVisitorCount() {
+  return lastVisitorCount;
+}
 
 export async function readVisitorCount(): Promise<number> {
+  if (lastVisitorCount > 0 && Date.now() < visitorFreshUntil) return lastVisitorCount;
   try {
     const doc = await getDocument("portalSettings/visitors");
     const count = Number(doc?.count ?? 0);
-    if (count > 0) lastVisitorCount = count;
+    if (count > 0) {
+      lastVisitorCount = count;
+      visitorFreshUntil = Date.now() + 60_000;
+    }
     return count;
   } catch {
     return lastVisitorCount;
@@ -1007,20 +1016,31 @@ async function incrementVisitorsFresh(): Promise<number> {
   if (!res.ok) return lastVisitorCount;
   const json = (await res.json()) as { writeResults?: { transformResults?: { integerValue?: string }[] }[] };
   const value = Number(json.writeResults?.[0]?.transformResults?.[0]?.integerValue ?? 0);
-  if (value > 0) lastVisitorCount = value;
-  if (value > 0) void publishVisitors(value);
+  if (value > 0) {
+    lastVisitorCount = value;
+    visitorFreshUntil = Date.now() + 60_000;
+    void publishVisitors(value);
+  }
   return value;
 }
 
 export type LivePulse = {
   visitors: number;
   volunteerCount: number;
+  hours: number;
   latest?: { id: string; volunteerId: string; fullName: string; unit: string; createdAt: string };
   best?: { id: string; volunteerId: string; fullName: string; unit: string; hours: number };
 };
 
+let lastLive: LivePulse | null = null;
+let lastLiveAt = 0;
+
+function rememberLive(pulse: LivePulse) {
+  lastLive = pulse;
+  lastLiveAt = Date.now();
+}
+
 async function writeLive(fields: Record<string, unknown>) {
-  if (collegeQuotaBlocked()) return;
   const params = new URLSearchParams();
   for (const key of Object.keys(fields)) params.append("updateMask.fieldPaths", key);
   const patch = await fetch(`${FIRESTORE_BASE}/portalSettings/live?${params}`, {
@@ -1041,14 +1061,16 @@ async function writeLive(fields: Record<string, unknown>) {
 }
 
 export async function readLive(): Promise<LivePulse | null> {
+  if (lastLive && Date.now() - lastLiveAt < 45_000) return lastLive;
   try {
     const doc = await getDocument("portalSettings/live");
-    if (!doc) return null;
+    if (!doc) return lastLive;
     const latestName = text(doc.latestName);
     const bestName = text(doc.bestName);
-    return {
-      visitors: Number(doc.visitors ?? 0),
+    const pulse: LivePulse = {
+      visitors: Number(doc.visitors ?? lastVisitorCount ?? 0),
       volunteerCount: Number(doc.volunteerCount ?? 0),
+      hours: Number(doc.serviceHours ?? 0),
       latest: latestName
         ? {
             id: text(doc.latestId),
@@ -1068,15 +1090,40 @@ export async function readLive(): Promise<LivePulse | null> {
           }
         : undefined,
     };
+    rememberLive(pulse);
+    return pulse;
   } catch {
-    return null;
+    return lastLive;
   }
 }
 
 export async function publishVisitors(count: number) {
   if (count < 1) return;
+  rememberLive({
+    visitors: count,
+    volunteerCount: lastLive?.volunteerCount ?? 0,
+    hours: lastLive?.hours ?? 0,
+    latest: lastLive?.latest,
+    best: lastLive?.best,
+  });
   await writeLive({
     visitors: encodeValue(count),
+    updatedAt: encodeValue(new Date().toISOString()),
+  });
+}
+
+export async function publishServiceHours(hours: number) {
+  const next = Math.max(0, Math.round(hours));
+  if (next < 1) return;
+  rememberLive({
+    visitors: lastLive?.visitors ?? lastVisitorCount,
+    volunteerCount: lastLive?.volunteerCount ?? 0,
+    hours: next,
+    latest: lastLive?.latest,
+    best: lastLive?.best,
+  });
+  await writeLive({
+    serviceHours: encodeValue(next),
     updatedAt: encodeValue(new Date().toISOString()),
   });
 }
