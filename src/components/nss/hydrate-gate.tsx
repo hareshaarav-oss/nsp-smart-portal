@@ -283,7 +283,6 @@ export function HydrateGate({ children }: { children: ReactNode }) {
       if (!cancelled) {
         applyBody(cloud);
         applyCachedPhotos();
-        void ensurePhotos();
       }
     }
 
@@ -381,12 +380,9 @@ export function HydrateGate({ children }: { children: ReactNode }) {
         applyCachedPhotos();
         const session = useSessionStore.getState().session;
         try {
-          if (session && localStorage.getItem("nsp-view") === "app" && window.location.pathname === "/") {
-            window.location.replace(session.role === "po" || session.role === "admin" ? "/po" : "/volunteer");
-            return;
-          }
+          if (session && localStorage.getItem("nsp-view") === "app") localStorage.removeItem("nsp-view");
         } catch {
-          /* stay on the portal */
+          /* stay on the home page */
         }
         if (session && !session.chatToken) {
           const renewed = await fetch("/api/nss-cloud", {
@@ -414,7 +410,17 @@ export function HydrateGate({ children }: { children: ReactNode }) {
       } catch {
         setStatus("Could not reach the college roll. Showing saved data.");
       }
-      if (!photosLoaded) void ensurePhotos();
+      window.setTimeout(() => {
+        if (!cancelled && !photosLoaded) void ensurePhotos();
+        if (!cancelled) {
+          void fetch("/api/nss-cloud?gallery=1")
+            .then((res) => res.json() as Promise<CloudBody>)
+            .then((cloud) => {
+              if (!cancelled && Array.isArray(cloud.gallery) && cloud.gallery.length) applyBody(cloud);
+            })
+            .catch(() => undefined);
+        }
+      }, 1200);
       void pullVisitors().catch(() => undefined);
       void pullPulse().catch(() => undefined);
     })();

@@ -222,14 +222,14 @@ export const Route = createFileRoute("/api/nss-cloud")({
       GET: async ({ request }) => {
         const includeGallery = new URL(request.url).searchParams.get("gallery") === "1";
         try {
-          const data = await loadPublicBoard({ gallery: true });
+          const data = await loadPublicBoard({ gallery: includeGallery });
           if (!data || data.volunteers.length < 20) {
             return Response.json(degradedBody(), { headers: cacheHeaders(120) });
           }
           const brand = collegeQuotaBlocked() ? { poPhoto: "", principalPhoto: "" } : await readBrandPhotos();
           return Response.json(
-            { ...publicPayload(data as unknown as Row, includeGallery || Boolean(data.gallery?.length)), brand, degraded: false },
-            { headers: cacheHeaders(600) },
+            { ...publicPayload(data as unknown as Row, includeGallery), brand, degraded: false },
+            { headers: cacheHeaders(includeGallery ? 120 : 60) },
           );
         } catch (error) {
           if (busyError(error) || collegeQuotaBlocked()) {
