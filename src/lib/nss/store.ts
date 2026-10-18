@@ -2289,7 +2289,7 @@ export const useNssStore =
         partialize: (s) => ({
           volunteers: (s.volunteers ?? []).map((v) => ({
             ...v,
-            photoUrl: v.photoUrl && !v.photoUrl.startsWith("data:") && v.photoUrl.length < 1200000 ? v.photoUrl : "",
+            photoUrl: v.photoUrl && ((v.photoUrl.startsWith("https://") && v.photoUrl.length < 8000) || (v.photoUrl.startsWith("data:image/") && v.photoUrl.length < 40000)) ? v.photoUrl : "",
           })),
 
           events:
@@ -2388,40 +2388,14 @@ export function rsvpOf(
   );
 }
 
-export function volunteerHours(
-  state: PortalState,
-  volunteerId: string,
-) {
-  const map =
-    new Map(
-      (state.events ?? []).map(
-        (e) => [e.id, e],
-      ),
-    );
-
-  return (
-    state.attendance ?? []
-  ).reduce(
-    (sum, row) => {
-      if (
-        row.volunteerId !==
-          volunteerId ||
-        !row.present
-      ) {
-        return sum;
-      }
-
-      return (
-        sum +
-        (
-          map.get(
-            row.eventId,
-          )?.hours ?? 0
-        )
-      );
-    },
-    0,
-  );
+export function volunteerHours(state: PortalState, volunteerId: string) {
+  const person = (state.volunteers ?? []).find((v) => v.id === volunteerId || v.volunteerId === volunteerId);
+  const keys = new Set([volunteerId, person?.id || "", person?.volunteerId || ""].filter(Boolean));
+  const map = new Map((state.events ?? []).map((e) => [e.id, e]));
+  return (state.attendance ?? []).reduce((sum, row) => {
+    if (!keys.has(row.volunteerId) || !row.present) return sum;
+    return sum + (map.get(row.eventId)?.hours ?? 0);
+  }, 0);
 }
 
 export function liveServiceHours(state: PortalState) {

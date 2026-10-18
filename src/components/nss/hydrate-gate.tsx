@@ -50,6 +50,25 @@ function rescueOfficerPhotos() {
   }
 }
 
+function readMisses() {
+  try {
+    const raw = JSON.parse(localStorage.getItem("nsp-photo-miss") || "[]") as string[];
+    return new Set(raw);
+  } catch {
+    return new Set<string>();
+  }
+}
+
+function markPhotoMiss(id: string) {
+  const misses = readMisses();
+  misses.add(id);
+  try {
+    localStorage.setItem("nsp-photo-miss", JSON.stringify([...misses].slice(-200)));
+  } catch {
+    /* ignore */
+  }
+}
+
 function readPhotoCache() {
   try {
     const raw = localStorage.getItem("nsp-photo-map-v2") || localStorage.getItem("nsp-photo-map");
@@ -103,6 +122,7 @@ async function pullPhotos() {
   const data = (await res.json()) as {
     ok?: boolean;
     roster?: { docId: string; volunteerId: string; name?: string }[];
+    photos?: { id: string; docId: string; photoUrl: string; name?: string }[];
     brand?: { poPhoto?: string; principalPhoto?: string };
   };
   if (!res.ok || !data.ok || !Array.isArray(data.roster) || data.roster.length === 0) return false;
@@ -116,47 +136,65 @@ async function pullPhotos() {
       },
     });
   }
-  const pending = data.roster.filter((row) => {
-    const known = cached[row.docId] || cached[row.volunteerId] || "";
-    return row.docId && !known.startsWith("data:image/") && !known.startsWith("https://") && known !== "0";
-  });
-  for (let i = 0; i < pending.length; i += 4) {
-    const slice = pending.slice(i, i + 4);
-    const ids = slice.map((row) => row.docId);
-    const batchRes = await fetch("/api/nss-cloud", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      cache: "no-store",
-      body: JSON.stringify({ action: "photo-sync", ids }),
-    });
-    const batch = (await batchRes.json()) as { ok?: boolean; photos?: { id: string; docId: string; photoUrl: string; name?: string }[] };
-    if (!batchRes.ok || !batch.ok || !Array.isArray(batch.photos)) return false;
+  const seen = new Set<string>();
+  if (Array.isArray(data.photos) && data.photos.length) {
     const map = new Map<string, string>();
-    const found = new Set(batch.photos.map((photo) => photo.docId));
-    for (const row of slice) {
-      if (!found.has(row.docId)) cached[row.docId] = "0";
-    }
-    for (const photo of batch.photos) {
-      if (!photo.photoUrl) continue;
-      const keys = [photo.id, photo.docId, photo.name || ""].filter(Boolean);
-      for (const key of keys) {
-        cached[key] = photo.photoUrl;
-        map.set(key, photo.photoUrl);
-      }
-      const roster = slice.find((row) => row.docId === photo.docId);
-      if (roster?.volunteerId) {
-        cached[roster.volunteerId] = photo.photoUrl;
-        map.set(roster.volunteerId, photo.photoUrl);
-      }
-      if (roster?.name) {
-        cached[roster.name] = photo.photoUrl;
-        map.set(roster.name, photo.photoUrl);
-      }
-    }
+    for (const photo of data.photos) rememberPhoto(photo, data.roster, cached, map);
     applyPhotoMap(map);
     writePhotoCache(cached);
+    for (const photo of data.photos) seen.add(photo.docId);
   }
-  return true;
+  const misses = readMisses();
+  const pending = data.roster.filter((row) => {
+    const known = cached[row.docId] || cached[row.volunteerId] || "";
+    return row.docId && !seen.has(row.docId) && !misses.has(row.docId) && !known.startsWith("data:image/") && !known.startsWith("https://");
+  });
+  let failed = false;
+  for (let i = 0; i < pending.length; i += 8) {
+    const slice = pending.slice(i, i + 8);
+    const ids = slice.map((row) => row.docId);
+    try {
+      const batchRes = await fetch("/api/nss-cloud", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        cache: "no-store",
+        body: JSON.stringify({ action: "photo-sync", ids }),
+      });
+      const batch = (await batchRes.json()) as { ok?: boolean; photos?: { id: string; docId: string; photoUrl: string; name?: string }[] };
+      if (!batchRes.ok || !batch.ok || !Array.isArray(batch.photos)) {
+        failed = true;
+        continue;
+      }
+      const map = new Map<string, string>();
+      const found = new Set(batch.photos.map((photo) => photo.docId));
+      for (const row of slice) {
+        if (!found.has(row.docId)) markPhotoMiss(row.docId);
+      }
+      for (const photo of batch.photos) rememberPhoto(photo, slice, cached, map);
+      applyPhotoMap(map);
+      writePhotoCache(cached);
+    } catch {
+      failed = true;
+    }
+  }
+  return !failed;
+}
+
+function rememberPhoto(
+  photo: { id?: string; docId: string; photoUrl?: string; name?: string },
+  roster: { docId: string; volunteerId: string; name?: string }[],
+  cached: Record<string, string>,
+  map: Map<string, string>,
+) {
+  if (!photo.photoUrl) return;
+  const keys = [photo.id || "", photo.docId, photo.name || ""].filter(Boolean);
+  const rosterRow = roster.find((row) => row.docId === photo.docId);
+  if (rosterRow?.volunteerId) keys.push(rosterRow.volunteerId);
+  if (rosterRow?.name) keys.push(rosterRow.name);
+  for (const key of keys) {
+    cached[key] = photo.photoUrl;
+    map.set(key, photo.photoUrl);
+  }
 }
 
 function dropStalePortalCache() {

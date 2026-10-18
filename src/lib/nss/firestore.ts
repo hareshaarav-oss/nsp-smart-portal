@@ -874,7 +874,7 @@ async function listPhotoRosterFresh() {
 
 export async function readPhotoBatch(docIds: string[]) {
   const photos: { id: string; docId: string; photoUrl: string; name: string }[] = [];
-  await Promise.all(docIds.slice(0, 4).map(async (docId) => {
+  await Promise.all(docIds.slice(0, 8).map(async (docId) => {
     const id = text(docId);
     if (!id) return;
     const params = new URLSearchParams();

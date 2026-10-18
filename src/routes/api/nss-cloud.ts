@@ -289,14 +289,15 @@ export const Route = createFileRoute("/api/nss-cloud")({
             return Response.json({ ok: Boolean(photoUrl), photoUrl });
           }
           if (body.action === "photo-sync") {
-            const ids = Array.isArray(body.ids) ? body.ids.map((id) => text(id)).filter(Boolean).slice(0, 4) : [];
+            const ids = Array.isArray(body.ids) ? body.ids.map((id) => text(id)).filter(Boolean).slice(0, 8) : [];
             if (ids.length) {
               const photos = await readPhotoBatch(ids);
               return Response.json({ ok: true, photos, build: appBuild() });
             }
             const roster = await listPhotoRoster();
-            const brand = await readBrandPhotos();
-            return Response.json({ ok: true, roster, brand, build: appBuild() });
+            const brand = await readBrandPhotos().catch(() => ({ poPhoto: "", principalPhoto: "" }));
+            const preview = await readPhotoBatch(roster.slice(0, 8).map((row) => row.docId)).catch(() => []);
+            return Response.json({ ok: true, roster, photos: preview, brand, build: appBuild() });
           }
           if (body.action === "resume-session") {
             const role = text(body.role);
