@@ -118,6 +118,8 @@ type Actions = {
 
   sendCertificates: (ids: string[]) => number;
 
+  deleteCertificate: (id: string) => boolean;
+
   addGalleryItems: (
     items: GalleryItem[],
   ) => void;
@@ -2221,6 +2223,14 @@ export const useNssStore =
             });
           }
 
+          if (item.kind === "certificate") {
+            const cert = item.data as IssuedCertificate;
+            const have = (current.certificates ?? []).some((row) => row.id === cert.id);
+            if (!have) {
+              set({ certificates: [...(current.certificates ?? []), cert] });
+            }
+          }
+
           set({
             recycleBin:
               current.recycleBin.filter(
@@ -2464,6 +2474,32 @@ export const useNssStore =
           });
 
           return sent;
+        },
+
+        deleteCertificate: (id) => {
+          const current = get();
+          const item = (current.certificates ?? []).find((c) => c.id === id);
+          if (!item) return false;
+          const volunteer = current.volunteers.find((v) => v.id === item.volunteerId);
+          const event = current.events.find((e) => e.id === item.eventId);
+          set({
+            certificates: (current.certificates ?? []).filter((c) => c.id !== id),
+            recycleBin: [
+              {
+                id: `del-${Date.now()}`,
+                kind: "certificate" as const,
+                label: `${item.certificateId || "Certificate"} · ${volunteer?.fullName || "Volunteer"}`,
+                deletedAt: new Date().toISOString(),
+                data: item,
+              },
+              ...(current.recycleBin ?? []),
+            ].slice(0, 200),
+          });
+          get().addLog(
+            "Moved to recycle bin",
+            `Certificate ${item.certificateId || item.id} for ${volunteer?.fullName || "a volunteer"} (${event?.name || "event"}) was removed.`,
+          );
+          return true;
         },
       }),
 

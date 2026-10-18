@@ -141,6 +141,21 @@ function CertificatesPage() {
     await printRows([volunteer.id]);
   }
 
+  function removeOne(volunteer: Volunteer) {
+    if (!event) return;
+    const cert = certificateOf(useNssStore.getState(), volunteer.id, event.id);
+    if (!cert) {
+      toast.message(`No certificate to delete for ${volunteer.fullName}.`);
+      return;
+    }
+    const removed = useNssStore.getState().deleteCertificate(cert.id);
+    if (!removed) {
+      toast.error("Could not delete that certificate.");
+      return;
+    }
+    toast.success(`Deleted ${cert.certificateId || "certificate"} for ${volunteer.fullName}.`);
+  }
+
   return (
     <div className="space-y-6">
       <div>
@@ -253,9 +268,14 @@ function CertificatesPage() {
                     </td>
                     <td className="px-3 py-2">
                       {event ? (
-                        <Button size="sm" variant="ghost" onClick={() => void viewOne(v)}>
-                          View
-                        </Button>
+                        <div className="flex flex-wrap gap-1">
+                          <Button type="button" size="sm" variant="outline" onClick={() => void viewOne(v)}>
+                            View
+                          </Button>
+                          <Button type="button" size="sm" variant="danger" onClick={() => removeOne(v)}>
+                            Delete
+                          </Button>
+                        </div>
                       ) : null}
                     </td>
                   </tr>

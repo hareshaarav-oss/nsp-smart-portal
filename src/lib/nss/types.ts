@@ -538,7 +538,8 @@ export type DeletedItem = {
     | "event"
     | "notice"
     | "gallery"
-    | "press";
+    | "press"
+    | "certificate";
 
   label: string;
 
@@ -549,7 +550,8 @@ export type DeletedItem = {
     | NssEvent
     | Notice
     | GalleryItem
-    | PressReportUpload;
+    | PressReportUpload
+    | IssuedCertificate;
 
   deletedBy?: string;
 
