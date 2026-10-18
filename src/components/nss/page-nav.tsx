@@ -1,5 +1,5 @@
-import { Link } from "@tanstack/react-router";
-import { Download } from "lucide-react";
+import { Link, useRouter } from "@tanstack/react-router";
+import { ArrowLeft, Download } from "lucide-react";
 import { dashboardPath, isOfficer, useSessionStore } from "@/lib/nss/session";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -13,13 +13,32 @@ export function PageNav({
 }) {
   const session = useSessionStore((s) => s.session);
   const setSession = useSessionStore((s) => s.setSession);
+  const router = useRouter();
   const dash = dashboardPath(session);
   const officer = isOfficer(session);
+
+  function goBack() {
+    if (window.history.length > 1) {
+      router.history.back();
+      return;
+    }
+    void router.navigate({ to: "/" });
+  }
 
   return (
     <nav className="bg-navy text-paper">
       <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-2 px-4 py-2 md:px-6">
         <div className="flex flex-wrap items-center gap-1 text-sm">
+          {current !== "home" ? (
+            <button
+              type="button"
+              onClick={goBack}
+              className="inline-flex items-center gap-1 rounded-sm px-3 py-2 hover:bg-white/10"
+            >
+              <ArrowLeft className="size-4" />
+              Back
+            </button>
+          ) : null}
           <Link
             to="/"
             className={cn(
