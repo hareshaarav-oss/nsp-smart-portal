@@ -10,6 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { blobToDataUrl, compressPortrait } from "@/lib/nss/media";
 import { useNssStore } from "@/lib/nss/store";
 import { BIRTHDAY_TEMPLATE } from "@/lib/nss/constants";
+import { cloudPost } from "@/lib/nss/dual-store";
 
 export const Route = createFileRoute("/po/settings")({ component: SettingsPage });
 
@@ -27,25 +28,19 @@ function SettingsPage() {
     update(draft);
     const token = useSessionStore.getState().session?.chatToken || "";
     if (token && (draft.poPhoto || draft.principalPhoto)) {
-      void fetch("/api/nss-cloud", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          action: "save-brand",
-          chatToken: token,
-          poPhoto: draft.poPhoto || "",
-          principalPhoto: draft.principalPhoto || "",
-        }),
-      })
-        .then((res) => res.json())
-        .then((data: { ok?: boolean; error?: string }) => {
-          if (!data.ok) toast.error(data.error || "Photograph stayed on this phone only.");
-          else toast.success("Settings and photographs saved.");
-        })
-        .catch(() => toast.error("Photograph stayed on this phone only."));
+      void cloudPost({
+        action: "save-brand",
+        chatToken: token,
+        poPhoto: draft.poPhoto || "",
+        principalPhoto: draft.principalPhoto || "",
+      }).then((result) => {
+        if (result.ok) toast.success("Settings saved on this device and the college cloud.");
+        else if (result.queued) toast.success("Settings saved on this device. Photographs will reach the cloud when the internet is back.");
+        else toast.error(result.error || "Photograph stayed on this phone only.");
+      });
       return;
     }
-    toast.success("Settings saved successfully.");
+    toast.success("Settings saved on this device.");
   };
   const [busy, setBusy] = useState<"principal" | "po" | null>(null);
 

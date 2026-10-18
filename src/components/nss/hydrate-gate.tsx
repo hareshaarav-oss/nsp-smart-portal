@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { rememberVolunteer, useNssStore } from "@/lib/nss/store";
 import { useSessionStore } from "@/lib/nss/session";
 import { COLLEGE_LOGO, NSS_LOGO, STORAGE_DATA } from "@/lib/nss/constants";
+import { startDualSync } from "@/lib/nss/dual-store";
 
 let seenBuild = "";
 
@@ -250,6 +251,7 @@ export function HydrateGate({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState("Loading the college NSS roll…");
 
   useEffect(() => {
+    startDualSync();
     let cancelled = false;
     let nextPull = 0;
     let photosLoaded = false;

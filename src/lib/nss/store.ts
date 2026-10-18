@@ -10,6 +10,7 @@ import { createSeedState } from "./seed";
 import { isOfficer, useSessionStore } from "./session";
 import { academicYear, byFullName, padId, parseDob, titleFirstName } from "./format";
 import { deleteMedia } from "./media";
+import { cloudPost, mirrorPortal, readPortalMirror } from "./dual-store";
 import { assignSequentialIds, certificateYear, formatCertificateSerial, nextCertificateSeq } from "./certificates";
 import { nssHourRule } from "./hours";
 
@@ -38,16 +39,12 @@ function purgeCloud(ids: string[]) {
   const unique = [...new Set(ids.map((id) => id.trim()).filter((id) => id.length > 1))].slice(0, 40);
   if (!unique.length) return;
   const session = useSessionStore.getState().session;
-  void fetch("/api/nss-cloud", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({
-      action: "purge",
-      chatToken: session?.chatToken || "",
-      deskRole: session?.role === "admin" ? "admin" : "po",
-      ids: unique,
-    }),
-  }).catch(() => undefined);
+  void cloudPost({
+    action: "purge",
+    chatToken: session?.chatToken || "",
+    deskRole: session?.role === "admin" ? "admin" : "po",
+    ids: unique,
+  });
 }
 import type {
   AttendanceRecord,
@@ -364,47 +361,37 @@ function persistAttendance(rows: { mobile: string; name: string; eventName: stri
   const ready = rows.filter((row) => row.mobile.replace(/\D/g, "").length >= 10 && row.eventName);
   if (!ready.length) return;
   const session = useSessionStore.getState().session;
-  void fetch("/api/nss-cloud", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({
-      action: "save-attendance",
-      chatToken: session?.chatToken || "",
-      deskRole: session?.role === "admin" ? "admin" : "po",
-      rows: ready,
-    }),
+  const token = session?.chatToken || "";
+  const deskRole = session?.role === "admin" ? "admin" : "po";
+  void cloudPost({
+    action: "save-attendance",
+    chatToken: token,
+    deskRole,
+    rows: ready,
   }).then(() => {
     const state = useNssStore.getState();
     const hours = totalServiceHours(state);
     if (hours > 0) {
-      void fetch("/api/nss-cloud", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          action: "live-hours",
-          chatToken: session?.chatToken || "",
-          deskRole: session?.role === "admin" ? "admin" : "po",
-          hours,
-        }),
-      }).catch(() => undefined);
+      void cloudPost({
+        action: "live-hours",
+        chatToken: token,
+        deskRole,
+        hours,
+      });
       useNssStore.setState({ liveHours: hours });
     }
     const best = bestVolunteer(state);
     if (!best) return;
-    void fetch("/api/nss-cloud", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        action: "live-best",
-        chatToken: session?.chatToken || "",
-        deskRole: session?.role === "admin" ? "admin" : "po",
-        volunteerId: best.volunteerId || best.id,
-        name: best.fullName,
-        unit: best.unit,
-        hours: volunteerHours(state, best.id),
-      }),
-    }).catch(() => undefined);
-  }).catch(() => undefined);
+    void cloudPost({
+      action: "live-best",
+      chatToken: token,
+      deskRole,
+      volunteerId: best.volunteerId || best.id,
+      name: best.fullName,
+      unit: best.unit,
+      hours: volunteerHours(state, best.id),
+    });
+  });
 }
 
 function looksLikeSeed(
@@ -521,7 +508,7 @@ function readLegacyPortalJson(): string | null {
 
 const portalStorage =
   createJSONStorage(() => ({
-    getItem: (name: string) => {
+    getItem: async (name: string) => {
       if (typeof window === "undefined") {
         return null;
       }
@@ -533,11 +520,13 @@ const portalStorage =
         if (raw) {
           return unwrapPersisted(raw);
         }
-
-        return readLegacyPortalJson();
       } catch {
-        return null;
+        /* private mode or a full quota */
       }
+
+      const mirrored = await readPortalMirror();
+      if (mirrored) return unwrapPersisted(mirrored);
+      return readLegacyPortalJson();
     },
 
     setItem: (
@@ -551,8 +540,9 @@ const portalStorage =
       try {
         localStorage.setItem(name, value);
       } catch {
-        /* keep the signed-in session even if the roll cache is full */
+        /* IndexedDB below still keeps the roll */
       }
+      void mirrorPortal(value);
     },
 
     removeItem: (name: string) => {
@@ -560,7 +550,12 @@ const portalStorage =
         return;
       }
 
-      localStorage.removeItem(name);
+      try {
+        localStorage.removeItem(name);
+      } catch {
+        /* ignore */
+      }
+      void mirrorPortal("");
     },
   }));
 

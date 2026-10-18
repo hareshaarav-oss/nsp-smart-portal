@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { blobToDataUrl, compressPassport, rememberPhoto } from "@/lib/nss/media";
 import { latinDigits } from "@/lib/nss/format";
 import { useNssStore, rememberVolunteer } from "@/lib/nss/store";
+import { enqueueCloud } from "@/lib/nss/dual-store";
 import type { Course, Gender, NssRole, NssUnit, Volunteer } from "@/lib/nss/types";
 
 export const Route = createFileRoute("/register")({ component: RegisterPage });
@@ -65,7 +66,11 @@ function RegisterPage() {
         body: JSON.stringify({ action: "register", ...form, mobile, photoUrl }),
       });
       const data = (await res.json()) as { ok?: boolean; error?: string; volunteer?: Volunteer };
-      if (!res.ok || !data.ok || !data.volunteer) throw new Error(data.error || "Cloud save failed");
+      if (!res.ok || !data.ok || !data.volunteer) {
+        const message = data.error || "Cloud save failed";
+        if (res.status === 409 || /already/i.test(message)) throw new Error(message);
+        throw new Error(message);
+      }
       rememberVolunteer({ ...data.volunteer, mobile });
       try {
         const fresh = await fetch("/api/nss-cloud", { cache: "no-store" });
@@ -94,7 +99,7 @@ function RegisterPage() {
         [data.volunteer.volunteerId, data.volunteer.id, data.volunteer.fullName.toLowerCase()],
         photoUrl,
       );
-      toast.success("Registration saved. The new volunteer is on the college roll.");
+      toast.success("Registration saved on this device and the college cloud.");
       setDone({
         name: data.volunteer.fullName,
         id: data.volunteer.volunteerId,
@@ -102,7 +107,22 @@ function RegisterPage() {
         enrollment: data.volunteer.enrollment,
       });
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Could not save the registration.");
+      const message = error instanceof Error ? error.message : "Could not save the registration.";
+      if (/already/i.test(message)) {
+        toast.error(message);
+        return;
+      }
+      const local = useNssStore.getState().addVolunteer({ ...form, mobile, photoUrl });
+      await enqueueCloud({ action: "register", ...form, mobile, photoUrl });
+      rememberPhoto([local.volunteerId, local.id, local.fullName.toLowerCase()], photoUrl);
+      addLog("Student registration", `Saved ${local.fullName} on this device. Cloud sync is waiting.`);
+      toast.success("Saved on this device. It will reach the college roll when the internet is back.");
+      setDone({
+        name: local.fullName,
+        id: local.volunteerId,
+        mobile,
+        enrollment: local.enrollment,
+      });
     }
   }
 
