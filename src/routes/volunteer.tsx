@@ -10,7 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { htmlForCertificate, openPreparedCertificate } from "@/lib/nss/certificates";
-import { daysUntilBirthday, formatLongDate, idCardName, isBirthdayOn, parseDob, todayIso } from "@/lib/nss/format";
+import { daysUntilBirthday, formatLongDate, idCardName, parseDob, todayIso } from "@/lib/nss/format";
 import { openIdCard } from "@/lib/nss/id-card";
 import { blobToDataUrl, compressPassport, rememberPhoto } from "@/lib/nss/media";
 import { findSessionVolunteer, isOfficer, registerFingerprint, useSessionStore } from "@/lib/nss/session";

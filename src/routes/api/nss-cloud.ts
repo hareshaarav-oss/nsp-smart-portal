@@ -432,7 +432,7 @@ export const Route = createFileRoute("/api/nss-cloud")({
             }
             if (body.action === "chat-send") {
               const threadId = canonicalThread(text(body.threadId));
-              const message = String(body.text ?? "").replace(/\u0000/g, "").trim().slice(0, 1000);
+              const message = String(body.text ?? "").split("\u0000").join("").trim().slice(0, 1000);
               if (!validThread(threadId) || !canSeeThread(user, threadId)) {
                 return Response.json({ ok: false, error: "You cannot send to that chat." }, { status: 403 });
               }

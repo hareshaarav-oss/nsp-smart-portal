@@ -551,7 +551,7 @@ export async function markBoardStale() {
   }
 }
 
-let purgedIds = new Set<string>();
+const purgedIds = new Set<string>();
 let purgedAt = 0;
 
 function rememberPurgedIds(ids: string[]) {

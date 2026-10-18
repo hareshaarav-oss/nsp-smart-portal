@@ -454,7 +454,6 @@ function SmartRecord({ volunteerId, onClose }: { volunteerId: string; onClose: (
               <tbody>
                 {events.map((e) => {
                   const att = attendanceOf(state, v.id, e.id);
-                  const cert = rec.certs.find((c: { eventId: string }) => c.eventId === e.id);
                   return (
                     <tr key={e.id} className="border-t border-border">
                       <td className="px-2 py-1.5">{e.name}</td>

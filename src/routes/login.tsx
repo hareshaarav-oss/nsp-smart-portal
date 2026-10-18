@@ -39,7 +39,7 @@ function LoginPage() {
   const [mode, setMode] = useState<"password" | "mpin">("password");
   const [id, setId] = useState("");
   const [password, setPassword] = useState("");
-  const [captcha, setCaptcha] = useState(makeCaptcha);
+  const [captcha, setCaptcha] = useState("");
   const [captchaIn, setCaptchaIn] = useState("");
   const [help, setHelp] = useState<"none" | "user" | "pass">("none");
   const [helpMobile, setHelpMobile] = useState("");
@@ -47,6 +47,9 @@ function LoginPage() {
   const navigate = useNavigate();
   const volunteers = useNssStore((s) => s.volunteers);
   const setSession = useSessionStore((s) => s.setSession);
+  useEffect(() => {
+    setCaptcha(makeCaptcha());
+  }, []);
   useEffect(() => {
     if (roleHint) setRole(roleHint);
   }, [roleHint]);
@@ -64,7 +67,7 @@ function LoginPage() {
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (captchaIn.trim().toUpperCase() !== captcha) {
+    if (!captcha || captchaIn.trim().toUpperCase() !== captcha) {
       toast.error("Captcha does not match. Please type the letters again.");
       refreshCaptcha();
       return;
@@ -240,7 +243,7 @@ function LoginPage() {
                     className="select-none rounded-md bg-navy px-3 py-2 font-mono text-lg tracking-[0.35em] text-paper"
                     style={{ fontStyle: "italic", letterSpacing: "0.28em" }}
                   >
-                    {captcha}
+                    {captcha || "·····"}
                   </span>
                   <Button type="button" size="sm" variant="ghost" onClick={refreshCaptcha}>
                     Refresh
@@ -255,7 +258,7 @@ function LoginPage() {
                   required
                 />
               </div>
-              <Button type="submit" className="w-full" size="lg">
+              <Button type="submit" className="w-full" size="lg" disabled={!captcha}>
                 Sign in
               </Button>
             </form>

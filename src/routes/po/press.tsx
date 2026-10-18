@@ -25,7 +25,10 @@ function PressPage() {
   );
   const [eventId, setEventId] = useState(events[0]?.id ?? "");
   const event = events.find((e) => e.id === eventId) ?? events[0];
-  const present = event ? presentVolunteers(state, event.id) : [];
+  const present = useMemo(
+    () => (event ? presentVolunteers(state, event.id) : []),
+    [event, state],
+  );
   const photos = useMemo(() => {
     if (!event) return [];
     return (state.gallery ?? []).filter(
@@ -44,7 +47,7 @@ function PressPage() {
     if (!event) return;
     setGu(defaultGujaratiPress(event, state.settings, present.length));
     setEn(defaultNaacEnglish(event, state.settings, present));
-  }, [event?.id, present.length, state.settings]);
+  }, [event, present, state.settings]);
 
 
   async function uploadExternal(file: File | undefined) {

@@ -3,13 +3,13 @@ import { COLLEGE_LOGO, NSS_LOGO } from "@/lib/nss/constants";
 import { useNssStore } from "@/lib/nss/store";
 
 const DURATION_MS = 2500;
-export const SPLASH_SEEN_KEY = "nsp-welcome-avyansh";
+const SPLASH_SEEN_KEY = "nsp-welcome-avyansh";
 
-export function markSplashSeen() {
+function markSplashSeen() {
   try { sessionStorage.setItem(SPLASH_SEEN_KEY, "1"); } catch (error) { void error; }
 }
 
-export function shouldShowSplash() {
+function shouldShowSplash() {
   try { return sessionStorage.getItem(SPLASH_SEEN_KEY) !== "1"; } catch { return true; }
 }
 
@@ -19,6 +19,11 @@ export function SplashScreen({ onDone }: { onDone: () => void }) {
   const settings = useNssStore((s) => s.settings);
 
   useEffect(() => {
+    if (!shouldShowSplash()) {
+      finished.current = true;
+      onDone();
+      return;
+    }
     const finish = () => {
       if (finished.current) return;
       finished.current = true; markSplashSeen(); onDone();

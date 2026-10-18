@@ -16,7 +16,8 @@ export const Route = createFileRoute("/po/gallery")({ component: PoGallery });
 
 function PoGallery() {
   const events = useNssStore((s) => s.events);
-  const gallery = useNssStore((s) => s.gallery) ?? [];
+  const gallerySource = useNssStore((s) => s.gallery);
+  const gallery = useMemo(() => gallerySource ?? [], [gallerySource]);
   const addGalleryItems = useNssStore((s) => s.addGalleryItems);
   const removeGalleryItem = useNssStore((s) => s.removeGalleryItem);
   const sortedEvents = useMemo(

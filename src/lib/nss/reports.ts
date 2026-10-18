@@ -470,7 +470,7 @@ export async function printAttendanceReport(state: PortalState, scope: Attendanc
 }
 
 export async function printVolunteerReport(state: PortalState) {
-  const { headers, rows } = volunteerReportRows(state);
+  const { rows } = volunteerReportRows(state);
   await printOfficialReport({
     title: "Volunteer Report — A to Z",
     headers: ["Sr. No.", "Volunteer ID", "Name", "Mobile", "Unit", "Course", "Role", "Hours"],

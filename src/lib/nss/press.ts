@@ -66,15 +66,6 @@ Prepared on ${formatLongDate(todayIso())}
 NSS Smart Portal`;
 }
 
-function paragraphs(text: string) {
-  return text
-    .split(/\n{2,}/)
-    .map((p) => p.trim())
-    .filter(Boolean)
-    .map((p) => `<p>${escapeHtml(p).replaceAll("\n", "<br/>")}</p>`)
-    .join("");
-}
-
 export async function openGujaratiPress(opts: {
   state: PortalState;
   event: NssEvent;
@@ -86,11 +77,10 @@ export async function openGujaratiPress(opts: {
   const photos = (opts.photos ?? (await eventPhotoDataUrls(opts.state, opts.event.id))).slice(0, 12);
   const present = presentVolunteers(opts.state, opts.event.id);
   const list = present
-    .map((v, i) => `<li>${escapeHtml(v.fullName)} <span class="id">${escapeHtml(v.volunteerId)}</span></li>`)
+    .map((v) => `<li>${escapeHtml(v.fullName)} <span class="id">${escapeHtml(v.volunteerId)}</span></li>`)
     .join("");
   const paras = opts.body.split(/\n{2,}/).map((p) => p.trim()).filter(Boolean);
   const photoBlock = (src: string, i: number) => `<figure><img src="${src}" alt="" /><figcaption>${escapeHtml(["કાર્યક્રમની તસવીર", "સેવાકીય પ્રવૃત્તિની તસવીર", "NSS સ્વયંસેવકોની તસવીર"][i % 3])}</figcaption></figure>`;
-  const photoHtml = photos.map(photoBlock).join("");
   const bodyHtml = paras.map((p, i) => {
     const block = `<p>${escapeHtml(p).replaceAll("\n", "<br/>")}</p>`;
     if (i === 1 && photos[0]) return `${block}<div class="feature-photo">${photoBlock(photos[0], 0)}</div>`;

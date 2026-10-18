@@ -2402,8 +2402,7 @@ export function liveServiceHours(state: PortalState) {
   const computed = totalServiceHours(state);
   const reported = state.settings?.reportedServiceHours ?? 0;
   const live = state.liveHours ?? 0;
-  const dummyFloor = reported === 576 && (state.attendance?.length ?? 0) === 0 && computed === 0;
-  return Math.max(computed, live, dummyFloor ? 0 : reported);
+  return Math.max(computed, live, reported);
 }
 
 export function totalServiceHours(

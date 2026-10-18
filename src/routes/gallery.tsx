@@ -10,7 +10,8 @@ import { useNssStore } from "@/lib/nss/store";
 export const Route = createFileRoute("/gallery")({ component: GalleryPage });
 
 function GalleryPage() {
-  const gallery = useNssStore((s) => s.gallery) ?? [];
+  const gallerySource = useNssStore((s) => s.gallery);
+  const gallery = useMemo(() => gallerySource ?? [], [gallerySource]);
   const folders = useMemo(() => {
     const set = new Set(gallery.map((g) => g.folder || g.eventName || "General"));
     return [...set].sort();

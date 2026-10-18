@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
-import { BrainCircuit, Cake, CheckCircle2, Clock3, FileText, Search, Sparkles, Users } from "lucide-react";
+import { BrainCircuit, Cake, CheckCircle2, FileText, Search, Sparkles, Users } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";

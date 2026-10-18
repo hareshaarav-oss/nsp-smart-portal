@@ -249,25 +249,6 @@ async function imageToDataUrl(url: string): Promise<string> {
   });
 }
 
-function signatureShortName(fullName: string, fallback: string) {
-  const clean = fullName.replace(/^dr\.\s*/i, "").trim();
-  if (!clean) return fallback;
-  return clean.split(/\s+/)[0] || fallback;
-}
-
-function principalSignature(fullName: string) {
-  const parts = fullName
-    .replace(/^dr\.\s*/i, "")
-    .trim()
-    .split(/\s+/)
-    .filter(Boolean);
-
-  if (!parts.length) return "T.J.Vyas";
-  if (parts.length === 1) return parts[0];
-  if (parts.length === 2) return `${parts[0][0]}.${parts[1]}`;
-  return `${parts[0][0]}.${parts[parts.length - 2][0]}.${parts[parts.length - 1]}`;
-}
-
 async function certificateSheet(opts: {
   cert: IssuedCertificate;
   volunteer: Volunteer;

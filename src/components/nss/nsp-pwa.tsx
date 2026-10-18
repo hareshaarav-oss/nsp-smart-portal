@@ -56,7 +56,7 @@ export function NspPwaRoot() {
   return null;
 }
 
-export function useInstallPrompt() {
+function useInstallPrompt() {
   return useSyncExternalStore(subscribe, getSnapshot, () => null);
 }
 

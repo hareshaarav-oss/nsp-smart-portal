@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { getMedia } from "@/lib/nss/media";
 import type { GalleryItem } from "@/lib/nss/types";
 
-export function useMediaUrl(mediaKey?: string, fallback = "") {
+function useMediaUrl(mediaKey?: string, fallback = "") {
   const [url, setUrl] = useState(fallback);
   useEffect(() => {
     let alive = true;

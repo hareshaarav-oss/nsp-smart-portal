@@ -1,9 +1,9 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useCallback, useMemo, useState } from "react";
-import { Cake, Star, Users } from "lucide-react";
+import { Cake, Star } from "lucide-react";
 import { AppShell } from "@/components/nss/shell";
 import { PhotoCarousel } from "@/components/nss/photo-carousel";
-import { shouldShowSplash, SplashScreen } from "@/components/nss/splash";
+import { SplashScreen } from "@/components/nss/splash";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -11,15 +11,6 @@ import { daysUntilBirthday, formatLongDate, isBirthdayOn, todayIso } from "@/lib
 import { activeVolunteers, alumniVolunteers, bestVolunteer, liveServiceHours, useNssStore, volunteerHours } from "@/lib/nss/store";
 
 export const Route = createFileRoute("/")({ component: Home });
-
-function initials(name: string) {
-  return name
-    .split(" ")
-    .filter((part) => part.length > 1 && !part.endsWith("."))
-    .slice(-2)
-    .map((part) => part[0])
-    .join("");
-}
 
 const SEED_IDS = new Set([
   "evt-plantation",
@@ -35,12 +26,12 @@ const SEED_IDS = new Set([
 ]);
 
 function Home() {
-  const [splashing, setSplashing] = useState(shouldShowSplash);
+  const [splashing, setSplashing] = useState(true);
   const dismiss = useCallback(() => setSplashing(false), []);
   const events = useNssStore((s) => s.events) ?? [];
   const notices = useNssStore((s) => s.notices) ?? [];
   const gallery = useNssStore((s) => s.gallery) ?? [];
-  const visitors = useNssStore((s) => (s.visitors === 1362 ? 0 : s.visitors));
+  const visitors = useNssStore((s) => s.visitors);
   const settings = useNssStore((s) => s.settings);
   const hours = useNssStore((s) => liveServiceHours(s));
   const volunteerCount = useNssStore((s) => activeVolunteers(s).length);
@@ -63,7 +54,8 @@ function Home() {
   const cardVid = showLiveBest && liveBest ? liveBest.volunteerId : bestVid;
   const cardHours = showLiveBest && liveBest ? liveBest.hours : bestHours;
   const today = todayIso();
-  const volunteers = useNssStore((s) => s.volunteers) ?? [];
+  const volunteerSource = useNssStore((s) => s.volunteers);
+  const volunteers = useMemo(() => volunteerSource ?? [], [volunteerSource]);
   const portal = useNssStore();
   const rollPhotos = useMemo(
     () => volunteers.filter((v) => v.status !== "alumni" && v.photoUrl),
@@ -277,59 +269,4 @@ function MiniStat({ label, value }: { label: string; value: number }) {
 
 function HomeOfficer({ role, name, quote, photo }: { role: string; name: string; quote: string; photo?: string }) {
   return <div className="rounded-2xl border border-border bg-card p-4 text-center shadow-sm"><p className="text-xs font-bold uppercase tracking-[0.14em] text-forest">{role}</p>{photo ? <img src={photo} alt={name} className="mx-auto mt-3 h-28 w-24 rounded-2xl object-cover" /> : <div className="mx-auto mt-3 flex h-28 w-24 items-center justify-center rounded-2xl bg-navy text-3xl text-paper">👤</div>}<p className="mt-3 text-sm font-semibold text-navy">{name}</p><p className="gu mt-2 line-clamp-4 text-xs leading-relaxed text-muted-foreground">“{quote}”</p></div>;
-}
-
-function OfficerCard({
-  role,
-  name,
-  quote,
-  photo,
-  fallback,
-  gujarati,
-}: {
-  role: string;
-  name: string;
-  quote: string;
-  photo?: string;
-  fallback: string;
-  gujarati?: boolean;
-}) {
-  return (
-    <Card className="shadow-md">
-      <CardContent className="flex flex-col gap-4 p-5 sm:flex-row sm:items-start">
-        <div className="mx-auto h-36 w-28 shrink-0 overflow-hidden rounded-md border-4 border-navy/15 bg-navy sm:mx-0">
-          {photo ? (
-            <img src={photo} alt={name} className="h-full w-full object-cover" />
-          ) : (
-            <div className="flex h-full items-center justify-center font-display text-paper">{fallback}</div>
-          )}
-        </div>
-        <div>
-          <p className="text-xs uppercase tracking-[0.16em] text-forest">{role}</p>
-          <p className="font-display text-lg text-navy">{name}</p>
-          <p className={`${gujarati ? "gu " : ""}mt-2 text-sm leading-relaxed text-muted-foreground`}>“{quote}”</p>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-function Stat({
-  icon: Icon,
-  label,
-  value,
-}: {
-  icon: typeof Users;
-  label: string;
-  value: number;
-}) {
-  return (
-    <Card className="shadow-md">
-      <CardContent className="p-4 text-center md:p-5">
-        <Icon className="mx-auto size-4 text-forest" />
-        <p className="mt-2 font-display text-3xl tabular-nums text-navy">{value}</p>
-        <p className="mt-1 text-xs uppercase tracking-wider text-muted-foreground">{label}</p>
-      </CardContent>
-    </Card>
-  );
 }
