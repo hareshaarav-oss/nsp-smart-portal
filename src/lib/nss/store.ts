@@ -11,6 +11,7 @@ import { isOfficer, useSessionStore } from "./session";
 import { academicYear, byFullName, padId, parseDob, titleFirstName } from "./format";
 import { deleteMedia } from "./media";
 import { assignSequentialIds, certificateYear, formatCertificateSerial, nextCertificateSeq } from "./certificates";
+import { nssHourRule } from "./hours";
 import type {
   AttendanceRecord,
   GalleryItem,
@@ -1042,11 +1043,13 @@ export const useNssStore =
                   ),
               );
 
-            next.events =
-              dedupeEvents([
-                ...cloud.events,
-                ...localExtra,
-              ]);
+            next.events = dedupeEvents([
+              ...cloud.events,
+              ...localExtra,
+            ]).map((event) => ({
+              ...event,
+              hours: nssHourRule(event).hours,
+            }));
           }
 
           if (Array.isArray(cloud.attendance)) {
@@ -1293,9 +1296,9 @@ export const useNssStore =
         },
 
         addEvent: (input) => {
-          const event: NssEvent =
-            {
+          const event: NssEvent = {
               ...input,
+              hours: nssHourRule(input).hours,
 
               id:
                 `evt-${Date.now()}`,

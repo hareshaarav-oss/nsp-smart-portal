@@ -1,4 +1,5 @@
 import { cleanPersonName, latinDigits, padId, parseDob, titleFirstName } from "./format";
+import { nssHourRule } from "./hours";
 import type {
   AttendanceRecord,
   GalleryItem,
@@ -338,7 +339,7 @@ async function loadCollegeCloudFresh(opts: { gallery?: boolean; photos?: boolean
       name,
       date,
       location: text(e.location) || "Mansa",
-      hours: Number(e.hours) > 0 ? Number(e.hours) : 4,
+      hours: nssHourRule({ name, date, description: text(e.description) }).hours,
       status,
       description: text(e.description),
       beneficiaries: Number(e.beneficiaries) > 0 ? Number(e.beneficiaries) : 0,
@@ -357,7 +358,7 @@ async function loadCollegeCloudFresh(opts: { gallery?: boolean; photos?: boolean
         name,
         date,
         location: "Mansa",
-        hours: 4,
+        hours: nssHourRule({ name, date }).hours,
         status: "completed",
         description: "",
         createdAt: date,

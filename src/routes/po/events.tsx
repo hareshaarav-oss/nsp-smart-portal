@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
   FileSpreadsheet,
@@ -20,6 +20,7 @@ import { Badge } from "@/components/ui/badge";
 import { qrSvg } from "@/lib/nss/qr";
 import { audienceLabel, eventBroadcastText } from "@/lib/nss/whatsapp";
 import { formatLongDate, todayIso } from "@/lib/nss/format";
+import { nssHourRule } from "@/lib/nss/hours";
 import { completeActivityReports } from "@/lib/nss/reports";
 import { activeVolunteers, useNssStore } from "@/lib/nss/store";
 
@@ -58,6 +59,14 @@ function EventsPage() {
 
   const [qrEventId, setQrEventId] = useState<string | null>(null);
   const [qrSvgMarkup, setQrSvgMarkup] = useState("");
+
+  useEffect(() => {
+    const events = useNssStore.getState().events ?? [];
+    for (const event of events) {
+      const hours = nssHourRule(event).hours;
+      if (event.hours !== hours) useNssStore.getState().updateEvent(event.id, { hours });
+    }
+  }, []);
 
   async function openEventQr(
     eventId: string,
@@ -375,6 +384,19 @@ function EventsPage() {
         Events
       </h2>
 
+      <Card className="border-saffron/40">
+        <CardContent className="grid gap-3 pt-5 sm:grid-cols-4">
+          <div className="sm:col-span-4">
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-saffron">NSS નિયમ મુજબ સેવા કલાક</p>
+            <p className="mt-1 text-sm text-muted-foreground">A volunteer completes 120 regular hours in a year. The special camp is extra.</p>
+          </div>
+          <div className="rounded-xl border border-border bg-muted/40 p-3"><p className="text-xs text-muted-foreground">One-day activity</p><p className="font-display text-2xl font-semibold text-navy">6</p><p className="text-xs">Plantation, blood donation, cleanliness, rally</p></div>
+          <div className="rounded-xl border border-border bg-muted/40 p-3"><p className="text-xs text-muted-foreground">Half-day activity</p><p className="font-display text-2xl font-semibold text-navy">4</p><p className="text-xs">Parade, national day, lecture</p></div>
+          <div className="rounded-xl border border-border bg-muted/40 p-3"><p className="text-xs text-muted-foreground">Orientation</p><p className="font-display text-2xl font-semibold text-navy">2</p><p className="text-xs">One session. Yearly block is 20 hours.</p></div>
+          <div className="rounded-xl border border-navy/20 bg-navy p-3 text-paper"><p className="text-xs text-paper/70">Special camp</p><p className="font-display text-2xl font-semibold">56</p><p className="text-xs text-paper/80">7 days × 8 hours</p></div>
+        </CardContent>
+      </Card>
+
       <Card>
         <CardContent className="pt-5">
           <form
@@ -386,12 +408,14 @@ function EventsPage() {
 
               <Input
                 value={form.name}
-                onChange={(e) =>
+                onChange={(e) => {
+                  const name = e.target.value;
                   setForm({
                     ...form,
-                    name: e.target.value,
-                  })
-                }
+                    name,
+                    hours: nssHourRule({ ...form, name }).hours,
+                  });
+                }}
                 required
               />
             </div>
@@ -403,13 +427,10 @@ function EventsPage() {
                 type="date"
                 value={form.date}
                 onChange={(e) =>
-                  setForm({
-                    ...form,
-                    date: e.target.value,
-                    endDate:
-                      form.endDate ||
-                      e.target.value,
-                  })
+                  const date = e.target.value;
+                  const endDate = form.endDate && form.endDate >= date ? form.endDate : date;
+                  const next = { ...form, date, endDate };
+                  setForm({ ...next, hours: nssHourRule(next).hours });
                 }
               />
             </div>
@@ -422,10 +443,9 @@ function EventsPage() {
                 min={form.date}
                 value={form.endDate}
                 onChange={(e) =>
-                  setForm({
-                    ...form,
-                    endDate: e.target.value,
-                  })
+                  const endDate = e.target.value;
+                  const next = { ...form, endDate };
+                  setForm({ ...next, hours: nssHourRule(next).hours });
                 }
               />
             </div>
@@ -474,22 +494,13 @@ function EventsPage() {
               />
             </div>
 
-            <div className="space-y-1.5">
-              <Label>Service hours</Label>
-
-              <Input
-                type="number"
-                min={0}
-                value={form.hours}
-                onChange={(e) =>
-                  setForm({
-                    ...form,
-                    hours: Number(
-                      e.target.value,
-                    ),
-                  })
-                }
-              />
+            <div className="space-y-1.5 sm:col-span-2">
+              <Label>Service hours, set by NSS rule</Label>
+              <div className="rounded-xl border border-saffron/40 bg-saffron/10 px-3 py-3">
+                <p className="font-display text-2xl font-semibold text-navy">{nssHourRule(form).hours} hours</p>
+                <p className="text-sm font-medium text-navy">{nssHourRule(form).label}</p>
+                <p className="mt-1 text-xs text-muted-foreground">{nssHourRule(form).note}</p>
+              </div>
             </div>
 
             <div className="space-y-2 sm:col-span-2 rounded-xl border border-border p-3">
@@ -685,6 +696,9 @@ function EventsPage() {
                   <p className="font-display text-lg font-semibold">
                     {e.name}
                   </p>
+                  <div className="mt-1">
+                    <Badge tone="saffron">{nssHourRule(e).label} · {nssHourRule(e).hours} hrs</Badge>
+                  </div>
 
                   <p className="text-sm text-muted-foreground">
                     {formatLongDate(e.date)}
