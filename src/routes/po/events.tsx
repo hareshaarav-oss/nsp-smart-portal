@@ -426,12 +426,12 @@ function EventsPage() {
               <Input
                 type="date"
                 value={form.date}
-                onChange={(e) =>
+                onChange={(e) => {
                   const date = e.target.value;
                   const endDate = form.endDate && form.endDate >= date ? form.endDate : date;
                   const next = { ...form, date, endDate };
                   setForm({ ...next, hours: nssHourRule(next).hours });
-                }
+                }}
               />
             </div>
 
@@ -442,11 +442,11 @@ function EventsPage() {
                 type="date"
                 min={form.date}
                 value={form.endDate}
-                onChange={(e) =>
+                onChange={(e) => {
                   const endDate = e.target.value;
                   const next = { ...form, endDate };
                   setForm({ ...next, hours: nssHourRule(next).hours });
-                }
+                }}
               />
             </div>
 
