@@ -698,6 +698,8 @@ export type PortalState = {
 
   recycleBin: DeletedItem[];
 
+  purgedKeys?: string[];
+
   notifications?: PortalNotification[];
 
   offlineAttendance?: OfflineAttendanceItem[];

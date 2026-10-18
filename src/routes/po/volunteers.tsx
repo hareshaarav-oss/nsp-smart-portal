@@ -173,6 +173,7 @@ function VolunteersPage() {
                         <img src={v.photoUrl} alt="" className="size-8 rounded object-cover" />
                       ) : null}
                       {v.fullName}
+                      <span className="block text-[11px] font-semibold text-forest">{volunteerHours(state, v.id)} hrs</span>
                       {best?.id === v.id ? <Star className="size-3.5 text-saffron" /> : null}
                     </div>
                   </td>
@@ -231,13 +232,9 @@ function VolunteersPage() {
                         size="sm"
                         variant="ghost"
                         onClick={() => {
-                          if (!confirm(`Delete ${v.fullName} from the college roll?`)) return;
-                          void officerCloud("set-status", { volunteerId: v.volunteerId, status: "deleted" })
-                            .then(() => {
-                              state.deleteVolunteer(v.id);
-                              toast.success("Removed from the college roll");
-                            })
-                            .catch((error) => toast.error(error instanceof Error ? error.message : "Could not remove this volunteer."));
+                          if (!confirm(`Permanently delete ${v.fullName}? This cannot be undone.`)) return;
+                          state.deleteVolunteer(v.id);
+                          toast.success("Permanently deleted");
                         }}
                       >
                         Delete
@@ -358,13 +355,16 @@ function SmartRecord({ volunteerId, onClose }: { volunteerId: string; onClose: (
       <CardContent className="space-y-4 pt-5">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="flex items-start gap-3">
-            {v.photoUrl ? (
-              <img src={v.photoUrl} alt="" className="h-24 w-20 rounded-md object-cover" />
-            ) : (
-              <div className="flex h-24 w-20 items-center justify-center rounded-md bg-navy text-paper">
-                {v.fullName.slice(0, 2).toUpperCase()}
-              </div>
-            )}
+            <div>
+              {v.photoUrl ? (
+                <img src={v.photoUrl} alt="" className="h-24 w-20 rounded-md object-cover" />
+              ) : (
+                <div className="flex h-24 w-20 items-center justify-center rounded-md bg-navy text-paper">
+                  {v.fullName.slice(0, 2).toUpperCase()}
+                </div>
+              )}
+              <p className="mt-1 text-center text-xs font-semibold text-forest">{rec.hours} hrs</p>
+            </div>
             <div>
               <p className="text-xs tracking-[0.16em] text-muted-foreground">SMART RECORD</p>
               <h3 className="font-display text-xl font-semibold">{v.fullName}</h3>

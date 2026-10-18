@@ -53,7 +53,7 @@ function BackupPage() {
       <Card>
         <CardHeader><CardTitle className="flex items-center gap-2"><Trash2 className="size-5" /> Recycle Bin <span className="text-sm font-normal text-muted-foreground">({recycleBin.length})</span></CardTitle></CardHeader>
         <CardContent className="space-y-3">
-          <p className="text-sm text-muted-foreground">Deleted volunteers and events are retained here instead of being permanently lost.</p>
+          <p className="text-sm text-muted-foreground">Delete removes an item for good. Anything still listed here can be restored, or deleted so it never comes back.</p>
           {recycleBin.length === 0 ? <p className="rounded-xl bg-muted p-4 text-sm text-muted-foreground">Recycle Bin is empty.</p> : <div className="space-y-2">{recycleBin.map((item) => <div key={item.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border p-3"><div><p className="font-medium">{item.label}</p><p className="text-xs text-muted-foreground">{item.kind} · {new Date(item.deletedAt).toLocaleString()}</p></div><div className="flex gap-2"><Button size="sm" variant="outline" onClick={() => { state.restoreDeleted(item.id); toast.success("Restored from Recycle Bin."); }}><RotateCcw /> Restore</Button><Button size="sm" variant="danger" onClick={() => { if (confirm("Permanently delete this item?")) state.permanentlyDelete(item.id); }}><Trash2 /> Delete</Button></div></div>)}</div>}
           {recycleBin.length ? <Button variant="outline" onClick={() => { if (confirm("Permanently empty the Recycle Bin?")) state.emptyRecycleBin(); }}>Empty Recycle Bin</Button> : null}
         </CardContent>

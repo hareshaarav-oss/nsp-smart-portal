@@ -12,6 +12,43 @@ import { academicYear, byFullName, padId, parseDob, titleFirstName } from "./for
 import { deleteMedia } from "./media";
 import { assignSequentialIds, certificateYear, formatCertificateSerial, nextCertificateSeq } from "./certificates";
 import { nssHourRule } from "./hours";
+
+function purgedKey(value: string) {
+  return value.trim().toLowerCase();
+}
+
+function dropped(keys: string[], purged: string[] = []) {
+  const set = new Set(purged.map(purgedKey));
+  return keys.some((key) => {
+    const clean = purgedKey(key);
+    return clean.length > 1 && set.has(clean);
+  });
+}
+
+function rememberPurged(keys: string[]) {
+  const have = new Set((useNssStore.getState().purgedKeys ?? []).map(purgedKey));
+  for (const key of keys) {
+    const clean = purgedKey(key);
+    if (clean.length > 1) have.add(clean);
+  }
+  useNssStore.setState({ purgedKeys: [...have].slice(-800) });
+}
+
+function purgeCloud(ids: string[]) {
+  const unique = [...new Set(ids.map((id) => id.trim()).filter((id) => id.length > 1))].slice(0, 40);
+  if (!unique.length) return;
+  const session = useSessionStore.getState().session;
+  void fetch("/api/nss-cloud", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      action: "purge",
+      chatToken: session?.chatToken || "",
+      deskRole: session?.role === "admin" ? "admin" : "po",
+      ids: unique,
+    }),
+  }).catch(() => undefined);
+}
 import type {
   AttendanceRecord,
   GalleryItem,
@@ -960,6 +997,12 @@ export const useNssStore =
                 ...pending,
               ]).sort(byFullName);
             }
+            if (next.volunteers) {
+              const purged = current.purgedKeys ?? [];
+              next.volunteers = next.volunteers.filter(
+                (row) => !dropped([row.id, row.volunteerId, row.mobile, row.fullName], purged),
+              );
+            }
 
             const seedish =
               looksLikeSeed(
@@ -1046,10 +1089,12 @@ export const useNssStore =
             next.events = dedupeEvents([
               ...cloud.events,
               ...localExtra,
-            ]).map((event) => ({
-              ...event,
-              hours: nssHourRule(event).hours,
-            }));
+            ])
+              .map((event) => ({
+                ...event,
+                hours: nssHourRule(event).hours,
+              }))
+              .filter((event) => !dropped([event.id, event.name], current.purgedKeys ?? []));
           }
 
           if (Array.isArray(cloud.attendance)) {
@@ -1057,7 +1102,9 @@ export const useNssStore =
           }
 
           if (Array.isArray(cloud.notices)) {
-            next.notices = dedupeNotices(cloud.notices);
+            next.notices = dedupeNotices(cloud.notices).filter(
+              (notice) => !dropped([notice.id, notice.title], current.purgedKeys ?? []),
+            );
           }
 
           if (
@@ -1081,18 +1128,10 @@ export const useNssStore =
                 ),
               );
 
-            next.gallery =
-              dedupeGallery([
-                ...localKeep,
-                ...cloud.gallery.filter(
-                  (g) =>
-                    !localIds.has(
-                      g.id,
-                    ) &&
-                    !g.mediaKey &&
-                    g.src,
-                ),
-              ]);
+            next.gallery = dedupeGallery([
+              ...localKeep,
+              ...cloud.gallery.filter((g) => !localIds.has(g.id) && !g.mediaKey && g.src),
+            ]).filter((item) => !dropped([item.id, item.caption || ""], current.purgedKeys ?? []));
           }
 
           if (
@@ -1229,70 +1268,19 @@ export const useNssStore =
           }),
 
         deleteVolunteer: (id) => {
-          const current =
-            get();
-
-          const item =
-            current.volunteers.find(
-              (v) => v.id === id,
-            );
-
+          const current = get();
+          const item = current.volunteers.find((v) => v.id === id);
           if (!item) return;
-
+          const keys = [item.id, item.volunteerId, item.mobile, item.fullName];
+          rememberPurged(keys);
+          purgeCloud(keys);
           set({
-            volunteers:
-              current.volunteers.filter(
-                (v) => v.id !== id,
-              ),
-
-            attendance:
-              current.attendance.filter(
-                (a) =>
-                  a.volunteerId !== id,
-              ),
-
-            eventRsvps:
-              (
-                current.eventRsvps ??
-                []
-              ).filter(
-                (r) =>
-                  r.volunteerId !== id,
-              ),
-
-            certificates:
-              current.certificates.filter(
-                (c) =>
-                  c.volunteerId !== id,
-              ),
-
-            recycleBin: [
-              {
-                id:
-                  `del-${Date.now()}`,
-
-                kind:
-                  "volunteer" as const,
-
-                label:
-                  item.fullName,
-
-                deletedAt:
-                  new Date()
-                    .toISOString(),
-
-                data: item,
-              },
-
-              ...(current.recycleBin ??
-                []),
-            ].slice(0, 200),
+            volunteers: current.volunteers.filter((v) => v.id !== id),
+            attendance: current.attendance.filter((a) => a.volunteerId !== id),
+            eventRsvps: (current.eventRsvps ?? []).filter((r) => r.volunteerId !== id),
+            certificates: current.certificates.filter((c) => c.volunteerId !== id),
           });
-
-          get().addLog(
-            "Moved to recycle bin",
-            `Volunteer ${item.fullName} was moved to Recycle Bin.`,
-          );
+          get().addLog("Permanent delete", `Volunteer ${item.fullName} was permanently deleted.`);
         },
 
         addEvent: (input) => {
@@ -1338,70 +1326,19 @@ export const useNssStore =
           }),
 
         deleteEvent: (id) => {
-          const current =
-            get();
-
-          const item =
-            current.events.find(
-              (e) => e.id === id,
-            );
-
+          const current = get();
+          const item = current.events.find((e) => e.id === id);
           if (!item) return;
-
+          const keys = [item.id, item.name];
+          rememberPurged(keys);
+          purgeCloud(keys);
           set({
-            events:
-              current.events.filter(
-                (e) => e.id !== id,
-              ),
-
-            attendance:
-              current.attendance.filter(
-                (a) =>
-                  a.eventId !== id,
-              ),
-
-            eventRsvps:
-              (
-                current.eventRsvps ??
-                []
-              ).filter(
-                (r) =>
-                  r.eventId !== id,
-              ),
-
-            certificates:
-              current.certificates.filter(
-                (c) =>
-                  c.eventId !== id,
-              ),
-
-            recycleBin: [
-              {
-                id:
-                  `del-${Date.now()}`,
-
-                kind:
-                  "event" as const,
-
-                label:
-                  item.name,
-
-                deletedAt:
-                  new Date()
-                    .toISOString(),
-
-                data: item,
-              },
-
-              ...(current.recycleBin ??
-                []),
-            ].slice(0, 200),
+            events: current.events.filter((e) => e.id !== id),
+            attendance: current.attendance.filter((a) => a.eventId !== id),
+            eventRsvps: (current.eventRsvps ?? []).filter((r) => r.eventId !== id),
+            certificates: current.certificates.filter((c) => c.eventId !== id),
           });
-
-          get().addLog(
-            "Moved to recycle bin",
-            `Event ${item.name} was moved to Recycle Bin.`,
-          );
+          get().addLog("Permanent delete", `Event ${item.name} was permanently deleted.`);
         },
 
         generateEventQr: (eventId) => {
@@ -1627,49 +1564,16 @@ export const useNssStore =
           }),
 
         deleteNotice: (id) => {
-          const current =
-            get();
-
-          const item =
-            current.notices.find(
-              (n) => n.id === id,
-            );
-
+          const current = get();
+          const item = current.notices.find((n) => n.id === id);
           if (!item) return;
-
+          const keys = [item.id, item.title];
+          rememberPurged(keys);
+          purgeCloud(keys);
           set({
-            notices:
-              current.notices.filter(
-                (n) => n.id !== id,
-              ),
-
-            recycleBin: [
-              {
-                id:
-                  `del-${Date.now()}`,
-
-                kind:
-                  "notice" as const,
-
-                label:
-                  item.title,
-
-                deletedAt:
-                  new Date()
-                    .toISOString(),
-
-                data: item,
-              },
-
-              ...(current.recycleBin ??
-                []),
-            ].slice(0, 200),
+            notices: current.notices.filter((n) => n.id !== id),
           });
-
-          get().addLog(
-            "Moved to recycle bin",
-            `Notice ${item.title} was moved to Recycle Bin.`,
-          );
+          get().addLog("Permanent delete", `Notice ${item.title} was permanently deleted.`);
         },
 
         updateSettings: (
@@ -1725,43 +1629,14 @@ export const useNssStore =
             );
 
           if (!item) return;
-
+          const keys = [item.id, item.name];
+          rememberPurged(keys);
+          purgeCloud(keys);
+          if (item.mediaKey) void deleteMedia(item.mediaKey);
           set({
-            pressReports:
-              (
-                current.pressReports ??
-                []
-              ).filter(
-                (r) => r.id !== id,
-              ),
-
-            recycleBin: [
-              {
-                id:
-                  `del-${Date.now()}`,
-
-                kind:
-                  "press" as const,
-
-                label:
-                  item.name,
-
-                deletedAt:
-                  new Date()
-                    .toISOString(),
-
-                data: item,
-              },
-
-              ...(current.recycleBin ??
-                []),
-            ].slice(0, 200),
+            pressReports: (current.pressReports ?? []).filter((r) => r.id !== id),
           });
-
-          get().addLog(
-            "Moved to recycle bin",
-            `Press report ${item.name} was moved to Recycle Bin.`,
-          );
+          get().addLog("Permanent delete", `Press report ${item.name} was permanently deleted.`);
         },
 
         removeGalleryItem: (
@@ -1779,44 +1654,14 @@ export const useNssStore =
             );
 
           if (!item) return;
-
+          const keys = [item.id, item.caption || ""];
+          rememberPurged(keys);
+          purgeCloud(keys);
+          if (item.mediaKey) void deleteMedia(item.mediaKey);
           set({
-            gallery:
-              (
-                current.gallery ??
-                []
-              ).filter(
-                (g) => g.id !== id,
-              ),
-
-            recycleBin: [
-              {
-                id:
-                  `del-${Date.now()}`,
-
-                kind:
-                  "gallery" as const,
-
-                label:
-                  item.caption ||
-                  "Gallery media",
-
-                deletedAt:
-                  new Date()
-                    .toISOString(),
-
-                data: item,
-              },
-
-              ...(current.recycleBin ??
-                []),
-            ].slice(0, 200),
+            gallery: (current.gallery ?? []).filter((g) => g.id !== id),
           });
-
-          get().addLog(
-            "Moved to recycle bin",
-            `Gallery media was moved to Recycle Bin.`,
-          );
+          get().addLog("Permanent delete", "Gallery media was permanently deleted.");
         },
 
         moveToAlumni: (
@@ -1986,89 +1831,21 @@ export const useNssStore =
           return count;
         },
 
-        deleteVolunteers: (
-          ids,
-        ) => {
-          const want =
-            new Set(ids);
-
-          const current =
-            get();
-
-          const removed =
-            current.volunteers.filter(
-              (v) =>
-                want.has(v.id),
-            );
-
-          if (!removed.length) {
-            return 0;
-          }
-
+        deleteVolunteers: (ids) => {
+          const want = new Set(ids);
+          const current = get();
+          const removed = current.volunteers.filter((v) => want.has(v.id));
+          if (!removed.length) return 0;
+          const keys = removed.flatMap((item) => [item.id, item.volunteerId, item.mobile, item.fullName]);
+          rememberPurged(keys);
+          purgeCloud(keys);
           set({
-            volunteers:
-              current.volunteers.filter(
-                (v) =>
-                  !want.has(v.id),
-              ),
-
-            attendance:
-              current.attendance.filter(
-                (a) =>
-                  !want.has(
-                    a.volunteerId,
-                  ),
-              ),
-
-            eventRsvps:
-              (
-                current.eventRsvps ??
-                []
-              ).filter(
-                (r) =>
-                  !want.has(
-                    r.volunteerId,
-                  ),
-              ),
-
-            certificates:
-              current.certificates.filter(
-                (c) =>
-                  !want.has(
-                    c.volunteerId,
-                  ),
-              ),
-
-            recycleBin: [
-              ...removed.map(
-                (item, i) => ({
-                  id:
-                    `del-${Date.now()}-${i}`,
-
-                  kind:
-                    "volunteer" as const,
-
-                  label:
-                    item.fullName,
-
-                  deletedAt:
-                    new Date()
-                      .toISOString(),
-
-                  data: item,
-                }),
-              ),
-
-              ...(current.recycleBin ??
-                []),
-            ].slice(0, 200),
+            volunteers: current.volunteers.filter((v) => !want.has(v.id)),
+            attendance: current.attendance.filter((a) => !want.has(a.volunteerId)),
+            eventRsvps: (current.eventRsvps ?? []).filter((r) => !want.has(r.volunteerId)),
+            certificates: current.certificates.filter((c) => !want.has(c.volunteerId)),
           });
-
-          get().addLog(
-            "Batch Deletion",
-            `Moved ${removed.length} volunteer(s) to Recycle Bin.`,
-          );
-
+          get().addLog("Permanent delete", `Permanently deleted ${removed.length} volunteer(s).`);
           return removed.length;
         },
 
@@ -2279,58 +2056,34 @@ export const useNssStore =
           );
         },
 
-        permanentlyDelete: (
-          id,
-        ) => {
-          const item =
-            (
-              get().recycleBin ??
-              []
-            ).find(
-              (row) => row.id === id,
-            );
-
-          if (
-            item?.kind ===
-              "gallery" &&
-            "mediaKey" in
-              item.data &&
-            item.data.mediaKey
-          ) {
-            void deleteMedia(
-              item.data.mediaKey,
-            );
+        permanentlyDelete: (id) => {
+          const item = (get().recycleBin ?? []).find((row) => row.id === id);
+          if (item?.kind === "gallery" && "mediaKey" in item.data && item.data.mediaKey) {
+            void deleteMedia(item.data.mediaKey);
           }
-
-          if (
-            item?.kind ===
-              "press" &&
-            "mediaKey" in
-              item.data &&
-            item.data.mediaKey
-          ) {
-            void deleteMedia(
-              item.data.mediaKey,
-            );
+          if (item?.kind === "press" && "mediaKey" in item.data && item.data.mediaKey) {
+            void deleteMedia(item.data.mediaKey);
           }
-
+          if (item) {
+            const data = item.data as { id?: string; volunteerId?: string; mobile?: string; fullName?: string; name?: string; title?: string };
+            const keys = [data.id || "", data.volunteerId || "", data.mobile || "", data.fullName || "", data.name || "", data.title || "", item.label];
+            rememberPurged(keys);
+            purgeCloud(keys);
+          }
           set({
-            recycleBin:
-              (
-                get()
-                  .recycleBin ??
-                []
-              ).filter(
-                (row) =>
-                  row.id !== id,
-              ),
+            recycleBin: (get().recycleBin ?? []).filter((row) => row.id !== id),
           });
         },
 
-        emptyRecycleBin: () =>
-          set({
-            recycleBin: [],
-          }),
+        emptyRecycleBin: () => {
+          const keys = (get().recycleBin ?? []).flatMap((item) => {
+            const data = item.data as { id?: string; volunteerId?: string; mobile?: string; fullName?: string; name?: string; title?: string };
+            return [data.id || "", data.volunteerId || "", data.mobile || "", data.fullName || "", data.name || "", data.title || "", item.label];
+          });
+          rememberPurged(keys);
+          purgeCloud(keys);
+          set({ recycleBin: [] });
+        },
 
         awardBadge: (
           volunteerId,
@@ -2514,25 +2267,13 @@ export const useNssStore =
           const current = get();
           const item = (current.certificates ?? []).find((c) => c.id === id);
           if (!item) return false;
-          const volunteer = current.volunteers.find((v) => v.id === item.volunteerId);
-          const event = current.events.find((e) => e.id === item.eventId);
+          const keys = [item.id, item.certificateId || ""];
+          rememberPurged(keys);
+          purgeCloud(keys);
           set({
             certificates: (current.certificates ?? []).filter((c) => c.id !== id),
-            recycleBin: [
-              {
-                id: `del-${Date.now()}`,
-                kind: "certificate" as const,
-                label: `${item.certificateId || "Certificate"} · ${volunteer?.fullName || "Volunteer"}`,
-                deletedAt: new Date().toISOString(),
-                data: item,
-              },
-              ...(current.recycleBin ?? []),
-            ].slice(0, 200),
           });
-          get().addLog(
-            "Moved to recycle bin",
-            `Certificate ${item.certificateId || item.id} for ${volunteer?.fullName || "a volunteer"} (${event?.name || "event"}) was removed.`,
-          );
+          get().addLog("Permanent delete", `Certificate ${item.certificateId || item.id} was permanently deleted.`);
           return true;
         },
       }),
@@ -2610,6 +2351,9 @@ export const useNssStore =
 
           recycleBin:
             s.recycleBin ?? [],
+
+          purgedKeys:
+            s.purgedKeys ?? [],
         }),
 
         merge: (

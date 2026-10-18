@@ -251,6 +251,7 @@ async function listPublicNotices() {
 }
 
 async function loadCollegeCloudFresh(opts: { gallery?: boolean; photos?: boolean } = {}): Promise<CloudPortal | null> {
+  await readPurgedIds().catch(() => undefined);
   const [students, eventDocs, noticeDocs, attendanceDocs, galleryDocs, stats, visitorsDoc] =
     await Promise.all([
       listCollection("students", { photos: opts.photos !== false }),
@@ -266,7 +267,11 @@ async function loadCollegeCloudFresh(opts: { gallery?: boolean; photos?: boolean
 
   const keep = students.filter((s) => {
     const status = text(s.status).toLowerCase();
-    return status !== "inactive" && status !== "deleted";
+    if (status === "inactive" || status === "deleted") return false;
+    const id = text(s._id).toLowerCase();
+    const vid = text(s.volunteerId).toLowerCase();
+    const name = text(s.fullName).toLowerCase();
+    return !purgedIds.has(id) && !purgedIds.has(vid) && !(name.length > 2 && purgedIds.has(name));
   });
 
   const sorted = [...keep].sort((a, b) =>
@@ -546,6 +551,87 @@ export async function markBoardStale() {
   }
 }
 
+let purgedIds = new Set<string>();
+let purgedAt = 0;
+
+function rememberPurgedIds(ids: string[]) {
+  for (const id of ids) {
+    const clean = text(id).toLowerCase();
+    if (clean.length > 1) purgedIds.add(clean);
+  }
+  purgedAt = Date.now();
+}
+
+export async function readPurgedIds() {
+  if (purgedIds.size && Date.now() - purgedAt < 10 * 60 * 1000) return purgedIds;
+  try {
+    const doc = await getDocument("portalSettings/purged");
+    const ids = Array.isArray(doc?.ids) ? doc.ids : [];
+    rememberPurgedIds(ids.map((id) => text(id)));
+  } catch {
+    /* the last purge list stays in memory */
+  }
+  return purgedIds;
+}
+
+function purged(value: string) {
+  return purgedIds.has(value.trim().toLowerCase());
+}
+
+export function omitPurged<T extends { volunteers: Volunteer[]; attendance: { volunteerId: string }[]; events: { id: string; name: string }[]; notices: { id: string; title: string }[] }>(data: T): T {
+  const volunteers = data.volunteers.filter((v) => !purged(v.id) && !purged(v.volunteerId) && !purged(v.fullName) && !purged(v.mobile || ""));
+  const keep = new Set(volunteers.flatMap((v) => [v.id, v.volunteerId]));
+  return {
+    ...data,
+    volunteers,
+    attendance: data.attendance.filter((row) => keep.has(row.volunteerId)),
+    events: data.events.filter((event) => !purged(event.id) && !purged(event.name)),
+    notices: data.notices.filter((notice) => !purged(notice.id) && !purged(notice.title)),
+  };
+}
+
+export async function purgeCloudIds(ids: string[]) {
+  const unique = [...new Set(ids.map((id) => text(id)).filter((id) => id.length > 1))].slice(0, 40);
+  if (!unique.length) return;
+  rememberPurgedIds(unique);
+  const project = process.env.NSS_FIRESTORE_PROJECT_ID?.trim() || "studio-8504026975-1fdbc";
+  const document = `projects/${project}/databases/(default)/documents/portalSettings/purged`;
+  const values = unique.map((id) => ({ stringValue: id }));
+  const commit = await fetch(`${FIRESTORE_BASE}:commit`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      writes: [
+        {
+          transform: {
+            document,
+            fieldTransforms: [{ fieldPath: "ids", appendMissingElements: { values } }],
+          },
+        },
+      ],
+    }),
+  });
+  if (!commit.ok) {
+    await fetch(`${FIRESTORE_BASE}/portalSettings?documentId=purged`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ fields: { ids: { arrayValue: { values } } } }),
+    });
+  }
+  await Promise.all(
+    unique.flatMap((id) =>
+      ["students", "events", "notices", "gallery"].map((collection) =>
+        fetch(`${FIRESTORE_BASE}/${collection}/${encodeURIComponent(id)}`, { method: "DELETE" }),
+      ),
+    ),
+  );
+  invalidateCollegeCache();
+  publicCache = null;
+  officerCache = null;
+  rosterCache = null;
+  void markBoardStale();
+}
+
 async function readBoard(): Promise<CloudPortal | null> {
   if (collegeQuotaBlocked()) return publicCache?.data ?? null;
   let doc: Record<string, unknown> | null = null;
@@ -598,21 +684,25 @@ async function writeBoard(data: CloudPortal) {
 
 export async function loadPublicBoard(opts: { gallery?: boolean } = {}): Promise<CloudPortal | null> {
   const now = Date.now();
-  if (publicCache && now - publicCache.at < PUBLIC_MEMORY_MS) return publicCache.data;
+  await readPurgedIds().catch(() => undefined);
+  if (publicCache && now - publicCache.at < PUBLIC_MEMORY_MS) return omitPurged(publicCache.data);
   if (!collegeQuotaBlocked()) {
     const board = await readBoard();
     if (board) {
-      publicCache = { at: Date.now(), data: board };
-      return board;
+      const clean = omitPurged(board);
+      publicCache = { at: Date.now(), data: clean };
+      return clean;
     }
   }
-  if (collegeQuotaBlocked()) return publicCache?.data ?? null;
+  if (collegeQuotaBlocked()) return publicCache?.data ? omitPurged(publicCache.data) : null;
   const fresh = await loadCollegeCloud({ gallery: opts.gallery !== false, photos: false });
   if (fresh && fresh.volunteers.length >= 20) {
-    publicCache = { at: Date.now(), data: fresh };
-    void writeBoard(fresh).catch(() => undefined);
+    const clean = omitPurged(fresh);
+    publicCache = { at: Date.now(), data: clean };
+    void writeBoard(clean).catch(() => undefined);
+    return clean;
   }
-  return fresh && fresh.volunteers.length > 0 ? fresh : publicCache?.data ?? null;
+  return fresh && fresh.volunteers.length > 0 ? omitPurged(fresh) : publicCache?.data ? omitPurged(publicCache.data) : null;
 }
 
 export async function loadOfficerRoll(): Promise<CloudPortal | null> {
@@ -758,7 +848,14 @@ async function listPhotoRosterFresh() {
     for (const doc of json.documents ?? []) docs.push(decodeDoc(doc));
     url = json.nextPageToken ? `${FIRESTORE_BASE}/students?${params}&pageToken=${encodeURIComponent(json.nextPageToken)}` : "";
   }
-  const live = docs.filter((row) => text(row.status).toLowerCase() !== "deleted");
+  const live = docs.filter((row) => {
+    const status = text(row.status).toLowerCase();
+    if (status === "deleted" || status === "inactive") return false;
+    const id = text(row._id).toLowerCase();
+    const vid = text(row.volunteerId).toLowerCase();
+    const name = text(row.fullName).toLowerCase();
+    return !purgedIds.has(id) && !purgedIds.has(vid) && !(name.length > 2 && purgedIds.has(name));
+  });
   live.sort(
     (a, b) =>
       isoDate(a.createdAt).localeCompare(isoDate(b.createdAt)) ||

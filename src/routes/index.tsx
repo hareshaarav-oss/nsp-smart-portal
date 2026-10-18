@@ -64,6 +64,7 @@ function Home() {
   const cardHours = showLiveBest && liveBest ? liveBest.hours : bestHours;
   const today = todayIso();
   const volunteers = useNssStore((s) => s.volunteers) ?? [];
+  const portal = useNssStore();
   const rollPhotos = useMemo(
     () => volunteers.filter((v) => v.status !== "alumni" && v.photoUrl),
     [volunteers],
@@ -163,7 +164,10 @@ function Home() {
                     {rollPhotos.map((v) => (
                       <figure key={v.id} className="text-center">
                         <img src={v.photoUrl} alt="" className="mx-auto h-24 w-20 rounded-md object-cover ring-1 ring-border" />
-                        <figcaption className="mt-1 line-clamp-2 text-[11px] leading-tight text-navy">{v.fullName}</figcaption>
+                        <figcaption className="mt-1 line-clamp-2 text-[11px] leading-tight text-navy">
+                          {v.fullName}
+                          <span className="mt-0.5 block font-semibold text-forest">{volunteerHours(portal, v.id)} hrs</span>
+                        </figcaption>
                       </figure>
                     ))}
                   </div>

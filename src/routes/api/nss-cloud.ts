@@ -1,4 +1,4 @@
-import { loadCollegeCloud, loadPublicBoard, loadOfficerRoll, collegeQuotaBlocked, saveStudentToCloud, incrementVisitors, readVisitorCount, knownVisitorCount, patchStudent, safePhoto, knownRole, issueChatPass, readChatPass, listRecentChatMessages, saveChatMessage, listChatPeople, clearAttendanceCloud, readBrandPhotos, saveBrandPhotos, listPhotoRoster, readPhotoBatch, saveAttendanceMarks, readLive, publishBestVolunteer, publishServiceHours } from "@/lib/nss/firestore";
+import { loadCollegeCloud, loadPublicBoard, loadOfficerRoll, collegeQuotaBlocked, saveStudentToCloud, incrementVisitors, readVisitorCount, knownVisitorCount, patchStudent, safePhoto, knownRole, issueChatPass, readChatPass, listRecentChatMessages, saveChatMessage, listChatPeople, clearAttendanceCloud, readBrandPhotos, saveBrandPhotos, listPhotoRoster, readPhotoBatch, saveAttendanceMarks, readLive, publishBestVolunteer, publishServiceHours, purgeCloudIds } from "@/lib/nss/firestore";
 import { createFileRoute } from "@tanstack/react-router";
 
 type Row = Record<string, unknown>;
@@ -355,6 +355,16 @@ export const Route = createFileRoute("/api/nss-cloud")({
               principalPhoto: typeof body.principalPhoto === "string" ? body.principalPhoto : undefined,
             });
             return Response.json({ ok: true, brand: saved });
+          }
+          if (body.action === "purge") {
+            const desk = text(body.deskRole);
+            const user = text(body.chatToken) ? await readChatPass(text(body.chatToken)).catch(() => null) : null;
+            const officer = user?.role === "po" || user?.role === "admin" || desk === "po" || desk === "admin";
+            if (!officer) return Response.json({ ok: false, error: "Only the Programme Officer can delete a record." }, { status: 403 });
+            const ids = (body.ids ?? []).map((id) => text(id)).filter((id) => id.length > 1).slice(0, 40);
+            if (!ids.length) return Response.json({ ok: false, error: "Nothing to delete." }, { status: 400 });
+            await purgeCloudIds(ids);
+            return Response.json({ ok: true });
           }
           if (body.action === "visit") {
             const visitors = await incrementVisitors();
