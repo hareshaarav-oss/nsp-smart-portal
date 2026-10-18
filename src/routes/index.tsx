@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { daysUntilBirthday, formatLongDate, isBirthdayOn, todayIso } from "@/lib/nss/format";
-import { activeVolunteers, alumniVolunteers, bestVolunteer, totalServiceHours, useNssStore, volunteerHours } from "@/lib/nss/store";
+import { activeVolunteers, alumniVolunteers, bestVolunteer, liveServiceHours, useNssStore, volunteerHours } from "@/lib/nss/store";
 
 export const Route = createFileRoute("/")({ component: Home });
 
@@ -21,15 +21,28 @@ function initials(name: string) {
     .join("");
 }
 
+const SEED_IDS = new Set([
+  "evt-plantation",
+  "evt-camp",
+  "evt-blood",
+  "evt-swachhata",
+  "evt-republic",
+  "ntc-leaders",
+  "ntc-reg",
+  "gal-plantation",
+  "gal-plantation-2",
+  "gal-swachhata",
+]);
+
 function Home() {
   const [splashing, setSplashing] = useState(shouldShowSplash);
   const dismiss = useCallback(() => setSplashing(false), []);
   const events = useNssStore((s) => s.events) ?? [];
   const notices = useNssStore((s) => s.notices) ?? [];
   const gallery = useNssStore((s) => s.gallery) ?? [];
-  const visitors = useNssStore((s) => s.visitors);
+  const visitors = useNssStore((s) => (s.visitors === 1362 ? 0 : s.visitors));
   const settings = useNssStore((s) => s.settings);
-  const hours = useNssStore((s) => Math.max(totalServiceHours(s), s.settings.reportedServiceHours ?? 0));
+  const hours = useNssStore((s) => liveServiceHours(s));
   const volunteerCount = useNssStore((s) => activeVolunteers(s).length);
   const liveVolunteerCount = useNssStore((s) => s.liveVolunteerCount ?? 0);
   const shownVolunteers = Math.max(volunteerCount, liveVolunteerCount);
@@ -74,31 +87,35 @@ function Home() {
     [volunteers, today],
   );
 
+  const collegeReady = shownVolunteers >= 20;
+  const collegeEvents = collegeReady ? events : events.filter((event) => !SEED_IDS.has(event.id));
+  const collegeNotices = collegeReady ? notices : notices.filter((notice) => !SEED_IDS.has(notice.id));
+  const collegeGallery = collegeReady ? gallery : gallery.filter((item) => !SEED_IDS.has(item.id));
   const upcoming = useMemo(
     () =>
-      events
+      collegeEvents
         .filter((event) => {
           const status = event.status.toLowerCase();
           if (status === "completed" || status === "cancelled") return false;
           return event.date >= today;
         })
         .sort((a, b) => a.date.localeCompare(b.date)),
-    [events, today],
+    [collegeEvents, today],
   );
   const completed = useMemo(
     () =>
-      events
+      collegeEvents
         .filter((event) => !upcoming.some((row) => row.id === event.id))
         .sort((a, b) => b.date.localeCompare(a.date))
         .slice(0, 6),
-    [events, upcoming],
+    [collegeEvents, upcoming],
   );
   const latestNotices = useMemo(
     () =>
-      [...notices]
+      [...collegeNotices]
         .filter((notice) => !notice.audience || notice.audience === "all")
         .sort((a, b) => b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt)),
-    [notices],
+    [collegeNotices],
   );
 
   return (
@@ -130,7 +147,7 @@ function Home() {
               <HomeOfficer role="Programme Officer" name={settings.poName} quote={settings.poQuote} photo={settings.poPhoto} />
               <div className="order-first md:order-none">
                 <div className="mb-3 flex items-center justify-between gap-3"><div><p className="text-xs font-semibold uppercase tracking-[0.18em] text-saffron">Welcome to NSP</p><h1 className="font-display text-2xl font-bold text-navy md:text-3xl">NSS Smart Portal</h1></div><span className="rounded-full bg-forest/10 px-3 py-1.5 text-xs font-semibold text-forest">☁ Cloud Connected</span></div>
-                <PhotoCarousel items={gallery} />
+                <PhotoCarousel items={collegeGallery} />
                 <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4"><MiniStat label="Volunteers" value={shownVolunteers} /><MiniStat label="Portal visitors" value={visitors} /><MiniStat label="Alumni" value={alumniCount} /><MiniStat label="Service hours" value={hours} /></div>
               </div>
               <HomeOfficer role="Principal" name={settings.principalName} quote={settings.principalQuote} photo={settings.principalPhoto} />

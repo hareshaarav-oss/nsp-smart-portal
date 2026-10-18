@@ -129,7 +129,7 @@ export function createSeedState(): PortalState {
     pressReports: [],
     logs: [],
     settings: DEFAULT_SETTINGS,
-    visitors: 1362,
+    visitors: 0,
     recycleBin: [],
   };
 }

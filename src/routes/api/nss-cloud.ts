@@ -19,7 +19,6 @@ function degradedBody() {
     ok: true as const,
     degraded: true,
     volunteers: [] as unknown[],
-    serviceHours: 576,
     build: appBuild(),
   };
 }
@@ -448,8 +447,8 @@ export const Route = createFileRoute("/api/nss-cloud")({
                 ok: true,
                 degraded: true,
                 volunteers: [],
-                serviceHours: Math.max(data?.serviceHours ?? 0, 576),
-                visitors: data?.visitors ?? 0,
+                ...(data && data.serviceHours > 0 ? { serviceHours: data.serviceHours } : {}),
+                ...(data && data.visitors > 0 ? { visitors: data.visitors } : {}),
                 build: appBuild(),
               });
             }

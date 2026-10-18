@@ -51,7 +51,7 @@ export const DEFAULT_SETTINGS: PortalSettings = {
   publishedVolunteerCount: 66,
   academicYear: "2026-27",
   serviceHourTarget: 120,
-  reportedServiceHours: 576,
+  reportedServiceHours: 0,
   waGirls: WA_GIRLS,
   waBoys: WA_BOYS,
   waLeaders: WA_LEADERS,

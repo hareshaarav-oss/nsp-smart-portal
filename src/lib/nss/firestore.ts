@@ -967,12 +967,16 @@ export async function saveStudentToCloud(input: Record<string, unknown>) {
   };
 }
 
+let lastVisitorCount = 0;
+
 export async function readVisitorCount(): Promise<number> {
   try {
     const doc = await getDocument("portalSettings/visitors");
-    return Number(doc?.count ?? 0);
+    const count = Number(doc?.count ?? 0);
+    if (count > 0) lastVisitorCount = count;
+    return count;
   } catch {
-    return 0;
+    return lastVisitorCount;
   }
 }
 
@@ -986,20 +990,6 @@ export async function incrementVisitors(): Promise<number> {
 
 async function incrementVisitorsFresh(): Promise<number> {
   const project = process.env.NSS_FIRESTORE_PROJECT_ID?.trim() || "studio-8504026975-1fdbc";
-  const existing = await getDocument("portalSettings/visitors");
-  const current = Number(existing?.count ?? 0);
-  if (!existing || current < 1) {
-    await fetch(`${FIRESTORE_BASE}/portalSettings?documentId=visitors`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        fields: {
-          count: encodeValue(1361),
-          updatedAt: encodeValue(new Date().toISOString()),
-        },
-      }),
-    });
-  }
   const res = await fetch(`${FIRESTORE_BASE}:commit`, {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -1014,12 +1004,12 @@ async function incrementVisitorsFresh(): Promise<number> {
       ],
     }),
   });
-  if (!res.ok) return current > 0 ? current : 0;
+  if (!res.ok) return lastVisitorCount;
   const json = (await res.json()) as { writeResults?: { transformResults?: { integerValue?: string }[] }[] };
   const value = Number(json.writeResults?.[0]?.transformResults?.[0]?.integerValue ?? 0);
-  const count = value || (current > 0 ? current + 1 : 1362);
-  void publishVisitors(count);
-  return count;
+  if (value > 0) lastVisitorCount = value;
+  if (value > 0) void publishVisitors(value);
+  return value;
 }
 
 export type LivePulse = {

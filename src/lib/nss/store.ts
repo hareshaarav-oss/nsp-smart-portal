@@ -2660,6 +2660,14 @@ export function volunteerHours(
   );
 }
 
+export function liveServiceHours(state: PortalState) {
+  const computed = totalServiceHours(state);
+  const reported = state.settings?.reportedServiceHours ?? 0;
+  const dummyFloor = reported === 576 && (state.attendance?.length ?? 0) === 0 && computed === 0;
+  if (dummyFloor) return computed;
+  return Math.max(computed, reported);
+}
+
 export function totalServiceHours(
   state: PortalState,
 ) {
