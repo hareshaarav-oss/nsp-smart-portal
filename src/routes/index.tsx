@@ -81,9 +81,9 @@ function Home() {
   );
 
   const collegeReady = shownVolunteers >= 20;
-  const collegeEvents = collegeReady ? events : events.filter((event) => !SEED_IDS.has(event.id));
-  const collegeNotices = collegeReady ? notices : notices.filter((notice) => !SEED_IDS.has(notice.id));
-  const collegeGallery = collegeReady ? gallery : gallery.filter((item) => !SEED_IDS.has(item.id));
+  const collegeEvents = collegeReady ? events.filter((event) => !SEED_IDS.has(event.id)) : events;
+  const collegeNotices = collegeReady ? notices.filter((notice) => !SEED_IDS.has(notice.id)) : notices;
+  const collegeGallery = collegeReady ? gallery.filter((item) => !SEED_IDS.has(item.id)) : gallery;
   const upcoming = useMemo(
     () =>
       collegeEvents

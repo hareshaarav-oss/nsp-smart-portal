@@ -216,6 +216,21 @@ function canSeeThread(user: { id: string; role: string; unit: string }, threadId
   return ids.includes(user.id);
 }
 
+function officerRole(user: { role?: string } | null | undefined) {
+  return user?.role === "po" || user?.role === "admin";
+}
+
+async function signedOfficer(chatToken: unknown) {
+  const token = text(chatToken);
+  if (!token) return null;
+  try {
+    const user = await readChatPass(token);
+    return officerRole(user) ? user : null;
+  } catch {
+    return null;
+  }
+}
+
 export const Route = createFileRoute("/api/nss-cloud")({
   server: {
     handlers: {
@@ -301,38 +316,38 @@ export const Route = createFileRoute("/api/nss-cloud")({
           }
           if (body.action === "resume-session") {
             const role = text(body.role);
-            if (role !== "po" && role !== "admin" && role !== "volunteer" && role !== "leader") {
+            if (role === "po" || role === "admin") {
+              return Response.json({ ok: false, error: "Sign in again with the Programme Officer password." }, { status: 401 });
+            }
+            if (role !== "volunteer" && role !== "leader") {
               return Response.json({ ok: false, error: "Open the desk from your saved login." }, { status: 400 });
             }
-            const senderId = role === "po" || role === "admin" ? role : text(body.volunteerId) || role;
+            const data = await loadCollegeCloud({ gallery: false, photos: false });
+            const want = text(body.volunteerId).toLowerCase();
+            const found = (data?.volunteers ?? []).find(
+              (row) => text(row.volunteerId).toLowerCase() === want || text(row.id).toLowerCase() === want,
+            );
+            if (!found) return Response.json({ ok: false, error: "Sign in again." }, { status: 401 });
+            const actualRole = text(found.nssRole) === "Leader" || knownRole(found.nssRole) !== "Volunteer" ? "leader" : "volunteer";
             const chatToken = newChatToken();
             await issueChatPass({
               token: chatToken,
-              senderId,
-              senderName: text(body.name) || "NSS",
-              role,
-              unit: text(body.unit),
-              docId: text(body.volunteerId),
+              senderId: publicId(found as unknown as Row),
+              senderName: text(found.fullName) || "NSS",
+              role: actualRole,
+              unit: text(found.unit),
+              docId: text(found.id),
             });
             return Response.json({ ok: true, chatToken });
           }
           if (body.action === "clear-attendance") {
-            let user: { role?: string } | null = null;
-            try {
-              user = text(body.chatToken) ? await readChatPass(text(body.chatToken)) : null;
-            } catch {
-              user = null;
-            }
-            const desk = text(body.deskRole);
-            const officer = user?.role === "po" || user?.role === "admin" || desk === "po" || desk === "admin";
+            const officer = await signedOfficer(body.chatToken);
             if (!officer) return Response.json({ ok: false, error: "Open the Programme Officer desk first." }, { status: 403 });
             const result = await clearAttendanceCloud(text(body.eventName), { all: body.all === true || !text(body.eventName) });
             return Response.json({ ok: true, ...result });
           }
           if (body.action === "save-attendance") {
-            const desk = text(body.deskRole);
-            const user = text(body.chatToken) ? await readChatPass(text(body.chatToken)).catch(() => null) : null;
-            const officer = user?.role === "po" || user?.role === "admin" || desk === "po" || desk === "admin";
+            const officer = await signedOfficer(body.chatToken);
             if (!officer) return Response.json({ ok: false, error: "Open the Programme Officer desk first." }, { status: 403 });
             const rows = Array.isArray(body.rows) ? body.rows : [];
             const saved = await saveAttendanceMarks(
@@ -358,9 +373,7 @@ export const Route = createFileRoute("/api/nss-cloud")({
             return Response.json({ ok: true, brand: saved });
           }
           if (body.action === "purge") {
-            const desk = text(body.deskRole);
-            const user = text(body.chatToken) ? await readChatPass(text(body.chatToken)).catch(() => null) : null;
-            const officer = user?.role === "po" || user?.role === "admin" || desk === "po" || desk === "admin";
+            const officer = await signedOfficer(body.chatToken);
             if (!officer) return Response.json({ ok: false, error: "Only the Programme Officer can delete a record." }, { status: 403 });
             const ids = (body.ids ?? []).map((id) => text(id)).filter((id) => id.length > 1).slice(0, 40);
             if (!ids.length) return Response.json({ ok: false, error: "Nothing to delete." }, { status: 400 });
@@ -380,18 +393,14 @@ export const Route = createFileRoute("/api/nss-cloud")({
             return Response.json({ ok: Boolean(live), live });
           }
           if (body.action === "live-hours") {
-            const desk = text(body.deskRole);
-            const user = text(body.chatToken) ? await readChatPass(text(body.chatToken)).catch(() => null) : null;
-            const officer = user?.role === "po" || user?.role === "admin" || desk === "po" || desk === "admin";
+            const officer = await signedOfficer(body.chatToken);
             if (!officer) return Response.json({ ok: false }, { status: 403 });
             const hours = Number(body.hours ?? 0);
             if (hours > 0) await publishServiceHours(hours);
             return Response.json({ ok: true, hours });
           }
           if (body.action === "live-best") {
-            const desk = text(body.deskRole);
-            const user = text(body.chatToken) ? await readChatPass(text(body.chatToken)).catch(() => null) : null;
-            const officer = user?.role === "po" || user?.role === "admin" || desk === "po" || desk === "admin";
+            const officer = await signedOfficer(body.chatToken);
             if (!officer) return Response.json({ ok: false }, { status: 403 });
             const name = text(body.name);
             if (!name) return Response.json({ ok: false }, { status: 400 });

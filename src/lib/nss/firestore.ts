@@ -103,7 +103,7 @@ function collectionUrl(name: string, token?: string, opts?: { photos?: boolean }
     }
   }
   if (name === "events") {
-    for (const field of ["eventName", "title", "date", "startDate", "location", "hours", "status", "description", "beneficiaries", "category", "coordinator", "createdAt"]) {
+    for (const field of ["eventName", "title", "date", "startDate", "endDate", "location", "hours", "status", "description", "beneficiaries", "category", "coordinator", "createdAt"]) {
       params.append("mask.fieldPaths", field);
     }
   }
@@ -334,19 +334,22 @@ async function loadCollegeCloudFresh(opts: { gallery?: boolean; photos?: boolean
   const events: NssEvent[] = eventDocs.map((e) => {
     const name = text(e.eventName) || text(e.title) || "NSS Activity";
     const date = isoDate(e.date) || isoDate(e.startDate);
+    const endDate = isoDate(e.endDate);
     const statusRaw = text(e.status).toLowerCase();
     const today = new Date().toISOString().slice(0, 10);
     let status: NssEvent["status"] =
       statusRaw === "cancelled" ? "cancelled" : statusRaw === "upcoming" || statusRaw === "planning" ? "upcoming" : "completed";
     if (status === "upcoming" && date && date < today) status = "completed";
+    const description = text(e.description);
     return {
       id: text(e._id) || `evt-${name}-${date}`,
       name,
       date,
+      endDate: endDate && endDate !== date ? endDate : undefined,
       location: text(e.location) || "Mansa",
-      hours: nssHourRule({ name, date, description: text(e.description) }).hours,
+      hours: nssHourRule({ name, date, endDate, description }).hours,
       status,
-      description: text(e.description),
+      description,
       beneficiaries: Number(e.beneficiaries) > 0 ? Number(e.beneficiaries) : 0,
       category: text(e.category),
       coordinator: text(e.coordinator),
@@ -491,7 +494,7 @@ export async function loadCollegeCloud(opts: { gallery?: boolean; photos?: boole
 
 const BOARD_TTL_MS = 12 * 60 * 60 * 1000;
 const PUBLIC_MEMORY_MS = 10 * 60 * 1000;
-let publicCache: { at: number; data: CloudPortal } | null = null;
+let publicCache: { at: number; data: CloudPortal; galleryReady?: boolean } | null = null;
 let officerCache: { at: number; data: CloudPortal } | null = null;
 
 function publicVolunteerId(v: { id: string; volunteerId?: string }) {
@@ -500,15 +503,22 @@ function publicVolunteerId(v: { id: string; volunteerId?: string }) {
   return v.id || v.volunteerId || "";
 }
 
-function publicBoardShape(data: CloudPortal): CloudPortal {
+function packGallery(items: CloudPortal["gallery"]) {
+  const maxPhoto = 230_000;
+  const maxGalleryBytes = 700_000;
   const gallery: CloudPortal["gallery"] = [];
   let galleryBytes = 0;
-  for (const item of data.gallery) {
-    if (!item.src || item.src.length > 120000) continue;
+  for (const item of items) {
+    if (!item.src || item.src.length > maxPhoto) continue;
+    if (gallery.length >= 8 || galleryBytes + item.src.length > maxGalleryBytes) continue;
     galleryBytes += item.src.length;
-    if (galleryBytes > 700000) break;
     gallery.push(item);
   }
+  return gallery;
+}
+
+function publicBoardShape(data: CloudPortal): CloudPortal {
+  const gallery = packGallery(data.gallery);
   const idMap = new Map(data.volunteers.map((v) => [v.id, publicVolunteerId(v)]));
   return {
     ...data,
@@ -632,13 +642,13 @@ export async function purgeCloudIds(ids: string[]) {
   void markBoardStale();
 }
 
-async function readBoard(): Promise<CloudPortal | null> {
-  if (collegeQuotaBlocked()) return publicCache?.data ?? null;
+async function readBoard(): Promise<{ data: CloudPortal; galleryCount: number | null } | null> {
+  if (collegeQuotaBlocked()) return publicCache ? { data: publicCache.data, galleryCount: publicCache.galleryReady ? publicCache.data.gallery.length : null } : null;
   let doc: Record<string, unknown> | null = null;
   try {
     doc = await getDocument("portalSettings/board");
   } catch {
-    return publicCache?.data ?? null;
+    return publicCache ? { data: publicCache.data, galleryCount: publicCache.galleryReady ? publicCache.data.gallery.length : null } : null;
   }
   if (!doc || doc.stale === true) return null;
   const updatedAt = Date.parse(text(doc.updatedAt));
@@ -646,7 +656,9 @@ async function readBoard(): Promise<CloudPortal | null> {
   try {
     const parsed = JSON.parse(text(doc.payload)) as CloudPortal;
     if (!parsed || !Array.isArray(parsed.volunteers) || parsed.volunteers.length < 20) return null;
-    return parsed;
+    const rawCount = doc.galleryCount;
+    const galleryCount = typeof rawCount === "number" && Number.isFinite(rawCount) ? rawCount : null;
+    return { data: parsed, galleryCount };
   } catch {
     return null;
   }
@@ -654,16 +666,18 @@ async function readBoard(): Promise<CloudPortal | null> {
 
 async function writeBoard(data: CloudPortal) {
   if (data.volunteers.length < 20 || collegeQuotaBlocked()) return;
-  const payload = JSON.stringify(publicBoardShape(data));
+  const shaped = publicBoardShape(data);
+  const payload = JSON.stringify(shaped);
   if (payload.length > 900000) return;
   const fields = {
     payload: { stringValue: payload },
     stale: { booleanValue: false },
     updatedAt: { stringValue: new Date().toISOString() },
-    volunteers: { integerValue: String(data.volunteers.length) },
+    volunteers: { integerValue: String(shaped.volunteers.length) },
+    galleryCount: { integerValue: String(shaped.gallery.length) },
   };
   const patch = await fetch(
-    `${FIRESTORE_BASE}/portalSettings/board?updateMask.fieldPaths=payload&updateMask.fieldPaths=stale&updateMask.fieldPaths=updatedAt&updateMask.fieldPaths=volunteers`,
+    `${FIRESTORE_BASE}/portalSettings/board?updateMask.fieldPaths=payload&updateMask.fieldPaths=stale&updateMask.fieldPaths=updatedAt&updateMask.fieldPaths=volunteers&updateMask.fieldPaths=galleryCount`,
     {
       method: "PATCH",
       headers: { "content-type": "application/json" },
@@ -684,21 +698,30 @@ async function writeBoard(data: CloudPortal) {
 
 export async function loadPublicBoard(opts: { gallery?: boolean } = {}): Promise<CloudPortal | null> {
   const now = Date.now();
+  const wantGallery = opts.gallery === true;
   await readPurgedIds().catch(() => undefined);
-  if (publicCache && now - publicCache.at < PUBLIC_MEMORY_MS) return omitPurged(publicCache.data);
+  if (publicCache && now - publicCache.at < PUBLIC_MEMORY_MS) {
+    const ready = !wantGallery || publicCache.galleryReady || publicCache.data.gallery.length > 0;
+    if (ready) return omitPurged(publicCache.data);
+  }
   if (!collegeQuotaBlocked()) {
     const board = await readBoard();
     if (board) {
-      const clean = omitPurged(board);
-      publicCache = { at: Date.now(), data: clean };
-      return clean;
+      const clean = omitPurged(board.data);
+      const knownEmpty = board.galleryCount === 0;
+      const usable = clean.gallery.length > 0 || knownEmpty;
+      if (!wantGallery || usable) {
+        publicCache = { at: Date.now(), data: clean, galleryReady: usable };
+        return clean;
+      }
     }
   }
   if (collegeQuotaBlocked()) return publicCache?.data ? omitPurged(publicCache.data) : null;
-  const fresh = await loadCollegeCloud({ gallery: opts.gallery !== false, photos: false });
+  const fresh = await loadCollegeCloud({ gallery: true, photos: false });
   if (fresh && fresh.volunteers.length >= 20) {
-    const clean = omitPurged(fresh);
-    publicCache = { at: Date.now(), data: clean };
+    const packed = omitPurged(fresh);
+    const clean = { ...packed, gallery: packGallery(packed.gallery) };
+    publicCache = { at: Date.now(), data: clean, galleryReady: true };
     void writeBoard(clean).catch(() => undefined);
     return clean;
   }
@@ -1197,13 +1220,7 @@ export async function readLive(): Promise<LivePulse | null> {
 
 export async function publishVisitors(count: number) {
   if (count < 1) return;
-  rememberLive({
-    visitors: count,
-    volunteerCount: lastLive?.volunteerCount ?? 0,
-    hours: lastLive?.hours ?? 0,
-    latest: lastLive?.latest,
-    best: lastLive?.best,
-  });
+  if (lastLive) lastLive = { ...lastLive, visitors: Math.max(lastLive.visitors, count) };
   await writeLive({
     visitors: encodeValue(count),
     updatedAt: encodeValue(new Date().toISOString()),

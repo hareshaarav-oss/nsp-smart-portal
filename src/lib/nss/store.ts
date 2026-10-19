@@ -6,7 +6,7 @@ import {
   STORAGE_DATA,
   STORAGE_SESSION,
 } from "./constants";
-import { createSeedState } from "./seed";
+import { createSeedState, isDemoRecord } from "./seed";
 import { isOfficer, useSessionStore } from "./session";
 import { academicYear, byFullName, padId, parseDob, titleFirstName } from "./format";
 import { deleteMedia } from "./media";
@@ -689,7 +689,7 @@ function mergePortalState(
           })),
         ),
 
-    events,
+    events: events.filter((event) => !isDemoRecord(event.id)),
 
     attendance: seed
       ? []
@@ -709,9 +709,9 @@ function mergePortalState(
         p.notices,
         current.notices,
       ),
-    ),
+    ).filter((notice) => !isDemoRecord(notice.id)),
 
-    gallery,
+    gallery: gallery.filter((item) => !isDemoRecord(item.id)),
 
     certificates,
     pressReports: seed
@@ -1067,29 +1067,21 @@ export const useNssStore =
           }
 
           if (Array.isArray(cloud.events)) {
-            const localExtra =
-              current.events.filter(
-                (e) =>
-                  e.id.startsWith(
-                    "evt-",
-                  ) &&
-                  e.id !== "evt-camp" &&
-                  !cloud.events?.some(
-                    (c) =>
-                      c.id === e.id ||
-                      c.name === e.name,
-                  ),
-              );
+            const localExtra = current.events.filter(
+              (e) =>
+                e.id.startsWith("evt-") &&
+                !isDemoRecord(e.id) &&
+                !cloud.events?.some(
+                  (c) => c.id === e.id || c.name.trim().toLowerCase() === e.name.trim().toLowerCase(),
+                ),
+            );
 
-            next.events = dedupeEvents([
-              ...cloud.events,
-              ...localExtra,
-            ])
+            next.events = dedupeEvents([...cloud.events, ...localExtra])
               .map((event) => ({
                 ...event,
                 hours: nssHourRule(event).hours,
               }))
-              .filter((event) => !dropped([event.id, event.name], current.purgedKeys ?? []));
+              .filter((event) => !isDemoRecord(event.id) && !dropped([event.id, event.name], current.purgedKeys ?? []));
           }
 
           if (Array.isArray(cloud.attendance)) {
