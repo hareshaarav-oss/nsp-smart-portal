@@ -1,4 +1,5 @@
 import { loadCollegeCloud, loadPublicBoard, loadOfficerRoll, collegeQuotaBlocked, saveStudentToCloud, incrementVisitors, readVisitorCount, knownVisitorCount, patchStudent, safePhoto, knownRole, issueChatPass, readChatPass, listRecentChatMessages, saveChatMessage, listChatPeople, clearAttendanceCloud, readBrandPhotos, saveBrandPhotos, listPhotoRoster, readPhotoBatch, saveAttendanceMarks, readLive, publishBestVolunteer, publishServiceHours, purgeCloudIds } from "@/lib/nss/firestore";
+import { passwordOk } from "@/lib/nss/seal.server";
 import { createFileRoute } from "@tanstack/react-router";
 
 type Row = Record<string, unknown>;
@@ -108,6 +109,7 @@ function selfVolunteer(row: Row) {
     emergencyContact: text(row.emergencyContact),
     abcId: text(row.abcId),
     myBharatId: text(row.myBharatId),
+    mpin: text(row.mpin),
   };
 }
 
@@ -152,7 +154,6 @@ function publicPayload(data: Row, includeGallery: boolean) {
 function matchVolunteer(volunteers: Row[], username: string, password: string) {
   const key = username.trim().toLowerCase();
   const keyDigits = digits(username);
-  const passDigits = digits(password);
   const hits = volunteers.filter((row) => {
     const tokens = text(row.fullName)
       .toLowerCase()
@@ -174,15 +175,11 @@ function matchVolunteer(volunteers: Row[], username: string, password: string) {
     );
   });
   if (!hits.length) {
-    return { error: "Username not found. Type only your FIRST NAME in CAPITAL letters, for example MAHI." };
+    return { error: "Username not found." };
   }
-  const matched = hits.filter((row) => {
-    const phone = digits(row.mobile);
-    const stored = text(row.loginPassword);
-    return (stored !== "" && stored === password.trim()) || (passDigits.length >= 10 && phone.endsWith(passDigits));
-  });
+  const matched = hits.filter((row) => passwordOk(text(row.loginPassword), password, digits(row.mobile)));
   if (matched[0]) return { row: matched[0] };
-  return { error: "Password is the 10-digit mobile number you entered at registration." };
+  return { error: "Wrong password." };
 }
 
 function newChatToken() {
@@ -206,14 +203,11 @@ function validThread(threadId: string) {
 
 function canSeeThread(user: { id: string; role: string; unit: string }, threadId: string) {
   const officer = user.role === "po" || user.role === "admin";
-  if (threadId === "college") return true;
-  if (threadId === "leaders") return officer || user.role === "leader";
-  if (threadId === "unit-1") return officer || user.unit === "Unit 1";
-  if (threadId === "unit-2") return officer || user.unit === "Unit 2";
+  if (threadId === "college" || threadId === "leaders" || threadId === "unit-1" || threadId === "unit-2") return officer;
   if (!threadId.startsWith("dm:")) return false;
   const ids = threadId.slice(3).split(":");
   if (officer) return ids.includes("po") || ids.includes("admin");
-  return ids.includes(user.id);
+  return ids.includes(user.id) && ids.includes("po");
 }
 
 function officerRole(user: { role?: string } | null | undefined) {
@@ -273,6 +267,7 @@ export const Route = createFileRoute("/api/nss-cloud")({
             myBharatId?: string;
             emergencyContact?: string;
             fatherName?: string;
+            mpin?: string;
             chatToken?: string;
             threadId?: string;
             text?: string;
@@ -451,7 +446,7 @@ export const Route = createFileRoute("/api/nss-cloud")({
             }
             const messages = (await listRecentChatMessages()).filter((row) => canSeeThread(user, canonicalThread(row.threadId)));
             const officer = user.role === "po" || user.role === "admin";
-            const people = await listChatPeople({ includeMobile: officer });
+            const people = officer ? await listChatPeople({ includeMobile: false }) : [];
             return Response.json({
               ok: true,
               me: { id: user.id, name: user.name, role: user.role, unit: user.unit },
@@ -504,6 +499,25 @@ export const Route = createFileRoute("/api/nss-cloud")({
               brand,
             });
           }
+          if (body.action === "reset-password") {
+            const data = await loadCollegeCloud({ gallery: false, photos: false });
+            const volunteers = (data?.volunteers ?? []) as unknown as Row[];
+            const want = digits(body.mobile);
+            const name = text(body.username).toLowerCase();
+            const found = volunteers.find(
+              (row) =>
+                want.length >= 10 &&
+                digits(row.mobile).endsWith(want) &&
+                text(row.fullName).toLowerCase().split(/\s+/)[0] === name,
+            );
+            if (!found) return Response.json({ ok: false, error: "No matching student." }, { status: 404 });
+            await patchStudent(text(found.id), {
+              password: digits(found.mobile),
+              passwordHasBeenChanged: false,
+              updatedAt: new Date().toISOString(),
+            });
+            return Response.json({ ok: true });
+          }
           if (body.action === "set-password" || body.action === "update-profile") {
             const data = await loadCollegeCloud({ gallery: false, photos: false });
             const volunteers = (data?.volunteers ?? []) as unknown as Row[];
@@ -529,6 +543,26 @@ export const Route = createFileRoute("/api/nss-cloud")({
             const patch: Record<string, unknown> = { updatedAt: new Date().toISOString() };
             for (const key of ["email", "address", "bloodGroup", "abcId", "myBharatId", "emergencyContact", "fatherName"] as const) {
               if (typeof body[key] === "string") patch[key] = text(body[key]);
+            }
+            if (typeof body.mobile === "string" && digits(body.mobile)) {
+              const next = digits(body.mobile).slice(-10);
+              if (next.length < 10) {
+                return Response.json({ ok: false, error: "Mobile must be 10 digits." }, { status: 400 });
+              }
+              const clash = volunteers.find(
+                (row) => digits(row.mobile).slice(-10) === next && text(row.id) !== text(found.id),
+              );
+              if (clash) {
+                return Response.json({ ok: false, error: "This mobile number is already on the NSS roll." }, { status: 409 });
+              }
+              patch.mobile = next;
+            }
+            if (typeof body.mpin === "string" && text(body.mpin)) {
+              const pin = text(body.mpin);
+              if (!/^\d{4}$/.test(pin)) {
+                return Response.json({ ok: false, error: "MPIN must be 4 digits." }, { status: 400 });
+              }
+              patch.mpin = pin;
             }
             if (photo) patch.photoUrl = photo;
             await patchStudent(text(found.id), patch);

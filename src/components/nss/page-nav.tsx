@@ -67,6 +67,9 @@ export function PageNav({
           ) : null}
           {officer ? (
             <>
+              <Link to="/chat" className="rounded-sm px-3 py-2 hover:bg-white/10">
+                Chat
+              </Link>
               <Link to="/po/attendance" className="rounded-sm px-3 py-2 hover:bg-white/10">
                 Attendance
               </Link>

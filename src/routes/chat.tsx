@@ -59,6 +59,11 @@ function readSeen() {
   }
 }
 
+function looksLikePhone(value: string) {
+  const digits = value.replace(/\D/g, "");
+  return digits.length >= 8;
+}
+
 function ChatPage() {
   const session = useSessionStore((s) => s.session);
   const [me, setMe] = useState<Me | null>(null);
@@ -71,7 +76,7 @@ function ChatPage() {
   const [sending, setSending] = useState(false);
   const [seen, setSeen] = useState<Record<string, string>>({});
   const [liveAt, setLiveAt] = useState(0);
-  const [alsoWa, setAlsoWa] = useState(true);
+  const [alsoWa, setAlsoWa] = useState(false);
   const scroller = useRef<HTMLDivElement>(null);
   const stick = useRef(true);
   const token = session?.chatToken || "";
@@ -82,6 +87,13 @@ function ChatPage() {
   useEffect(() => {
     setSeen(readSeen());
   }, []);
+
+  useEffect(() => {
+    if (!session || session.role === "po" || session.role === "admin") return;
+    const id = me?.id || session.volunteerId || "";
+    if (!id) return;
+    setActive(canonicalThread(`dm:${id}:po`));
+  }, [session, me?.id]);
 
   useEffect(() => {
     if (!session || session.chatToken) return;
@@ -120,8 +132,9 @@ function ChatPage() {
         });
         const data = (await res.json()) as { ok?: boolean; me?: Me; people?: Person[]; messages?: ChatMessage[] };
         if (stop || !res.ok || !data.ok || !data.me) return;
+        const desk = data.me.role === "po" || data.me.role === "admin";
         setMe(data.me);
-        setPeople(data.people ?? []);
+        setPeople(desk ? (data.people ?? []).map((person) => ({ ...person, mobile: undefined })) : []);
         setMessages(data.messages ?? []);
         setLiveAt(Date.now());
       } catch {
@@ -160,11 +173,8 @@ function ChatPage() {
   }, [messages, active, mobileList]);
 
   const allowedGroups = GROUPS.filter((group) => {
-    if (!me) return group.id === "college";
-    if (group.id === "leaders") return me.role === "leader" || me.role === "po" || me.role === "admin";
-    if (group.id === "unit-1") return me.role === "po" || me.role === "admin" || me.unit === "Unit 1";
-    if (group.id === "unit-2") return me.role === "po" || me.role === "admin" || me.unit === "Unit 2";
-    return true;
+    if (!me) return false;
+    return me.role === "po" || me.role === "admin";
   });
 
   function personName(id: string) {
@@ -195,12 +205,11 @@ function ChatPage() {
   }
 
   function phoneFor(id: string) {
-    if (!id) return "";
-    if (id === "po" || id === "admin") return poWhatsapp || "";
-    const person = people.find((row) => row.id === id);
-    if (person?.mobile) return person.mobile;
+    if (session?.role !== "po" && session?.role !== "admin") return "";
+    if (!id || id === "po" || id === "admin") return id === "po" || id === "admin" ? poWhatsapp || "" : "";
     const stored = roll.find((row) => row.volunteerId === id || row.id === id);
-    return stored?.mobile || "";
+    const mobile = stored?.mobile || "";
+    return mobile.replace(/\D/g, "").length >= 10 ? mobile : "";
   }
 
   function openWhatsAppChat(text: string) {
@@ -221,23 +230,27 @@ function ChatPage() {
     localStorage.setItem("nsp-chat-seen", JSON.stringify(next));
   }
 
-  async function send(e?: React.FormEvent) {
+  async function send(e?: React.FormEvent, threadId = active) {
     e?.preventDefault();
     const text = draft.trim();
     if (!text || sending) return;
+    const desk = session?.role === "po" || session?.role === "admin";
+    const mine = me?.id || session?.volunteerId || "";
+    const thread = desk ? canonicalThread(threadId) : mine ? canonicalThread(`dm:${mine}:po`) : "";
+    if (!thread || (!desk && !thread.endsWith(":po") && !thread.includes(":po"))) return;
     setSending(true);
     try {
       const res = await fetch("/api/nss-cloud", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ action: "chat-send", chatToken: token, threadId: canonicalThread(active), text }),
+        body: JSON.stringify({ action: "chat-send", chatToken: token, threadId: thread, text }),
       });
       const data = (await res.json()) as { ok?: boolean; error?: string; message?: ChatMessage };
       if (!res.ok || !data.ok || !data.message) throw new Error(data.error || "Message was not sent.");
       setMessages((current) => [...current.filter((row) => row.id !== data.message?.id), data.message!]);
       setDraft("");
       stick.current = true;
-      if (active.startsWith("dm:") && alsoWa && phoneFor(otherId())) openWhatsAppChat(text);
+      if ((session?.role === "po" || session?.role === "admin") && active.startsWith("dm:") && alsoWa && phoneFor(otherId())) openWhatsAppChat(text);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Message was not sent.");
     } finally {
@@ -247,15 +260,90 @@ function ChatPage() {
 
   if (!session) return <Navigate to="/login" search={{ role: "volunteer" }} />;
 
-  const threadMessages = messages.filter((message) => canonicalThread(message.threadId) === canonicalThread(active));
+  const officer = (session.role === "po" || session.role === "admin") && (!me || me.role === "po" || me.role === "admin");
   const meId = me?.id || (session.role === "po" ? "po" : session.role === "admin" ? "admin" : session.volunteerId || "");
+  const poThread = meId && meId !== "po" ? canonicalThread(`dm:${meId}:po`) : "";
+
+  if (!officer) {
+    const threadMessages = messages.filter((message) => poThread && canonicalThread(message.threadId) === poThread);
+    return (
+      <AppShell eyebrow="NSS CHAT" current="page">
+        <div className="mx-auto flex h-[calc(100dvh-13.5rem)] w-full max-w-3xl flex-col overflow-hidden border-y border-border bg-[#efe7d6] md:my-4 md:h-[calc(100dvh-8.5rem)] md:rounded-2xl md:border">
+          <header className="bg-navy px-4 py-3 text-paper">
+            <p className="font-medium">Programme Officer</p>
+            <p className="text-xs text-paper/70">{me?.name || session.name}</p>
+          </header>
+          {!token ? (
+            <div className="flex-1" />
+          ) : (
+            <>
+              <div
+                ref={scroller}
+                className="min-h-0 flex-1 space-y-2 overflow-y-auto bg-[radial-gradient(#e4d5b4_0.7px,transparent_0.7px)] bg-[length:14px_14px] px-3 py-4"
+              >
+                {threadMessages.map((message, index) => {
+                  const mine = message.senderId === me?.id || message.senderId === meId;
+                  const previous = threadMessages[index - 1];
+                  const showDay = !previous || previous.createdAt.slice(0, 10) !== message.createdAt.slice(0, 10);
+                  return (
+                    <div key={message.id}>
+                      {showDay ? <p className="mx-auto my-2 w-fit rounded-full bg-white/80 px-3 py-1 text-[11px] text-muted-foreground">{dayLabel(message.createdAt)}</p> : null}
+                      <div className={`flex ${mine ? "justify-end" : "justify-start"}`}>
+                        <div className={`max-w-[85%] rounded-2xl px-3 py-2 shadow-sm ${mine ? "rounded-br-sm bg-forest text-white" : "rounded-bl-sm bg-white text-navy"}`}>
+                          <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">{message.text}</p>
+                          <p className={`mt-1 flex items-center justify-end gap-1 text-[10px] ${mine ? "text-white/75" : "text-muted-foreground"}`}>
+                            {clock(message.createdAt)}
+                            {mine ? <CheckCheck className="size-3.5" /> : null}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              <form
+                className="border-t border-border bg-card p-3"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (poThread) setActive(poThread);
+                  void send(e);
+                }}
+              >
+                <div className="flex items-end gap-2">
+                  <textarea
+                    value={draft}
+                    onChange={(e) => setDraft(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !e.shiftKey) {
+                        e.preventDefault();
+                        if (poThread) setActive(poThread);
+                        void send();
+                      }
+                    }}
+                    rows={1}
+                    placeholder="Message"
+                    className="max-h-28 min-h-11 flex-1 resize-none rounded-full border border-border bg-muted/40 px-4 py-2.5 text-sm outline-none focus:border-forest"
+                  />
+                  <Button type="submit" disabled={sending || !draft.trim() || !poThread} className="size-11 rounded-full bg-forest p-0 text-primary-foreground hover:bg-forest/90" aria-label="Send">
+                    <SendHorizonal />
+                  </Button>
+                </div>
+              </form>
+            </>
+          )}
+        </div>
+      </AppShell>
+    );
+  }
+
+  const threadMessages = messages.filter((message) => canonicalThread(message.threadId) === canonicalThread(active));
   const directory = (() => {
     const map = new Map<string, Person>();
     for (const volunteer of roll) {
       if (!volunteer.fullName || volunteer.status === "alumni") continue;
       const id = volunteer.volunteerId || volunteer.id;
       if (!id || id === meId) continue;
-      map.set(id, { id, name: volunteer.fullName, unit: volunteer.unit || "Unit 1", role: volunteer.nssRole || "Volunteer", mobile: volunteer.mobile });
+      map.set(id, { id, name: volunteer.fullName, unit: volunteer.unit || "Unit 1", role: volunteer.nssRole || "Volunteer" });
     }
     for (const person of people) {
       if (!person.id || person.id === meId) continue;
@@ -265,7 +353,6 @@ function ChatPage() {
         name: person.name || prev?.name || person.id,
         unit: person.unit || prev?.unit || "Unit 1",
         role: person.role || prev?.role || "Volunteer",
-        mobile: person.mobile || prev?.mobile,
       });
     }
     const needle = query.trim().toLowerCase();
@@ -277,7 +364,6 @@ function ChatPage() {
   const activeRoll = roll.find((row) => row.volunteerId === otherId() || row.id === otherId());
   const activeHours = activeRoll ? volunteerHours(useNssStore.getState(), activeRoll.id) : 0;
   const activePhone = phoneFor(otherId());
-  const live = liveAt > 0 && Date.now() - liveAt < 6000;
 
   function threadButton(id: string) {
     const last = lastMessage(id);
@@ -306,21 +392,23 @@ function ChatPage() {
         <aside className={`${mobileList ? "flex" : "hidden"} w-full flex-col bg-card md:flex md:w-80 md:border-r md:border-border`}>
           <div className="bg-navy px-4 py-3 text-paper">
             <p className="font-display text-lg">NSS Chat</p>
-            <p className="text-xs text-paper/70">{live ? "Live · refreshing" : me?.name || session.name}</p>
+            <p className="text-xs text-paper/70">{me?.name || session.name}</p>
           </div>
+          {officer ? (
           <div className="border-b border-border p-3">
-            <div className="relative">
-              <Search className="pointer-events-none absolute left-3 top-2.5 size-4 text-muted-foreground" />
-              <Input id="chat-search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search a volunteer" className="pl-9" />
-            </div>
-            <Button className="mt-2 w-full bg-forest text-primary-foreground hover:bg-forest/90" onClick={() => document.getElementById("chat-search")?.focus()}>
-              <MessageCircle />
-              Personal volunteers ({directory.length})
-            </Button>
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-3 top-2.5 size-4 text-muted-foreground" />
+                <Input id="chat-search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search a volunteer" className="pl-9" />
+              </div>
+              <Button className="mt-2 w-full bg-forest text-primary-foreground hover:bg-forest/90" onClick={() => document.getElementById("chat-search")?.focus()}>
+                <MessageCircle />
+                Personal volunteers ({directory.length})
+              </Button>
           </div>
+          ) : null}
           <div className="min-h-0 flex-1 overflow-y-auto">
             <p className="px-4 pt-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">Personal</p>
-            {meId && meId !== "po" && meId !== "admin" ? (
+            {meId && meId !== "po" ? (
               <button type="button" className="flex w-full items-center gap-3 border-b border-border px-4 py-3 text-left hover:bg-muted" onClick={() => openThread(canonicalThread(`dm:${meId}:po`))}>
                 <span className="flex size-10 items-center justify-center rounded-full bg-navy text-xs font-semibold text-paper">PO</span>
                 <span>
@@ -329,24 +417,35 @@ function ChatPage() {
                 </span>
               </button>
             ) : null}
-            {directory.length === 0 ? <p className="px-4 py-3 text-sm text-muted-foreground">No volunteer on the roll yet.</p> : null}
-            {directory.map((person) => {
-              const thread = canonicalThread(`dm:${meId}:${person.id}`);
-              const photo = roll.find((row) => row.volunteerId === person.id || row.id === person.id)?.photoUrl;
-              const count = unreadCount(thread);
-              return (
-                <button key={person.id} type="button" className={`flex w-full items-center gap-3 border-b border-border px-4 py-3 text-left ${active === thread ? "bg-forest/10" : "hover:bg-muted"}`} onClick={() => openThread(thread)}>
-                  {photo ? <img src={photo} alt="" className="size-10 rounded-full object-cover" /> : <span className="flex size-10 items-center justify-center rounded-full bg-forest text-xs font-semibold text-paper">{person.name.slice(0, 1)}</span>}
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate font-medium text-navy">{person.name}</span>
-                    <span className="block truncate text-xs text-muted-foreground">{person.id} · {person.unit}{person.mobile ? " · WhatsApp" : ""}</span>
-                  </span>
-                  {count > 0 ? <span className="min-w-5 rounded-full bg-forest px-1.5 text-center text-[10px] font-semibold text-white">{count}</span> : null}
-                </button>
-              );
-            })}
-            <p className="px-4 pt-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">Groups</p>
-            {allowedGroups.map((group) => threadButton(group.id))}
+            {officer && meId !== "admin" ? (
+              <button type="button" className="flex w-full items-center gap-3 border-b border-border px-4 py-3 text-left hover:bg-muted" onClick={() => openThread(canonicalThread(`dm:${meId}:admin`))}>
+                <span className="flex size-10 items-center justify-center rounded-full bg-navy text-xs font-semibold text-paper">AD</span>
+                <span>
+                  <span className="block font-medium text-navy">Admin</span>
+                  <span className="block text-xs text-muted-foreground">Personal chat</span>
+                </span>
+              </button>
+            ) : null}
+            {officer && directory.length === 0 ? <p className="px-4 py-3 text-sm text-muted-foreground">No volunteer on the roll yet.</p> : null}
+            {officer
+              ? directory.map((person) => {
+                  const thread = canonicalThread(`dm:${meId}:${person.id}`);
+                  const photo = roll.find((row) => row.volunteerId === person.id || row.id === person.id)?.photoUrl;
+                  const count = unreadCount(thread);
+                  return (
+                    <button key={person.id} type="button" className={`flex w-full items-center gap-3 border-b border-border px-4 py-3 text-left ${active === thread ? "bg-forest/10" : "hover:bg-muted"}`} onClick={() => openThread(thread)}>
+                      {photo ? <img src={photo} alt="" className="size-10 rounded-full object-cover" /> : <span className="flex size-10 items-center justify-center rounded-full bg-forest text-xs font-semibold text-paper">{person.name.slice(0, 1)}</span>}
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate font-medium text-navy">{person.name}</span>
+                        <span className="block truncate text-xs text-muted-foreground">{person.unit}{person.id && !looksLikePhone(person.id) ? ` · ${person.id}` : ""}</span>
+                      </span>
+                      {count > 0 ? <span className="min-w-5 rounded-full bg-forest px-1.5 text-center text-[10px] font-semibold text-white">{count}</span> : null}
+                    </button>
+                  );
+                })
+              : null}
+            {officer ? <p className="px-4 pt-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">Groups</p> : null}
+            {officer ? allowedGroups.map((group) => threadButton(group.id)) : null}
           </div>
         </aside>
         <section className={`${mobileList ? "hidden" : "flex"} min-w-0 flex-1 flex-col md:flex`}>
@@ -358,10 +457,10 @@ function ChatPage() {
               <p className="truncate font-medium">{threadTitle(active)}</p>
               <p className="truncate text-xs text-paper/70">
                 {active.startsWith("dm:") ? `Personal chat${activePerson ? ` · ${activePerson.unit}` : ""}` : GROUPS.find((group) => group.id === active)?.subtitle}
-                {live ? " · Live" : ""}
+                {""}
               </p>
             </div>
-            {active.startsWith("dm:") && activePhone ? (
+            {officer && active.startsWith("dm:") && activePhone ? (
               <button type="button" className="inline-flex items-center gap-1 rounded-full bg-[#25D366] px-3 py-1.5 text-xs font-semibold text-white" onClick={() => openWhatsAppChat(draft)}>
                 <Phone className="size-3.5" />
                 WhatsApp
@@ -374,14 +473,10 @@ function ChatPage() {
               <span>{activeRoll.nssRole}</span>
               <span>{activeHours} hours</span>
               <span>{activeRoll.course} Sem {activeRoll.semester}</span>
-              <span className="text-forest">{live ? "Updating automatically" : "Waiting for refresh"}</span>
             </div>
           ) : null}
           {!token ? (
-            <div className="flex flex-1 flex-col items-center justify-center gap-2 px-6 text-center">
-              <p className="font-medium text-navy">Connecting your chat…</p>
-              <p className="max-w-sm text-sm text-muted-foreground">Your desk stays signed in. Messages open as soon as the college roll answers.</p>
-            </div>
+            <div className="flex flex-1 flex-col items-center justify-center gap-2 px-6 text-center" />
           ) : (
             <>
               <div
@@ -393,7 +488,6 @@ function ChatPage() {
                 }}
                 className="min-h-0 flex-1 space-y-2 overflow-y-auto bg-[radial-gradient(#e4d5b4_0.7px,transparent_0.7px)] bg-[length:14px_14px] px-3 py-4"
               >
-                {threadMessages.length === 0 ? <p className="py-16 text-center text-sm text-muted-foreground">No messages yet. Say hello.</p> : null}
                 {threadMessages.map((message, index) => {
                   const mine = message.senderId === me?.id;
                   const previous = threadMessages[index - 1];
@@ -443,10 +537,10 @@ function ChatPage() {
                     <SendHorizonal />
                   </Button>
                 </div>
-                {active.startsWith("dm:") ? (
+                {officer && active.startsWith("dm:") ? (
                   <label className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
                     <input type="checkbox" checked={alsoWa} onChange={(e) => setAlsoWa(e.target.checked)} />
-                    Also open WhatsApp with this message{activePhone ? "" : " when a number is available"}
+                    Also open WhatsApp
                   </label>
                 ) : null}
               </form>
