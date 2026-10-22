@@ -258,7 +258,7 @@ async function listPublicNotices() {
       return queried.filter((n) => {
         const kind = text(n.kind);
         const title = text(n.title);
-        return kind !== "chat" && kind !== "chat-auth" && title !== "NSS_CHAT_INTERNAL" && title !== "NSS_CHAT_AUTH";
+        return !text(n.kind).startsWith("chat") && !text(n.title).startsWith("NSS_CHAT");
       });
     }
   } catch (error) {
@@ -268,7 +268,7 @@ async function listPublicNotices() {
   return docs.filter((n) => {
     const kind = text(n.kind);
     const title = text(n.title);
-    return kind !== "chat" && kind !== "chat-auth" && title !== "NSS_CHAT_INTERNAL" && title !== "NSS_CHAT_AUTH";
+    return !text(n.kind).startsWith("chat") && !text(n.title).startsWith("NSS_CHAT");
   });
 }
 
@@ -423,7 +423,7 @@ async function loadCollegeCloudFresh(opts: { gallery?: boolean; photos?: boolean
     .filter((n) => {
       const kind = text(n.kind);
       const title = text(n.title);
-      return kind !== "chat" && kind !== "chat-auth" && title !== "NSS_CHAT_INTERNAL" && title !== "NSS_CHAT_AUTH";
+      return !text(n.kind).startsWith("chat") && !text(n.title).startsWith("NSS_CHAT");
     })
     .map((n) => {
     const body = text(n.text) || text(n.body);
@@ -1433,6 +1433,22 @@ export function computeServiceHours(events: { id: string; hours?: number }[], at
 }
 
 export type ChatPerson = { id: string; name: string; unit: string; role: string; mobile?: string };
+export type ChatExtra = {
+  kind?: string;
+  editedAt?: string;
+  expiresAt?: string;
+  viewOnce?: boolean;
+  opened?: boolean;
+  reactions?: Record<string, string>;
+  poll?: { q: string; options: string[]; votes: Record<string, string> };
+  fileName?: string;
+  lat?: number;
+  lng?: number;
+  contactName?: string;
+  contactUnit?: string;
+  forwarded?: boolean;
+};
+
 export type ChatRow = {
   id: string;
   threadId: string;
@@ -1443,7 +1459,8 @@ export type ChatRow = {
   replyName?: string;
   replyText?: string;
   media?: string;
-  mediaType?: "" | "image" | "video";
+  mediaType?: "" | "image" | "video" | "audio" | "file";
+  extra?: ChatExtra;
 };
 
 async function createDocument(collection: string, id: string, values: Record<string, unknown>) {
@@ -1548,11 +1565,12 @@ export async function listRecentChatMessages(limit = 60): Promise<ChatRow[]> {
   if (collegeQuotaBlocked()) return chatCache?.rows.slice(-limit) ?? [];
   const mapRows = (docs: Record<string, unknown>[]) =>
     docs
-      .filter((row) => text(row.kind) === "chat" && text(row.threadId) && (text(row.text) || text(row.mediaType) || text(row.media)))
+      .filter((row) => text(row.kind) === "chat" && text(row.threadId) && (text(row.text) || text(row.mediaType) || text(row.media) || text(row.extra)))
       .map((row) => {
-        const mediaType: "" | "image" | "video" = text(row.mediaType) === "video" ? "video" : text(row.mediaType) === "image" ? "image" : "";
+        const mediaType: "" | "image" | "video" | "audio" | "file" = text(row.mediaType) === "video" ? "video" : text(row.mediaType) === "audio" ? "audio" : text(row.mediaType) === "file" ? "file" : text(row.mediaType) === "image" ? "image" : "";
         const media = mediaType && text(row.media) ? openText(text(row.media)) : "";
-        const safeMedia = media.startsWith(mediaType === "video" ? "data:video/" : "data:image/") && media.length < 800000 ? media : "";
+        const prefix = mediaType === "video" ? "data:video/" : mediaType === "audio" ? "data:audio/" : mediaType === "file" ? "data:" : "data:image/";
+        const safeMedia = media.startsWith(prefix) && media.length < 800000 ? media : "";
         return {
           id: text(row._id),
           threadId: text(row.threadId),
@@ -1564,6 +1582,7 @@ export async function listRecentChatMessages(limit = 60): Promise<ChatRow[]> {
           replyText: openText(text(row.replyText)).slice(0, 140),
           media: safeMedia,
           mediaType,
+          extra: parseChatExtra(text(row.extra)),
         };
       })
       .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
@@ -1581,7 +1600,7 @@ export async function listRecentChatMessages(limit = 60): Promise<ChatRow[]> {
       orderBy: [{ field: { fieldPath: "createdAt" }, direction: "DESCENDING" }],
       limit,
       select: {
-        fields: ["kind", "threadId", "text", "senderId", "senderName", "createdAt", "replyName", "replyText", "mediaType"].map((fieldPath) => ({ fieldPath })),
+        fields: ["kind", "threadId", "text", "senderId", "senderName", "createdAt", "replyName", "replyText", "mediaType", "extra"].map((fieldPath) => ({ fieldPath })),
       },
     });
     const docs = ordered ?? (await runQuery({
@@ -1595,7 +1614,7 @@ export async function listRecentChatMessages(limit = 60): Promise<ChatRow[]> {
       },
       limit,
       select: {
-        fields: ["kind", "threadId", "text", "senderId", "senderName", "createdAt", "replyName", "replyText", "mediaType"].map((fieldPath) => ({ fieldPath })),
+        fields: ["kind", "threadId", "text", "senderId", "senderName", "createdAt", "replyName", "replyText", "mediaType", "extra"].map((fieldPath) => ({ fieldPath })),
       },
     })) ?? [];
     const rows = mapRows(docs);
@@ -1606,26 +1625,98 @@ export async function listRecentChatMessages(limit = 60): Promise<ChatRow[]> {
   }
 }
 
+export function parseChatExtra(raw: string): ChatExtra {
+  const opened = openText(raw);
+  if (!opened.startsWith("{")) return {};
+  try {
+    const value = JSON.parse(opened) as ChatExtra;
+    return value && typeof value === "object" ? value : {};
+  } catch {
+    return {};
+  }
+}
+
+function packExtra(extra?: ChatExtra) {
+  if (!extra) return "";
+  const json = JSON.stringify(extra).slice(0, 1800);
+  return json.length > 2 ? sealText(json) : "";
+}
+
+export function sideDocId(prefix: "pre" | "blk", userId: string) {
+  return `${prefix}${userId.replace(/[^A-Za-z0-9]/g, "").slice(0, 24)}`;
+}
+
+export async function patchNotice(id: string, values: Record<string, unknown>) {
+  const safe = text(id);
+  if (!/^[A-Za-z0-9]{4,48}$/.test(safe)) throw new Error("That chat item was not found.");
+  const fields: Record<string, unknown> = {};
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(values)) {
+    fields[key] = encodeValue(value);
+    params.append("updateMask.fieldPaths", key);
+  }
+  const res = await fetch(`${FIRESTORE_BASE}/notices/${encodeURIComponent(safe)}?${params}`, {
+    method: "PATCH",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ fields }),
+  });
+  if (!res.ok) throw new Error("Could not update the chat.");
+  chatCache = null;
+}
+
+export async function readSide(id: string) {
+  if (!/^[A-Za-z0-9]{4,48}$/.test(id)) return null;
+  return getDocument(`notices/${id}`);
+}
+
+export async function upsertNotice(id: string, values: Record<string, unknown>) {
+  const row = await getDocument(`notices/${id}`);
+  if (!row) await createDocument("notices", id, values);
+  else await patchNotice(id, values);
+}
+
+export async function readOneChat(id: string): Promise<ChatRow | null> {
+  if (!/^chat[a-z0-9]{4,40}$/i.test(id)) return null;
+  const row = await getDocument(`notices/${id}`);
+  if (!row || text(row.kind) !== "chat") return null;
+  const mediaType: "" | "image" | "video" | "audio" | "file" = text(row.mediaType) === "video" ? "video" : text(row.mediaType) === "audio" ? "audio" : text(row.mediaType) === "file" ? "file" : text(row.mediaType) === "image" ? "image" : "";
+  return {
+    id,
+    threadId: text(row.threadId),
+    text: openText(text(row.text)).slice(0, 1000),
+    senderId: text(row.senderId),
+    senderName: text(row.senderName).slice(0, 80),
+    createdAt: text(row.createdAt),
+    replyName: openText(text(row.replyName)).slice(0, 80),
+    replyText: openText(text(row.replyText)).slice(0, 140),
+    media: "",
+    mediaType,
+    extra: parseChatExtra(text(row.extra)),
+  };
+}
+
 export async function readChatMedia(ids: string[]) {
   const unique = [...new Set(ids.map((id) => text(id)).filter((id) => /^chat[a-z0-9]{4,40}$/i.test(id)))].slice(0, 6);
   const docs = await Promise.all(unique.map((id) => getDocument(`notices/${id}`).catch(() => null)));
   return docs.flatMap((row) => {
     if (!row || text(row.kind) !== "chat") return [];
-    const mediaType: "" | "image" | "video" = text(row.mediaType) === "video" ? "video" : text(row.mediaType) === "image" ? "image" : "";
+    const mediaType = text(row.mediaType) === "video" ? "video" : text(row.mediaType) === "audio" ? "audio" : text(row.mediaType) === "file" ? "file" : text(row.mediaType) === "image" ? "image" : "";
     const media = mediaType ? openText(text(row.media)) : "";
-    const safe = media.startsWith(mediaType === "video" ? "data:video/" : "data:image/") && media.length < 800000 ? media : "";
+    const prefix = mediaType === "video" ? "data:video/" : mediaType === "audio" ? "data:audio/" : mediaType === "file" ? "data:" : "data:image/";
+    const safe = media.startsWith(prefix) && media.length < 800000 ? media : "";
     if (!safe) return [];
     return [{ id: text(row._id), threadId: text(row.threadId), media: safe, mediaType }];
   });
 }
 
-export async function saveChatMessage(input: { threadId: string; text: string; senderId: string; senderName: string; replyName?: string; replyText?: string; media?: string; mediaType?: "" | "image" | "video" }) {
+export async function saveChatMessage(input: { threadId: string; text: string; senderId: string; senderName: string; replyName?: string; replyText?: string; media?: string; mediaType?: "" | "image" | "video" | "audio" | "file"; extra?: ChatExtra }) {
   const createdAt = new Date().toISOString();
   const id = `chat${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
   const replyName = text(input.replyName).slice(0, 80);
   const replyText = text(input.replyText).slice(0, 140);
-  const mediaType = input.mediaType === "video" ? "video" : input.mediaType === "image" ? "image" : "";
+  const mediaType = input.mediaType === "video" || input.mediaType === "audio" || input.mediaType === "file" || input.mediaType === "image" ? input.mediaType : "";
   const media = mediaType && input.media && input.media.length < 700000 ? input.media : "";
+  const extra = input.extra;
   await createDocument("notices", id, {
     kind: "chat",
     title: "NSS_CHAT_INTERNAL",
@@ -1637,6 +1728,7 @@ export async function saveChatMessage(input: { threadId: string; text: string; s
     replyText: replyText ? sealText(replyText) : "",
     media: media ? sealText(media) : "",
     mediaType: media ? mediaType : "",
+    extra: packExtra(extra),
     createdAt,
   });
   chatCache = null;
@@ -1651,12 +1743,39 @@ export async function saveChatMessage(input: { threadId: string; text: string; s
     replyText,
     media,
     mediaType: media ? mediaType : "",
+    extra,
   };
 }
 
 async function deleteNoticeDoc(id: string) {
   if (!/^chat[a-z0-9]{4,40}$/i.test(id)) return;
   await fetch(`${FIRESTORE_BASE}/notices/${encodeURIComponent(id)}`, { method: "DELETE" });
+}
+
+export async function listChatStatuses() {
+  const docs =
+    (await runQuery({
+      from: [{ collectionId: "notices" }],
+      where: {
+        fieldFilter: {
+          field: { fieldPath: "kind" },
+          op: "EQUAL",
+          value: { stringValue: "chat-status" },
+        },
+      },
+      limit: 20,
+    })) ?? [];
+  const cutoff = Date.now() - 24 * 60 * 60 * 1000;
+  return docs
+    .map((row) => ({
+      id: text(row._id),
+      text: openText(text(row.text)).slice(0, 140),
+      senderId: text(row.senderId),
+      senderName: text(row.senderName).slice(0, 80),
+      createdAt: text(row.createdAt),
+    }))
+    .filter((row) => row.text && new Date(row.createdAt).getTime() > cutoff)
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
 
 export async function deleteChatMessages(ids: string[]) {

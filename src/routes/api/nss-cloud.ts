@@ -1,5 +1,5 @@
-import { loadCollegeCloud, loadPublicBoard, loadOfficerRoll, collegeQuotaBlocked, saveStudentToCloud, incrementVisitors, readVisitorCount, knownVisitorCount, patchStudent, safePhoto, knownRole, issueChatPass, readChatPass, listRecentChatMessages, saveChatMessage, listChatPeople, clearAttendanceCloud, readBrandPhotos, saveBrandPhotos, listPhotoRoster, readPhotoBatch, saveAttendanceMarks, readLive, publishBestVolunteer, publishServiceHours, purgeCloudIds, deleteChatMessages, chatIdsInThread, readChatMedia } from "@/lib/nss/firestore";
-import { passwordOk } from "@/lib/nss/seal.server";
+import { loadCollegeCloud, loadPublicBoard, loadOfficerRoll, collegeQuotaBlocked, saveStudentToCloud, incrementVisitors, readVisitorCount, knownVisitorCount, patchStudent, safePhoto, knownRole, issueChatPass, readChatPass, listRecentChatMessages, saveChatMessage, listChatPeople, clearAttendanceCloud, readBrandPhotos, saveBrandPhotos, listPhotoRoster, readPhotoBatch, saveAttendanceMarks, readLive, publishBestVolunteer, publishServiceHours, purgeCloudIds, deleteChatMessages, chatIdsInThread, readChatMedia, readOneChat, patchNotice, upsertNotice, sideDocId, listChatStatuses, readSide, type ChatExtra } from "@/lib/nss/firestore";
+import { passwordOk, sealText } from "@/lib/nss/seal.server";
 import { createFileRoute } from "@tanstack/react-router";
 
 type Row = Record<string, unknown>;
@@ -197,12 +197,13 @@ function canonicalThread(threadId: string) {
 }
 
 function validThread(threadId: string) {
-  if (threadId === "college" || threadId === "unit-1" || threadId === "unit-2" || threadId === "leaders") return true;
+  if (threadId === "college" || threadId === "unit-1" || threadId === "unit-2" || threadId === "leaders" || threadId === "channel") return true;
   return /^dm:[A-Za-z0-9-]{1,24}:[A-Za-z0-9-]{1,24}$/.test(threadId);
 }
 
 function canSeeThread(user: { id: string; role: string; unit: string }, threadId: string) {
   const officer = user.role === "po" || user.role === "admin";
+  if (threadId === "channel") return true;
   if (threadId === "college" || threadId === "leaders" || threadId === "unit-1" || threadId === "unit-2") return officer;
   if (!threadId.startsWith("dm:")) return false;
   const ids = threadId.slice(3).split(":");
@@ -276,6 +277,24 @@ export const Route = createFileRoute("/api/nss-cloud")({
             replyText?: string;
             media?: string;
             mediaType?: string;
+            kind?: string;
+            emoji?: string;
+            option?: number;
+            peerId?: string;
+            typing?: boolean;
+            blockId?: string;
+            viewOnce?: boolean;
+            expiresAt?: string;
+            fileName?: string;
+            lat?: number;
+            lng?: number;
+            contactName?: string;
+            contactUnit?: string;
+            pollQ?: string;
+            pollOptions?: string[];
+            call?: string;
+            sdp?: string;
+            forwarded?: boolean;
             nssRole?: string;
             status?: string;
             eventName?: string;
@@ -417,7 +436,7 @@ export const Route = createFileRoute("/api/nss-cloud")({
             const saved = await saveStudentToCloud({ ...body, nssRole: "Volunteer" });
             return Response.json(saved);
           }
-          if (body.action === "chat-sync" || body.action === "chat-send" || body.action === "chat-delete" || body.action === "chat-clear" || body.action === "chat-media" || body.action === "set-role" || body.action === "set-status") {
+          if (body.action === "chat-sync" || body.action === "chat-send" || body.action === "chat-delete" || body.action === "chat-clear" || body.action === "chat-media" || body.action === "chat-edit" || body.action === "chat-react" || body.action === "chat-vote" || body.action === "chat-once" || body.action === "chat-presence" || body.action === "chat-block" || body.action === "chat-status" || body.action === "set-role" || body.action === "set-status") {
             const user = await readChatPass(text(body.chatToken));
             if (!user) return Response.json({ ok: false, error: "Sign in again to use NSS Chat." }, { status: 401 });
             if (body.action === "set-role" || body.action === "set-status") {
@@ -447,6 +466,110 @@ export const Route = createFileRoute("/api/nss-cloud")({
                 .map((row) => ({ id: row.id, media: row.media, mediaType: row.mediaType }));
               return Response.json({ ok: true, media });
             }
+            if (body.action === "chat-edit" || body.action === "chat-react" || body.action === "chat-vote" || body.action === "chat-once") {
+              const row = await readOneChat(text(body.messageId));
+              if (!row || !canSeeThread(user, canonicalThread(row.threadId))) {
+                return Response.json({ ok: false, error: "That message is not in your chat." }, { status: 404 });
+              }
+              const extra: ChatExtra = { ...(row.extra ?? {}) };
+              if (body.action === "chat-edit") {
+                if (row.senderId !== user.id) return Response.json({ ok: false, error: "You can edit only your own message." }, { status: 403 });
+                const message = String(body.text ?? "").split("\u0000").join("").trim().slice(0, 1000);
+                if (!message) return Response.json({ ok: false, error: "Type a message first." }, { status: 400 });
+                extra.editedAt = new Date().toISOString();
+                await patchNotice(row.id, { text: sealText(message), extra: sealText(JSON.stringify(extra).slice(0, 1800)) });
+                return Response.json({ ok: true, id: row.id, text: message, extra });
+              }
+              if (body.action === "chat-react") {
+                const emoji = text(body.emoji).slice(0, 8);
+                const reactions = { ...(extra.reactions ?? {}) };
+                if (!emoji || reactions[user.id] === emoji) delete reactions[user.id];
+                else reactions[user.id] = emoji;
+                extra.reactions = reactions;
+                await patchNotice(row.id, { extra: sealText(JSON.stringify(extra).slice(0, 1800)) });
+                return Response.json({ ok: true, id: row.id, extra });
+              }
+              if (body.action === "chat-vote") {
+                const poll = extra.poll;
+                if (!poll) return Response.json({ ok: false, error: "That is not a poll." }, { status: 400 });
+                const option = Number(body.option);
+                if (!Number.isInteger(option) || option < 0 || option >= poll.options.length) {
+                  return Response.json({ ok: false, error: "Choose an option." }, { status: 400 });
+                }
+                poll.votes = { ...(poll.votes ?? {}), [user.id]: String(option) };
+                extra.poll = poll;
+                await patchNotice(row.id, { extra: sealText(JSON.stringify(extra).slice(0, 1800)) });
+                return Response.json({ ok: true, id: row.id, extra });
+              }
+              extra.opened = true;
+              await patchNotice(row.id, { media: "", mediaType: "", extra: sealText(JSON.stringify(extra).slice(0, 1800)) });
+              return Response.json({ ok: true, id: row.id, extra });
+            }
+            if (body.action === "chat-presence" || body.action === "chat-block" || body.action === "chat-status") {
+              if (body.action === "chat-block") {
+                const other = text(body.blockId).replace(/[^A-Za-z0-9-]/g, "").slice(0, 24);
+                if (!other || other === user.id) return Response.json({ ok: false, error: "That person cannot be blocked." }, { status: 400 });
+                const id = sideDocId("blk", user.id);
+                const current = text((await readSide(id))?.ids);
+                const set = new Set(current.split(",").filter(Boolean));
+                if (set.has(other)) set.delete(other);
+                else set.add(other);
+                const ids = [...set].slice(0, 80).join(",");
+                await upsertNotice(id, { kind: "chat-block", title: "NSS_CHAT_INTERNAL", ids, senderId: user.id });
+                return Response.json({ ok: true, blocked: ids.split(",").filter(Boolean) });
+              }
+              if (body.action === "chat-status") {
+                const message = String(body.text ?? "").split("\u0000").join("").trim().slice(0, 140);
+                if (!message) return Response.json({ ok: false, error: "Type a status first." }, { status: 400 });
+                const id = `stat${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+                await upsertNotice(id, {
+                  kind: "chat-status",
+                  title: "NSS_CHAT_INTERNAL",
+                  text: sealText(message),
+                  senderId: user.id,
+                  senderName: user.name.slice(0, 80),
+                  createdAt: new Date().toISOString(),
+                });
+                return Response.json({ ok: true });
+              }
+              const now = new Date().toISOString();
+              const keep = await readSide(sideDocId("pre", user.id));
+              const hasCall = Object.prototype.hasOwnProperty.call(body, "call");
+              await upsertNotice(sideDocId("pre", user.id), {
+                kind: "chat-presence",
+                title: "NSS_CHAT_INTERNAL",
+                senderId: user.id,
+                lastSeen: now,
+                typingThread: body.typing ? canonicalThread(text(body.threadId)) : "",
+                typingAt: body.typing ? now : "",
+                readThread: canonicalThread(text(body.threadId)),
+                readAt: now,
+                call: hasCall ? text(body.call).slice(0, 16) : text(keep?.call),
+                callThread: hasCall ? (body.call ? canonicalThread(text(body.threadId)) : "") : text(keep?.callThread),
+                callAt: hasCall ? (body.call ? now : "") : text(keep?.callAt),
+                sdp: hasCall ? text(body.sdp).slice(0, 20000) : text(keep?.sdp),
+              });
+              const peerId = text(body.peerId).replace(/[^A-Za-z0-9-]/g, "").slice(0, 24);
+              const peer = peerId ? await readSide(sideDocId("pre", peerId)) : null;
+              const statuses = await listChatStatuses().catch(() => []);
+              return Response.json({
+                ok: true,
+                statuses,
+                peer: peer
+                  ? {
+                      lastSeen: text(peer.lastSeen),
+                      typingThread: text(peer.typingThread),
+                      typingAt: text(peer.typingAt),
+                      readThread: text(peer.readThread),
+                      readAt: text(peer.readAt),
+                      call: text(peer.call),
+                      callThread: text(peer.callThread),
+                      callAt: text(peer.callAt),
+                      sdp: text(peer.sdp),
+                    }
+                  : null,
+              });
+            }
             if (body.action === "chat-delete" || body.action === "chat-clear") {
               const recent = await listRecentChatMessages(300);
               if (body.action === "chat-delete") {
@@ -472,17 +595,44 @@ export const Route = createFileRoute("/api/nss-cloud")({
             }
             if (body.action === "chat-send") {
               const threadId = canonicalThread(text(body.threadId));
+              const officer = user.role === "po" || user.role === "admin";
               const message = String(body.text ?? "").split("\u0000").join("").trim().slice(0, 1000);
-              const mediaType = body.mediaType === "video" ? "video" : body.mediaType === "image" ? "image" : "";
+              const mediaType = body.mediaType === "video" ? "video" : body.mediaType === "audio" ? "audio" : body.mediaType === "file" ? "file" : body.mediaType === "image" ? "image" : "";
               const rawMedia = typeof body.media === "string" ? body.media.trim() : "";
               const mediaOk =
                 (mediaType === "image" && rawMedia.startsWith("data:image/") && rawMedia.length < 700000) ||
-                (mediaType === "video" && rawMedia.startsWith("data:video/") && rawMedia.length < 700000);
-              if (rawMedia && !mediaOk) return Response.json({ ok: false, error: "That photo or video is too large." }, { status: 400 });
-              if (!validThread(threadId) || !canSeeThread(user, threadId)) {
+                (mediaType === "video" && rawMedia.startsWith("data:video/") && rawMedia.length < 700000) ||
+                (mediaType === "audio" && (rawMedia.startsWith("data:audio/") || rawMedia.startsWith("data:video/webm")) && rawMedia.length < 700000) ||
+                (mediaType === "file" && rawMedia.startsWith("data:") && rawMedia.length < 500000);
+              if (rawMedia && !mediaOk) return Response.json({ ok: false, error: "That file is too large." }, { status: 400 });
+              if (!validThread(threadId) || !canSeeThread(user, threadId) || (threadId === "channel" && !officer)) {
                 return Response.json({ ok: false, error: "You cannot send to that chat." }, { status: 403 });
               }
-              if (!message && !mediaOk) return Response.json({ ok: false, error: "Type a message first." }, { status: 400 });
+              if (threadId.startsWith("dm:")) {
+                const ids = threadId.slice(3).split(":");
+                const other = ids.find((id) => id !== user.id) || "";
+                const mine = text((await readSide(sideDocId("blk", user.id)))?.ids).split(",");
+                const theirs = other ? text((await readSide(sideDocId("blk", other)))?.ids).split(",") : [];
+                if ((other && mine.includes(other)) || theirs.includes(user.id)) {
+                  return Response.json({ ok: false, error: "This chat is blocked." }, { status: 403 });
+                }
+              }
+              const pollOptions = Array.isArray(body.pollOptions) ? body.pollOptions.map((item) => text(item).slice(0, 40)).filter(Boolean).slice(0, 4) : [];
+              const kind = text(body.kind).slice(0, 16);
+              if (!message && !mediaOk && kind !== "poll") return Response.json({ ok: false, error: "Type a message first." }, { status: 400 });
+              const expiresAt = text(body.expiresAt);
+              const extra: ChatExtra = {
+                kind: kind || (mediaType === "audio" ? "audio" : mediaType === "file" ? "file" : ""),
+                expiresAt: /^\d{4}-\d{2}-\d{2}T/.test(expiresAt) ? expiresAt : "",
+                viewOnce: Boolean(body.viewOnce) && (mediaType === "image" || mediaType === "video"),
+                fileName: text(body.fileName).slice(0, 80),
+                lat: Number.isFinite(Number(body.lat)) ? Number(body.lat) : undefined,
+                lng: Number.isFinite(Number(body.lng)) ? Number(body.lng) : undefined,
+                contactName: text(body.contactName).slice(0, 80),
+                contactUnit: text(body.contactUnit).slice(0, 40),
+                forwarded: Boolean(body.forwarded),
+                poll: kind === "poll" && pollOptions.length >= 2 ? { q: message.slice(0, 140), options: pollOptions, votes: {} } : undefined,
+              };
               const saved = await saveChatMessage({
                 threadId,
                 text: message,
@@ -492,6 +642,7 @@ export const Route = createFileRoute("/api/nss-cloud")({
                 replyText: text(body.replyText).slice(0, 140),
                 media: mediaOk ? rawMedia : "",
                 mediaType: mediaOk ? mediaType : "",
+                extra,
               });
               return Response.json({ ok: true, message: saved });
             }
