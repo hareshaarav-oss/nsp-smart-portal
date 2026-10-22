@@ -1,4 +1,4 @@
-import { createFileRoute, Navigate } from "@tanstack/react-router";
+import { createFileRoute, Link, Navigate } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { ArrowLeft, Check, CheckCheck, Copy, Eraser, FileText, Lock, MapPin, Mic, MoreVertical, Paperclip, Phone, PhoneOff, Reply, Search, SendHorizonal, Smile, Star, Trash2, UserRound, Video, X } from "lucide-react";
 import { toast } from "sonner";
@@ -108,7 +108,35 @@ function firstLink(value: string) {
   }
 }
 
-const EMOJI = ["😀", "😁", "😂", "😊", "😍", "🙏", "👍", "👏", "🎉", "💪", "✅", "❤️", "🔥", "🌟", "🇮🇳", "📚", "🏆", "⏰"];
+function rangeEmoji(start: number, end: number) {
+  const out: string[] = [];
+  for (let cp = start; cp <= end; cp += 1) {
+    const bare = String.fromCodePoint(cp);
+    const shown = `${bare}\uFE0F`;
+    if (/\p{Emoji_Presentation}/u.test(bare)) out.push(bare);
+    else if (/\p{Emoji}/u.test(bare) && /\p{Emoji_Presentation}/u.test(shown)) out.push(shown);
+  }
+  return out;
+}
+
+function allFlags() {
+  const out: string[] = [];
+  for (let a = 0x1f1e6; a <= 0x1f1ff; a += 1) {
+    for (let b = 0x1f1e6; b <= 0x1f1ff; b += 1) out.push(String.fromCodePoint(a, b));
+  }
+  return out;
+}
+
+const EMOJI_TABS = [
+  { id: "smile", label: "😊", items: rangeEmoji(0x1f600, 0x1f64f) },
+  { id: "people", label: "👋", items: [...rangeEmoji(0x1f440, 0x1f4ff), ...rangeEmoji(0x1f90c, 0x1f9ff), ...rangeEmoji(0x1fa70, 0x1faff)] },
+  { id: "nature", label: "🐻", items: [...rangeEmoji(0x1f400, 0x1f43f), ...rangeEmoji(0x1f980, 0x1f9ae)] },
+  { id: "food", label: "🍔", items: rangeEmoji(0x1f32d, 0x1f37f) },
+  { id: "travel", label: "🚗", items: [...rangeEmoji(0x1f680, 0x1f6ff), ...rangeEmoji(0x1f3d4, 0x1f3ff)] },
+  { id: "objects", label: "💡", items: [...rangeEmoji(0x1f4a0, 0x1f4ff), ...rangeEmoji(0x1f5a0, 0x1f5ff)] },
+  { id: "symbols", label: "❤️", items: [...rangeEmoji(0x2600, 0x26ff), ...rangeEmoji(0x2700, 0x27bf), ...rangeEmoji(0x1f7e0, 0x1f7ff)] },
+  { id: "flags", label: "🏳️", items: allFlags() },
+];
 
 function previewLine(message: { text?: string; mediaType?: string }) {
   if (message.mediaType === "image") return message.text || "Photo";
@@ -192,6 +220,8 @@ function ChatPage() {
   const [liveAt, setLiveAt] = useState(0);
   const [alsoWa, setAlsoWa] = useState(false);
   const [emojiOn, setEmojiOn] = useState(false);
+  const [emojiTab, setEmojiTab] = useState("smile");
+  const [emojiQuery, setEmojiQuery] = useState("");
   const [reply, setReply] = useState<{ name: string; text: string } | null>(null);
   const [picked, setPicked] = useState("");
   const [ask, setAsk] = useState<"" | "clear" | "delete">("");
@@ -225,6 +255,14 @@ function ChatPage() {
   useEffect(() => {
     setSeen(readSeen());
     setPrefs(loadPrefs());
+  }, []);
+
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
   }, []);
 
   useEffect(() => {
@@ -873,7 +911,7 @@ function ChatPage() {
           </div>
         ) : null}
         {threadId === "channel" && !officer ? <div className="bg-[#f0f2f5] px-3 py-3 text-center text-xs text-[#667781]">Only the Programme Officer can post here.</div> : (
-        <form className="bg-[#f0f2f5] px-2 py-2" onSubmit={(e) => void send(e, threadId)}>
+        <form className="bg-[#f0f2f5] px-2 py-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]" onSubmit={(e) => void send(e, threadId)}>
           {reply ? (
             <div className="mb-2 flex items-start justify-between gap-2 rounded-lg bg-muted px-3 py-2 text-xs text-navy">
               <span className="min-w-0 truncate">{reply.name}: {reply.text}</span>
@@ -887,25 +925,34 @@ function ChatPage() {
             </div>
           ) : null}
           {sheet ? (
-            <div className="mb-2 grid grid-cols-4 gap-2 text-center text-[11px] text-[#111b21]">
-              <label className="rounded-lg bg-white py-2">Photo<input type="file" accept="image/*" className="sr-only" onChange={(e) => { const file = e.target.files?.[0]; e.target.value = ""; void attachFile(file); }} /></label>
-              <label className="rounded-lg bg-white py-2">Video<input type="file" accept="video/*" className="sr-only" onChange={(e) => { const file = e.target.files?.[0]; e.target.value = ""; void attachFile(file); }} /></label>
-              <label className="rounded-lg bg-white py-2">GIF<input type="file" accept="image/gif" className="sr-only" onChange={(e) => { const file = e.target.files?.[0]; e.target.value = ""; void attachFile(file); }} /></label>
-              <label className="rounded-lg bg-white py-2">Document<input type="file" accept=".pdf,.txt,.doc,.docx,application/pdf" className="sr-only" onChange={(e) => { const file = e.target.files?.[0]; e.target.value = ""; void attachFile(file); }} /></label>
-              <button type="button" className="rounded-lg bg-white py-2" onClick={() => { setEmojiOn(true); setSheet(false); }}>Sticker</button>
-              <button type="button" className="rounded-lg bg-white py-2" onClick={() => { const person = otherId(threadId); setDraft(""); void sendContact(person); }}>Contact</button>
-              <button type="button" className="rounded-lg bg-white py-2" onClick={() => { setSheet(false); void shareLocation(); }}><MapPin className="mx-auto size-4" />Location</button>
-              {officer ? <button type="button" className="rounded-lg bg-white py-2" onClick={() => setPollOn(true)}>Poll</button> : null}
+            <div className="mb-2 overflow-hidden rounded-2xl bg-white shadow-sm">
+              <p className="border-b px-4 py-2 text-sm font-semibold text-[#111b21]">Share</p>
+              <label className="flex w-full items-center gap-3 border-b px-4 py-3 text-sm">Photo<input type="file" accept="image/*" className="sr-only" onChange={(e) => { const file = e.target.files?.[0]; e.target.value = ""; setSheet(false); void attachFile(file); }} /></label>
+              <label className="flex w-full items-center gap-3 border-b px-4 py-3 text-sm">Video<input type="file" accept="video/*" className="sr-only" onChange={(e) => { const file = e.target.files?.[0]; e.target.value = ""; setSheet(false); void attachFile(file); }} /></label>
+              <label className="flex w-full items-center gap-3 border-b px-4 py-3 text-sm">GIF<input type="file" accept="image/gif" className="sr-only" onChange={(e) => { const file = e.target.files?.[0]; e.target.value = ""; setSheet(false); void attachFile(file); }} /></label>
+              <label className="flex w-full items-center gap-3 border-b px-4 py-3 text-sm">Document<input type="file" accept=".pdf,.txt,.doc,.docx,application/pdf" className="sr-only" onChange={(e) => { const file = e.target.files?.[0]; e.target.value = ""; setSheet(false); void attachFile(file); }} /></label>
+              <button type="button" className="flex w-full items-center gap-3 border-b px-4 py-3 text-left text-sm" onClick={() => { setEmojiOn(true); setEmojiTab("smile"); setSheet(false); }}>Sticker</button>
+              <button type="button" className="flex w-full items-center gap-3 border-b px-4 py-3 text-left text-sm" onClick={() => { void sendContact(otherId(threadId)); setSheet(false); }}>Contact</button>
+              <button type="button" className="flex w-full items-center gap-3 border-b px-4 py-3 text-left text-sm" onClick={() => { setSheet(false); void shareLocation(); }}>Location</button>
+              {officer ? <button type="button" className="flex w-full items-center gap-3 border-b px-4 py-3 text-left text-sm" onClick={() => { setPollOn(true); setSheet(false); }}>Poll</button> : null}
+              <button type="button" className="flex w-full items-center gap-3 px-4 py-3 text-left text-sm" onClick={() => { setSheet(false); void toggleVoice(); }}>Voice message</button>
             </div>
           ) : null}
           {emojiOn ? (
-            <div className="mb-2 flex flex-wrap gap-1">
-              {STICKERS.map((emoji) => (
-                <button key={emoji} type="button" className="rounded-md px-1.5 py-1 text-2xl" onClick={() => { setDraft(emoji); setEmojiOn(false); void sendSticker(emoji, threadId); }}>{emoji}</button>
-              ))}
-              {EMOJI.map((emoji) => (
-                <button key={emoji} type="button" className="rounded-md px-1.5 py-1 text-lg" onClick={() => setDraft((current) => `${current}${emoji}`)}>{emoji}</button>
-              ))}
+            <div className="mb-2 flex h-64 flex-col overflow-hidden rounded-2xl bg-white">
+              <input value={emojiQuery} onChange={(e) => setEmojiQuery(e.target.value)} placeholder="Search emoji" className="border-b px-3 py-2 text-sm outline-none" />
+              <div className="flex gap-1 overflow-x-auto border-b px-2 py-1">
+                {EMOJI_TABS.map((tab) => (
+                  <button key={tab.id} type="button" className={`rounded-full px-2 py-1 text-lg ${emojiTab === tab.id && !emojiQuery ? "bg-[#e7fce3]" : ""}`} onClick={() => { setEmojiTab(tab.id); setEmojiQuery(""); }}>{tab.label}</button>
+                ))}
+              </div>
+              <div className="min-h-0 flex-1 overflow-y-auto p-2">
+                <div className="grid grid-cols-8 gap-1">
+                  {(emojiQuery ? [...new Set(EMOJI_TABS.flatMap((tab) => tab.items))].filter((item) => item.includes(emojiQuery)).slice(0, 200) : (EMOJI_TABS.find((tab) => tab.id === emojiTab)?.items ?? [])).map((emoji) => (
+                    <button key={emoji} type="button" className="rounded-md py-1 text-2xl leading-none hover:bg-[#f0f2f5]" onClick={() => setDraft((current) => `${current}${emoji}`)}>{emoji}</button>
+                  ))}
+                </div>
+              </div>
             </div>
           ) : null}
           {pollOn ? <input value={pollOptions} onChange={(e) => setPollOptions(e.target.value)} className="mb-2 w-full rounded-lg px-3 py-2 text-sm" placeholder="Yes, No, Maybe" /> : null}
@@ -1010,10 +1057,10 @@ function ChatPage() {
   if (prefs.lock && !unlocked) {
     return (
       <AppShell eyebrow="NSS CHAT" current="page">
-        <form className="mx-auto mt-16 flex max-w-xs flex-col gap-3" onSubmit={(e) => { e.preventDefault(); if (pinHash(pinDraft) === prefs.lock) setUnlocked(true); else toast.error("Wrong PIN"); }}>
-          <Lock className="mx-auto size-8 text-[#075e54]" />
-          <input value={pinDraft} onChange={(e) => setPinDraft(e.target.value)} inputMode="numeric" className="rounded-lg border px-3 py-2 text-center" />
-          <Button type="submit" className="bg-[#075e54] text-white">Open</Button>
+        <form className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-[#111b21] text-white" onSubmit={(e) => { e.preventDefault(); if (pinHash(pinDraft) === prefs.lock) setUnlocked(true); else toast.error("Wrong PIN"); }}>
+          <Lock className="mb-4 size-10 text-[#25d366]" />
+          <input value={pinDraft} onChange={(e) => setPinDraft(e.target.value)} inputMode="numeric" placeholder="PIN" className="w-40 rounded-full bg-white px-4 py-3 text-center text-[#111b21]" />
+          <Button type="submit" className="mt-4 rounded-full bg-[#00a884] px-6 text-white">Open</Button>
         </form>
       </AppShell>
     );
@@ -1021,11 +1068,16 @@ function ChatPage() {
 
   return (
     <AppShell eyebrow="NSS CHAT" current="page">
-      <div className={`mx-auto flex h-[calc(100dvh-13.5rem)] w-full max-w-6xl overflow-hidden border-y border-[#d1d7db] md:my-4 md:h-[calc(100dvh-8.5rem)] md:rounded-xl md:border ${prefs.dark ? "bg-[#0b141a]" : "bg-[#efeae2]"}`}>
-        <aside className={`${mobileList ? "flex" : "hidden"} w-full flex-col md:flex md:w-80 md:border-r md:border-[#d1d7db] ${prefs.dark ? "bg-[#111b21] text-white" : "bg-white"}`}>
-          <div className="bg-[#075e54] px-4 py-3 text-white">
-            <p className="font-medium">Chats</p>
-            <p className="text-xs text-white/70">{me?.name || session.name}</p>
+      <div className={`fixed inset-0 z-50 flex ${prefs.dark ? "bg-[#0b141a]" : "bg-[#efeae2]"}`}>
+        <aside className={`${mobileList ? "flex" : "hidden"} h-full w-full flex-col md:flex md:w-96 md:border-r md:border-[#d1d7db] ${prefs.dark ? "bg-[#111b21] text-white" : "bg-white"}`}>
+          <div className="flex items-center gap-3 bg-[#075e54] px-3 py-3 text-white">
+            <Link to={session.role === "po" ? "/po" : session.role === "admin" ? "/admin-dashboard" : "/student-dashboard"} className="rounded-full p-1 hover:bg-white/10" aria-label="Back">
+              <ArrowLeft className="size-5" />
+            </Link>
+            <div>
+              <p className="font-medium">Chats</p>
+              <p className="text-xs text-white/70">{me?.name || session.name}</p>
+            </div>
           </div>
           {officer ? (
           <div className="border-b border-[#d1d7db] bg-white p-2">
@@ -1079,8 +1131,8 @@ function ChatPage() {
             {allowedGroups.map((group) => threadButton(group.id))}
           </div>
         </aside>
-        <section className={`${mobileList ? "hidden" : "flex"} min-w-0 flex-1 flex-col md:flex`}>
-          <header className="flex items-center gap-3 bg-[#075e54] px-2 py-2 text-white">
+        <section className={`${mobileList ? "hidden" : "flex"} relative min-w-0 flex-1 flex-col md:flex`}>
+          <header className="flex items-center gap-2 bg-[#075e54] px-2 py-2.5 text-white">
             <button type="button" className="rounded-md p-2 hover:bg-white/10 md:hidden" onClick={() => setMobileList(true)} aria-label="Back to chats">
               <ArrowLeft className="size-5" />
             </button>
@@ -1109,24 +1161,34 @@ function ChatPage() {
             </button>
           </header>
           {menu ? (
-            <div className="flex flex-wrap gap-2 bg-[#075e54] px-3 pb-3 text-xs text-white">
-              <button type="button" onClick={() => { setFinder(finder ? "" : " "); setMenu(false); }}>Search</button>
-              <button type="button" onClick={() => { setStarredOn((on) => !on); setMenu(false); }}>Starred</button>
-              <button type="button" onClick={() => { togglePref("pins", canonicalThread(active)); setMenu(false); }}>Pin</button>
-              <button type="button" onClick={() => { togglePref("mutes", canonicalThread(active)); setMenu(false); }}>Mute</button>
-              <button type="button" onClick={() => { togglePref("archives", canonicalThread(active)); setMenu(false); }}>Archive</button>
-              <button type="button" onClick={() => { togglePref("marked", canonicalThread(active)); setMenu(false); }}>Unread</button>
-              <button type="button" onClick={() => { const hours = prefs.disappear[canonicalThread(active)] ? 0 : 24; savePrefs({ ...prefs, disappear: { ...prefs.disappear, [canonicalThread(active)]: hours } }); setMenu(false); }}>Disappearing</button>
-              <button type="button" onClick={() => { const next = WALLS[(WALLS.indexOf(prefs.wallpaper) + 1) % WALLS.length]; savePrefs({ ...prefs, wallpaper: next }); setMenu(false); }}>Wallpaper</button>
-              <button type="button" onClick={() => { savePrefs({ ...prefs, dark: !prefs.dark }); setMenu(false); }}>Dark mode</button>
-              <button type="button" onClick={() => { const pin = window.prompt("4 digit chat lock", ""); if (pin && pin.length >= 4) { savePrefs({ ...prefs, lock: pinHash(pin) }); setUnlocked(false); } setMenu(false); }}>Lock</button>
-              {active.startsWith("dm:") ? <button type="button" onClick={() => { void fetch("/api/nss-cloud", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "chat-block", chatToken: token, blockId: otherId() }) }); setMenu(false); }}>Block</button> : null}
-              <button type="button" onClick={() => { const status = window.prompt("Status", ""); if (status?.trim()) void fetch("/api/nss-cloud", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "chat-status", chatToken: token, text: status.trim() }) }); setMenu(false); }}>Status</button>
-              {officer ? <button type="button" onClick={() => { void broadcast(); setMenu(false); }}>Broadcast</button> : null}
-              <button type="button" onClick={() => { setArchivesOn((on) => !on); setMenu(false); }}>Archived chats</button>
-              <button type="button" onClick={() => { const blob = new Blob([JSON.stringify(messages.map((row) => ({ ...row, media: row.media ? "attached" : "" })))], { type: "application/json" }); const url = URL.createObjectURL(blob); const link = document.createElement("a"); link.href = url; link.download = "nss-chat-backup.json"; link.click(); setMenu(false); }}>Backup</button>
-              <button type="button" onClick={() => { setAsk("clear"); setMenu(false); }}>Clear chat</button>
-              {!active.startsWith("dm:") ? <span>Admin: Programme Officer</span> : null}
+            <div className="absolute inset-0 z-20 flex flex-col bg-white text-[#111b21]">
+              <div className="flex items-center gap-3 bg-[#075e54] px-3 py-3 text-white">
+                <button type="button" className="rounded-full p-1" aria-label="Close" onClick={() => setMenu(false)}><ArrowLeft className="size-5" /></button>
+                <p className="font-medium">Features</p>
+              </div>
+              <div className="min-h-0 flex-1 overflow-y-auto">
+                {([
+                  ["Search in chat", () => setFinder(" ")],
+                  ["Starred messages", () => setStarredOn((on) => !on)],
+                  ["Pin chat", () => togglePref("pins", canonicalThread(active))],
+                  ["Mute", () => togglePref("mutes", canonicalThread(active))],
+                  ["Archive", () => togglePref("archives", canonicalThread(active))],
+                  ["Mark unread", () => togglePref("marked", canonicalThread(active))],
+                  ["Disappearing messages", () => { const hours = prefs.disappear[canonicalThread(active)] ? 0 : 24; savePrefs({ ...prefs, disappear: { ...prefs.disappear, [canonicalThread(active)]: hours } }); }],
+                  ["Wallpaper", () => { const next = WALLS[(WALLS.indexOf(prefs.wallpaper) + 1) % WALLS.length]; savePrefs({ ...prefs, wallpaper: next }); }],
+                  ["Dark mode", () => savePrefs({ ...prefs, dark: !prefs.dark })],
+                  ["Chat lock", () => { const pin = window.prompt("4 digit chat lock", ""); if (pin && pin.length >= 4) { savePrefs({ ...prefs, lock: pinHash(pin) }); setUnlocked(false); } }],
+                  ["Block", () => { if (active.startsWith("dm:")) void fetch("/api/nss-cloud", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "chat-block", chatToken: token, blockId: otherId() }) }); }],
+                  ["Status", () => { const status = window.prompt("Status", ""); if (status?.trim()) void fetch("/api/nss-cloud", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "chat-status", chatToken: token, text: status.trim() }) }); }],
+                  ["Broadcast", () => { if (officer) void broadcast(); }],
+                  ["Archived chats", () => setArchivesOn((on) => !on)],
+                  ["Backup", () => { const blob = new Blob([JSON.stringify(messages.map((row) => ({ ...row, media: row.media ? "attached" : "" })))], { type: "application/json" }); const url = URL.createObjectURL(blob); const link = document.createElement("a"); link.href = url; link.download = "nss-chat-backup.json"; link.click(); }],
+                  ["Clear chat", () => setAsk("clear")],
+                ] as [string, () => void][]).map(([label, run]) => (
+                  <button key={label} type="button" className="flex w-full items-center border-b px-4 py-3.5 text-left text-[15px]" onClick={() => { run(); setMenu(false); }}>{label}</button>
+                ))}
+                {!active.startsWith("dm:") ? <p className="px-4 py-3 text-sm text-[#667781]">Group admin: Programme Officer</p> : null}
+              </div>
             </div>
           ) : null}
           {finder ? <input value={finder.trim() ? finder : ""} onChange={(e) => setFinder(e.target.value)} placeholder="Search in chat" className="border-b px-3 py-2 text-sm outline-none" /> : null}
