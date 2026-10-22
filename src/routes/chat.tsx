@@ -1,6 +1,6 @@
 import { createFileRoute, Link, Navigate } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
-import { ArrowLeft, Check, CheckCheck, Copy, Eraser, FileText, Lock, MapPin, Mic, MoreVertical, Paperclip, Phone, PhoneOff, Reply, Search, SendHorizonal, Smile, Star, Trash2, UserRound, Video, X } from "lucide-react";
+import { ArrowLeft, Camera, Check, CheckCheck, Copy, FileText, Lock, MapPin, Mic, MoreVertical, Paperclip, Phone, PhoneOff, Reply, Search, SendHorizonal, Smile, Star, Trash2, UserRound, Video, X } from "lucide-react";
 import { toast } from "sonner";
 import { AppShell } from "@/components/nss/shell";
 import { Button } from "@/components/ui/button";
@@ -228,6 +228,8 @@ function ChatPage() {
   const [pending, setPending] = useState<{ media: string; mediaType: "image" | "video" | "audio" | "file"; name?: string } | null>(null);
   const [prefs, setPrefs] = useState<Prefs>(blankPrefs);
   const [menu, setMenu] = useState(false);
+  const [menuMore, setMenuMore] = useState(false);
+  const [listTab, setListTab] = useState<"all" | "unread">("all");
   const [finder, setFinder] = useState("");
   const [unlocked, setUnlocked] = useState(false);
   const [pinDraft, setPinDraft] = useState("");
@@ -326,15 +328,12 @@ function ChatPage() {
           return kept && !row.media ? { ...row, media: kept.media, mediaType: kept.mediaType } : row;
         });
         setMessages((current) => {
-          if (
-            current.length === incoming.length &&
-            current.every((row, index) => row.id === incoming[index]?.id && row.text === incoming[index]?.text && row.media === incoming[index]?.media)
-          ) {
-            return current;
-          }
-          return incoming;
+          const locals = current.filter((row) => row.id.startsWith("local-"));
+          const kept = locals.filter((local) => !incoming.some((row) => row.senderId === local.senderId && row.threadId === local.threadId && row.text === local.text));
+          const next = [...incoming, ...kept].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+          if (current.length === next.length && current.every((row, index) => row.id === next[index]?.id && row.text === next[index]?.text && row.media === next[index]?.media)) return current;
+          return next;
         });
-        setLiveAt(Date.now());
       } catch {
         /* keep the last messages on screen */
       }
@@ -506,6 +505,19 @@ function ChatPage() {
         setPending({ media, mediaType: "video" });
         return;
       }
+      if (file.type.startsWith("audio/")) {
+        if (file.size > 380000) {
+          toast.error("Audio is too large.");
+          return;
+        }
+        const media = await readData(file);
+        if (!media.startsWith("data:audio/") || media.length > 500000) {
+          toast.error("Audio is too large.");
+          return;
+        }
+        setPending({ media, mediaType: "audio", name: file.name || "Audio" });
+        return;
+      }
       if (!file.type.startsWith("image/") || file.type === "image/gif") {
         if (file.size > 380000) {
           toast.error("That file is too large.");
@@ -534,13 +546,37 @@ function ChatPage() {
     e?.preventDefault();
     const text = draft.trim();
     const attachment = pending;
-    if ((!text && !attachment && !pollOn) || sending) return;
+    if (!text && !attachment && !pollOn) return;
     const desk = session?.role === "po" || session?.role === "admin";
     const mine = me?.id || session?.volunteerId || "";
     const thread = desk ? canonicalThread(threadId) : mine ? canonicalThread(`dm:${mine}:po`) : "";
     if (!thread || (!desk && !thread.endsWith(":po") && !thread.includes(":po"))) return;
     const hours = prefs.disappear[thread] || 0;
-    setSending(true);
+    const localId = `local-${Date.now()}`;
+    const localMessage: ChatMessage = {
+      id: localId,
+      threadId: thread,
+      text,
+      senderId: mine || me?.id || "",
+      senderName: me?.name || session?.name || "",
+      createdAt: new Date().toISOString(),
+      replyName: reply?.name || "",
+      replyText: reply?.text || "",
+      media: attachment?.media || "",
+      mediaType: attachment?.mediaType || "",
+      extra: forwarded ? { forwarded: true } : undefined,
+    };
+    if (attachment?.media) mediaBag.current.set(localId, attachment);
+    setMessages((current) => [...current, localMessage]);
+    setDraft("");
+    setReply(null);
+    setPending(null);
+    setEmojiOn(false);
+    setPollOn(false);
+    setViewOnce(false);
+    setForwarded(false);
+    setSheet(false);
+    stick.current = true;
     try {
       const res = await fetch("/api/nss-cloud", {
         method: "POST",
@@ -550,8 +586,8 @@ function ChatPage() {
           chatToken: token,
           threadId: thread,
           text,
-          replyName: reply?.name || "",
-          replyText: reply?.text || "",
+          replyName: localMessage.replyName,
+          replyText: localMessage.replyText,
           media: attachment?.media || "",
           mediaType: attachment?.mediaType || "",
           fileName: attachment?.name || "",
@@ -564,21 +600,13 @@ function ChatPage() {
       });
       const data = (await res.json()) as { ok?: boolean; error?: string; message?: ChatMessage };
       if (!res.ok || !data.ok || !data.message) throw new Error(data.error || "Message was not sent.");
-      setMessages((current) => [...current.filter((row) => row.id !== data.message?.id), data.message!]);
-      setDraft("");
-      setReply(null);
-      setPending(null);
-      setEmojiOn(false);
-      setPollOn(false);
-      setViewOnce(false);
-      setForwarded(false);
-      setSheet(false);
-      stick.current = true;
+      if (attachment?.media && data.message.mediaType) mediaBag.current.set(data.message.id, { media: data.message.media || attachment.media, mediaType: attachment.mediaType });
+      setMessages((current) => [...current.filter((row) => row.id !== localId && row.id !== data.message?.id), { ...data.message!, media: data.message!.media || attachment?.media || "", mediaType: data.message!.mediaType || attachment?.mediaType || "" }]);
       if ((session?.role === "po" || session?.role === "admin") && active.startsWith("dm:") && alsoWa && phoneFor(otherId())) openWhatsAppChat(text);
     } catch (error) {
+      setMessages((current) => current.filter((row) => row.id !== localId));
+      setDraft(text);
       toast.error(error instanceof Error ? error.message : "Message was not sent.");
-    } finally {
-      setSending(false);
     }
   }
 
@@ -852,7 +880,7 @@ function ChatPage() {
                       {prefs.stars.includes(message.id) ? <Star className="size-3 fill-current" /> : null}
                       {extra.editedAt ? <span>Edited</span> : null}
                       {clock(message.createdAt)}
-                      {mine ? delivered || read ? <CheckCheck className={`size-3.5 ${read ? "text-[#53bdeb]" : ""}`} /> : <Check className="size-3.5" /> : null}
+                      {mine ? message.id.startsWith("local-") ? <Check className="size-3.5" /> : delivered || read ? <CheckCheck className={`size-3.5 ${read ? "text-[#53bdeb]" : ""}`} /> : <Check className="size-3.5" /> : null}
                     </p>
                   </div>
                 </div>
@@ -911,90 +939,119 @@ function ChatPage() {
           </div>
         ) : null}
         {threadId === "channel" && !officer ? <div className="bg-[#f0f2f5] px-3 py-3 text-center text-xs text-[#667781]">Only the Programme Officer can post here.</div> : (
-        <form className="bg-[#f0f2f5] px-2 py-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]" onSubmit={(e) => void send(e, threadId)}>
+        <form className="relative bg-[#f0f2f5] px-1.5 py-1.5 pb-[max(0.35rem,env(safe-area-inset-bottom))]" onSubmit={(e) => void send(e, threadId)}>
           {reply ? (
-            <div className="mb-2 flex items-start justify-between gap-2 rounded-lg bg-muted px-3 py-2 text-xs text-navy">
-              <span className="min-w-0 truncate">{reply.name}: {reply.text}</span>
+            <div className="mb-1 flex items-start justify-between gap-2 rounded-lg border-l-4 border-[#06cf9c] bg-white px-3 py-2 text-xs">
+              <span className="min-w-0 truncate text-[#111b21]">{reply.name}: {reply.text}</span>
               <button type="button" aria-label="Cancel reply" onClick={() => setReply(null)}><X className="size-3.5" /></button>
             </div>
           ) : null}
           {pending ? (
-            <div className="mb-2 flex items-center justify-between gap-2 rounded-lg bg-muted px-3 py-2 text-xs text-navy">
+            <div className="mb-1 flex items-center justify-between gap-2 rounded-lg bg-white px-3 py-2 text-xs text-[#111b21]">
               {pending.mediaType === "image" ? <img src={pending.media} alt="" className="size-10 rounded object-cover" /> : <span>{pending.name || pending.mediaType}</span>}
+              {pending.mediaType === "image" || pending.mediaType === "video" ? <label className="flex items-center gap-1 text-[#667781]"><input type="checkbox" checked={viewOnce} onChange={(e) => setViewOnce(e.target.checked)} />View once</label> : null}
               <button type="button" aria-label="Remove attachment" onClick={() => setPending(null)}><X className="size-3.5" /></button>
             </div>
           ) : null}
           {sheet ? (
-            <div className="mb-2 overflow-hidden rounded-2xl bg-white shadow-sm">
-              <p className="border-b px-4 py-2 text-sm font-semibold text-[#111b21]">Share</p>
-              <label className="flex w-full items-center gap-3 border-b px-4 py-3 text-sm">Photo<input type="file" accept="image/*" className="sr-only" onChange={(e) => { const file = e.target.files?.[0]; e.target.value = ""; setSheet(false); void attachFile(file); }} /></label>
-              <label className="flex w-full items-center gap-3 border-b px-4 py-3 text-sm">Video<input type="file" accept="video/*" className="sr-only" onChange={(e) => { const file = e.target.files?.[0]; e.target.value = ""; setSheet(false); void attachFile(file); }} /></label>
-              <label className="flex w-full items-center gap-3 border-b px-4 py-3 text-sm">GIF<input type="file" accept="image/gif" className="sr-only" onChange={(e) => { const file = e.target.files?.[0]; e.target.value = ""; setSheet(false); void attachFile(file); }} /></label>
-              <label className="flex w-full items-center gap-3 border-b px-4 py-3 text-sm">Document<input type="file" accept=".pdf,.txt,.doc,.docx,application/pdf" className="sr-only" onChange={(e) => { const file = e.target.files?.[0]; e.target.value = ""; setSheet(false); void attachFile(file); }} /></label>
-              <button type="button" className="flex w-full items-center gap-3 border-b px-4 py-3 text-left text-sm" onClick={() => { setEmojiOn(true); setEmojiTab("smile"); setSheet(false); }}>Sticker</button>
-              <button type="button" className="flex w-full items-center gap-3 border-b px-4 py-3 text-left text-sm" onClick={() => { void sendContact(otherId(threadId)); setSheet(false); }}>Contact</button>
-              <button type="button" className="flex w-full items-center gap-3 border-b px-4 py-3 text-left text-sm" onClick={() => { setSheet(false); void shareLocation(); }}>Location</button>
-              {officer ? <button type="button" className="flex w-full items-center gap-3 border-b px-4 py-3 text-left text-sm" onClick={() => { setPollOn(true); setSheet(false); }}>Poll</button> : null}
-              <button type="button" className="flex w-full items-center gap-3 px-4 py-3 text-left text-sm" onClick={() => { setSheet(false); void toggleVoice(); }}>Voice message</button>
+            <div className="absolute inset-x-2 bottom-full z-30 mb-2 rounded-2xl bg-white px-3 py-4 shadow-2xl">
+              <div className="grid grid-cols-4 gap-y-4 text-center text-[12px] text-[#111b21]">
+                <label className="flex flex-col items-center gap-1.5">
+                  <span className="flex size-14 items-center justify-center rounded-full bg-[#7f66ff] text-white"><FileText className="size-6" /></span>
+                  Document
+                  <input type="file" accept=".pdf,.txt,.doc,.docx,application/pdf" className="sr-only" onChange={(e) => { const file = e.target.files?.[0]; e.target.value = ""; setSheet(false); void attachFile(file); }} />
+                </label>
+                <label className="flex flex-col items-center gap-1.5">
+                  <span className="flex size-14 items-center justify-center rounded-full bg-[#ff2e74] text-white"><Camera className="size-6" /></span>
+                  Camera
+                  <input type="file" accept="image/*" capture="environment" className="sr-only" onChange={(e) => { const file = e.target.files?.[0]; e.target.value = ""; setSheet(false); void attachFile(file); }} />
+                </label>
+                <label className="flex flex-col items-center gap-1.5">
+                  <span className="flex size-14 items-center justify-center rounded-full bg-[#007bfc] text-white"><Camera className="size-6" /></span>
+                  Gallery
+                  <input type="file" accept="image/*,video/*" className="sr-only" onChange={(e) => { const file = e.target.files?.[0]; e.target.value = ""; setSheet(false); void attachFile(file); }} />
+                </label>
+                <label className="flex flex-col items-center gap-1.5">
+                  <span className="flex size-14 items-center justify-center rounded-full bg-[#f05c48] text-white"><Mic className="size-6" /></span>
+                  Audio
+                  <input type="file" accept="audio/*" className="sr-only" onChange={(e) => { const file = e.target.files?.[0]; e.target.value = ""; setSheet(false); void attachFile(file); }} />
+                </label>
+                <button type="button" className="flex flex-col items-center gap-1.5" onClick={() => { setSheet(false); void shareLocation(); }}>
+                  <span className="flex size-14 items-center justify-center rounded-full bg-[#02a698] text-white"><MapPin className="size-6" /></span>
+                  Location
+                </button>
+                <button type="button" className="flex flex-col items-center gap-1.5" onClick={() => { void sendContact(otherId(threadId)); setSheet(false); }}>
+                  <span className="flex size-14 items-center justify-center rounded-full bg-[#009de2] text-white"><UserRound className="size-6" /></span>
+                  Contact
+                </button>
+                {officer ? (
+                  <button type="button" className="flex flex-col items-center gap-1.5" onClick={() => { setPollOn(true); setSheet(false); }}>
+                    <span className="flex size-14 items-center justify-center rounded-full bg-[#02a698] text-lg text-white">☰</span>
+                    Poll
+                  </button>
+                ) : null}
+                <button type="button" className="flex flex-col items-center gap-1.5" onClick={() => { setEmojiOn(true); setEmojiTab("smile"); setSheet(false); }}>
+                  <span className="flex size-14 items-center justify-center rounded-full bg-[#ffb300] text-2xl">😀</span>
+                  Sticker
+                </button>
+              </div>
             </div>
           ) : null}
           {emojiOn ? (
-            <div className="mb-2 flex h-64 flex-col overflow-hidden rounded-2xl bg-white">
-              <input value={emojiQuery} onChange={(e) => setEmojiQuery(e.target.value)} placeholder="Search emoji" className="border-b px-3 py-2 text-sm outline-none" />
-              <div className="flex gap-1 overflow-x-auto border-b px-2 py-1">
-                {EMOJI_TABS.map((tab) => (
-                  <button key={tab.id} type="button" className={`rounded-full px-2 py-1 text-lg ${emojiTab === tab.id && !emojiQuery ? "bg-[#e7fce3]" : ""}`} onClick={() => { setEmojiTab(tab.id); setEmojiQuery(""); }}>{tab.label}</button>
-                ))}
-              </div>
-              <div className="min-h-0 flex-1 overflow-y-auto p-2">
-                <div className="grid grid-cols-8 gap-1">
-                  {(emojiQuery ? [...new Set(EMOJI_TABS.flatMap((tab) => tab.items))].filter((item) => item.includes(emojiQuery)).slice(0, 200) : (EMOJI_TABS.find((tab) => tab.id === emojiTab)?.items ?? [])).map((emoji) => (
-                    <button key={emoji} type="button" className="rounded-md py-1 text-2xl leading-none hover:bg-[#f0f2f5]" onClick={() => setDraft((current) => `${current}${emoji}`)}>{emoji}</button>
+            <div className="mb-1 flex h-72 flex-col overflow-hidden rounded-xl bg-white">
+              <div className="min-h-0 flex-1 overflow-y-auto p-1">
+                <div className="grid grid-cols-8">
+                  {(EMOJI_TABS.find((tab) => tab.id === emojiTab)?.items ?? []).map((emoji) => (
+                    <button key={emoji} type="button" className="py-1 text-[26px] leading-none" onClick={() => setDraft((current) => `${current}${emoji}`)}>{emoji}</button>
                   ))}
                 </div>
               </div>
+              <div className="flex items-center justify-between border-t bg-[#f0f2f5] px-1 py-1">
+                {EMOJI_TABS.map((tab) => (
+                  <button key={tab.id} type="button" className={`flex-1 rounded-lg py-1 text-lg ${emojiTab === tab.id ? "bg-white" : ""}`} onClick={() => setEmojiTab(tab.id)}>{tab.label}</button>
+                ))}
+              </div>
             </div>
           ) : null}
-          {pollOn ? <input value={pollOptions} onChange={(e) => setPollOptions(e.target.value)} className="mb-2 w-full rounded-lg px-3 py-2 text-sm" placeholder="Yes, No, Maybe" /> : null}
-          {pending && (pending.mediaType === "image" || pending.mediaType === "video") ? (
-            <label className="mb-2 flex items-center gap-2 text-xs text-[#667781]"><input type="checkbox" checked={viewOnce} onChange={(e) => setViewOnce(e.target.checked)} />View once</label>
-          ) : null}
-          <div className="flex items-end gap-2">
-            <button type="button" className="flex size-11 items-center justify-center rounded-full text-[#54656f]" aria-label="Emoji" onClick={() => { setSheet(false); setEmojiOn((on) => !on); }}>
-              <Smile className="size-5" />
-            </button>
-            <button type="button" className="flex size-11 items-center justify-center rounded-full text-[#54656f]" aria-label="Attach" onClick={() => setSheet((on) => !on)}>
-              <Paperclip className="size-5" />
-            </button>
-            <textarea
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  void send(undefined, threadId);
-                }
-              }}
-              rows={1}
-              placeholder="Message"
-              className="max-h-28 min-h-11 flex-1 resize-none rounded-lg border-0 bg-white px-3 py-2.5 text-sm outline-none"
-            />
+          {pollOn ? <input value={pollOptions} onChange={(e) => setPollOptions(e.target.value)} className="mb-1 w-full rounded-full px-4 py-2 text-sm" placeholder="Yes, No, Maybe" /> : null}
+          <div className="flex items-end gap-1.5">
+            <div className="flex min-h-12 flex-1 items-end rounded-3xl bg-white pl-1 pr-1">
+              <button type="button" className="mb-1 flex size-10 items-center justify-center text-[#54656f]" aria-label="Emoji" onClick={() => { setSheet(false); setEmojiOn((on) => !on); }}>
+                <Smile className="size-6" />
+              </button>
+              <textarea
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    void send(undefined, threadId);
+                  }
+                }}
+                rows={1}
+                placeholder="Message"
+                className="max-h-28 min-h-12 flex-1 resize-none bg-transparent py-3 text-[16px] outline-none"
+              />
+              <button type="button" className="mb-1 flex size-10 items-center justify-center text-[#54656f]" aria-label="Attach" onClick={() => { setEmojiOn(false); setSheet((on) => !on); }}>
+                <Paperclip className="size-5" />
+              </button>
+              {!draft.trim() ? (
+                <label className="mb-1 flex size-10 cursor-pointer items-center justify-center text-[#54656f]" aria-label="Camera">
+                  <Camera className="size-5" />
+                  <input type="file" accept="image/*" capture="environment" className="sr-only" onChange={(e) => { const file = e.target.files?.[0]; e.target.value = ""; void attachFile(file); }} />
+                </label>
+              ) : null}
+            </div>
             {draft.trim() || pending || pollOn ? (
-              <Button type="submit" disabled={sending || !threadId} className="size-11 rounded-full bg-[#00a884] p-0 text-white hover:bg-[#008f72]" aria-label="Send">
+              <Button type="submit" className="size-12 rounded-full bg-[#00a884] p-0 text-white hover:bg-[#008f72]" aria-label="Send">
                 <SendHorizonal />
               </Button>
             ) : (
-              <button type="button" className={`flex size-11 items-center justify-center rounded-full text-white ${recording ? "bg-red-600" : "bg-[#00a884]"}`} aria-label="Voice message" onClick={() => void toggleVoice()}>
+              <button type="button" className={`flex size-12 items-center justify-center rounded-full text-white ${recording ? "bg-red-600" : "bg-[#00a884]"}`} aria-label="Voice message" onClick={() => void toggleVoice()}>
                 <Mic className="size-5" />
               </button>
             )}
           </div>
-          {officer && threadId.startsWith("dm:") ? (
-            <label className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
-              <input type="checkbox" checked={alsoWa} onChange={(e) => setAlsoWa(e.target.checked)} />
-              Also open WhatsApp
-            </label>
-          ) : null}
         </form>
         )}
       </>
@@ -1037,17 +1094,18 @@ function ChatPage() {
     const archived = prefs.archives.includes(id);
     if (archivesOn ? !archived : archived) return null;
     const count = prefs.mutes.includes(id) ? 0 : prefs.marked.includes(id) ? Math.max(1, unreadCount(id)) : unreadCount(id);
+    if (listTab === "unread" && count === 0) return null;
     return (
-      <button key={id} type="button" className={`flex w-full items-center gap-3 border-b border-border px-4 py-3 text-left ${active === id ? "bg-forest/10" : "hover:bg-muted"}`} onClick={() => openThread(id)}>
+      <button key={id} type="button" className={`flex w-full items-center gap-3 px-3 py-2.5 text-left ${active === id ? "bg-[#f0f2f5]" : "hover:bg-[#f5f6f6]"}`} onClick={() => openThread(id)}>
         <span className={`flex size-11 shrink-0 items-center justify-center rounded-full text-xs font-semibold text-paper ${group ? "bg-navy" : "bg-forest"}`}>{group ? group.title.slice(0, 1) : threadTitle(id).slice(0, 1)}</span>
         <span className="min-w-0 flex-1">
           <span className="flex items-center justify-between gap-2">
             <span className="truncate font-medium text-navy">{threadTitle(id)}</span>
-            <span className="shrink-0 text-[11px] text-muted-foreground">{last ? clock(last.createdAt) : ""}</span>
+            <span className={`shrink-0 text-[11px] ${count > 0 ? "text-[#25d366]" : "text-[#667781]"}`}>{last ? clock(last.createdAt) : ""}</span>
           </span>
           <span className="mt-0.5 flex items-center justify-between gap-2">
-            <span className="truncate text-xs text-muted-foreground">{last ? previewLine(last) : group?.subtitle || "Personal chat"}</span>
-            {count > 0 ? <span className="min-w-5 rounded-full bg-forest px-1.5 text-center text-[10px] font-semibold text-white">{count}</span> : null}
+            <span className="truncate text-xs text-muted-foreground">{last ? previewLine(last) : group?.subtitle || ""}</span>
+            {count > 0 ? <span className="min-w-5 rounded-full bg-[#25d366] px-1.5 text-center text-[11px] font-semibold text-white">{count}</span> : null}
           </span>
         </span>
       </button>
@@ -1078,6 +1136,10 @@ function ChatPage() {
               <p className="font-medium">Chats</p>
               <p className="text-xs text-white/70">{me?.name || session.name}</p>
             </div>
+          </div>
+          <div className="flex gap-2 bg-white px-3 py-2">
+            <button type="button" className={`rounded-full px-3 py-1 text-sm ${listTab === "all" ? "bg-[#d9fdd3] text-[#008069]" : "bg-[#f0f2f5] text-[#54656f]"}`} onClick={() => setListTab("all")}>All</button>
+            <button type="button" className={`rounded-full px-3 py-1 text-sm ${listTab === "unread" ? "bg-[#d9fdd3] text-[#008069]" : "bg-[#f0f2f5] text-[#54656f]"}`} onClick={() => setListTab("unread")}>Unread</button>
           </div>
           {officer ? (
           <div className="border-b border-[#d1d7db] bg-white p-2">
@@ -1136,6 +1198,7 @@ function ChatPage() {
             <button type="button" className="rounded-md p-2 hover:bg-white/10 md:hidden" onClick={() => setMobileList(true)} aria-label="Back to chats">
               <ArrowLeft className="size-5" />
             </button>
+            <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-white/20 text-sm font-semibold">{threadTitle(active).slice(0, 1)}</span>
             <div className="min-w-0 flex-1">
               <p className="truncate font-medium">{threadTitle(active)}</p>
               <p className="truncate text-xs text-white/70">
@@ -1156,39 +1219,40 @@ function ChatPage() {
                 <button type="button" className="rounded-full p-2 hover:bg-white/10" aria-label="Video call" onClick={() => void startCall("video")}><Video className="size-4" /></button>
               </>
             ) : null}
-            <button type="button" className="rounded-full p-2 hover:bg-white/10" aria-label="Menu" onClick={() => setMenu((on) => !on)}>
-              <MoreVertical className="size-4" />
+            <button type="button" className="rounded-full p-2 hover:bg-white/10" aria-label="Menu" onClick={() => { setMenuMore(false); setMenu((on) => !on); }}>
+              <MoreVertical className="size-5" />
             </button>
           </header>
           {menu ? (
-            <div className="absolute inset-0 z-20 flex flex-col bg-white text-[#111b21]">
-              <div className="flex items-center gap-3 bg-[#075e54] px-3 py-3 text-white">
-                <button type="button" className="rounded-full p-1" aria-label="Close" onClick={() => setMenu(false)}><ArrowLeft className="size-5" /></button>
-                <p className="font-medium">Features</p>
-              </div>
-              <div className="min-h-0 flex-1 overflow-y-auto">
-                {([
-                  ["Search in chat", () => setFinder(" ")],
+            <div className="absolute right-2 top-14 z-30 w-56 overflow-hidden rounded-md bg-white py-1 text-[15px] text-[#111b21] shadow-xl">
+              {([
+                ["View chat", () => setMenu(false)],
+                ["Search", () => setFinder(" ")],
+                ["Mute notifications", () => togglePref("mutes", canonicalThread(active))],
+                ["Disappearing messages", () => { const hours = prefs.disappear[canonicalThread(active)] ? 0 : 24; savePrefs({ ...prefs, disappear: { ...prefs.disappear, [canonicalThread(active)]: hours } }); }],
+                ["Wallpaper", () => { const next = WALLS[(WALLS.indexOf(prefs.wallpaper) + 1) % WALLS.length]; savePrefs({ ...prefs, wallpaper: next }); }],
+                ["More", () => setMenuMore((on) => !on)],
+              ] as [string, () => void][]).map(([label, run]) => (
+                <button key={label} type="button" className="block w-full px-4 py-2.5 text-left hover:bg-[#f5f6f6]" onClick={() => { if (label !== "More") { run(); setMenu(false); } else run(); }}>{label}</button>
+              ))}
+              {menuMore ? (
+                ([
                   ["Starred messages", () => setStarredOn((on) => !on)],
                   ["Pin chat", () => togglePref("pins", canonicalThread(active))],
-                  ["Mute", () => togglePref("mutes", canonicalThread(active))],
                   ["Archive", () => togglePref("archives", canonicalThread(active))],
-                  ["Mark unread", () => togglePref("marked", canonicalThread(active))],
-                  ["Disappearing messages", () => { const hours = prefs.disappear[canonicalThread(active)] ? 0 : 24; savePrefs({ ...prefs, disappear: { ...prefs.disappear, [canonicalThread(active)]: hours } }); }],
-                  ["Wallpaper", () => { const next = WALLS[(WALLS.indexOf(prefs.wallpaper) + 1) % WALLS.length]; savePrefs({ ...prefs, wallpaper: next }); }],
+                  ["Mark as unread", () => togglePref("marked", canonicalThread(active))],
                   ["Dark mode", () => savePrefs({ ...prefs, dark: !prefs.dark })],
                   ["Chat lock", () => { const pin = window.prompt("4 digit chat lock", ""); if (pin && pin.length >= 4) { savePrefs({ ...prefs, lock: pinHash(pin) }); setUnlocked(false); } }],
                   ["Block", () => { if (active.startsWith("dm:")) void fetch("/api/nss-cloud", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "chat-block", chatToken: token, blockId: otherId() }) }); }],
                   ["Status", () => { const status = window.prompt("Status", ""); if (status?.trim()) void fetch("/api/nss-cloud", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "chat-status", chatToken: token, text: status.trim() }) }); }],
                   ["Broadcast", () => { if (officer) void broadcast(); }],
                   ["Archived chats", () => setArchivesOn((on) => !on)],
-                  ["Backup", () => { const blob = new Blob([JSON.stringify(messages.map((row) => ({ ...row, media: row.media ? "attached" : "" })))], { type: "application/json" }); const url = URL.createObjectURL(blob); const link = document.createElement("a"); link.href = url; link.download = "nss-chat-backup.json"; link.click(); }],
+                  ["Export chat", () => { const blob = new Blob([JSON.stringify(messages.map((row) => ({ ...row, media: row.media ? "attached" : "" })))], { type: "application/json" }); const url = URL.createObjectURL(blob); const link = document.createElement("a"); link.href = url; link.download = "nss-chat-backup.json"; link.click(); }],
                   ["Clear chat", () => setAsk("clear")],
                 ] as [string, () => void][]).map(([label, run]) => (
-                  <button key={label} type="button" className="flex w-full items-center border-b px-4 py-3.5 text-left text-[15px]" onClick={() => { run(); setMenu(false); }}>{label}</button>
-                ))}
-                {!active.startsWith("dm:") ? <p className="px-4 py-3 text-sm text-[#667781]">Group admin: Programme Officer</p> : null}
-              </div>
+                  <button key={label} type="button" className="block w-full px-4 py-2.5 text-left hover:bg-[#f5f6f6]" onClick={() => { run(); setMenu(false); }}>{label}</button>
+                ))
+              ) : null}
             </div>
           ) : null}
           {finder ? <input value={finder.trim() ? finder : ""} onChange={(e) => setFinder(e.target.value)} placeholder="Search in chat" className="border-b px-3 py-2 text-sm outline-none" /> : null}
@@ -1211,14 +1275,6 @@ function ChatPage() {
             <div className="flex items-center justify-between bg-[#111b21] px-3 py-2 text-sm text-white">
               <span>Incoming {peer.call} call</span>
               <button type="button" className="rounded-full bg-[#00a884] px-3 py-1" onClick={() => void startCall(peer.call === "video" ? "video" : "audio", peer.sdp)}>Answer</button>
-            </div>
-          ) : null}
-          {active.startsWith("dm:") && activeRoll ? (
-            <div className="flex flex-wrap items-center gap-2 border-b border-border bg-white px-3 py-2 text-xs text-navy">
-              <span className="font-semibold">Smart record</span>
-              <span>{activeRoll.nssRole}</span>
-              <span>{activeHours} hours</span>
-              <span>{activeRoll.course} Sem {activeRoll.semester}</span>
             </div>
           ) : null}
           {!token ? <div className="flex flex-1" /> : talk(threadMessages, canonicalThread(active), !active.startsWith("dm:"))}
