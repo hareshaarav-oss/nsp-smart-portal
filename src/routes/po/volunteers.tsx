@@ -269,7 +269,7 @@ function SmartRecord({ volunteerId, onClose }: { volunteerId: string; onClose: (
     }
     void pull();
     const timer = window.setInterval(() => void pull(), 180000);
-    const tick = window.setInterval(() => setTick((n) => n + 1), 1000);
+    const tick = window.setInterval(() => setTick((n) => n + 1), 30000);
     return () => {
       stop = true;
       window.clearInterval(timer);

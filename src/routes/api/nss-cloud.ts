@@ -1,4 +1,4 @@
-import { loadCollegeCloud, loadPublicBoard, loadOfficerRoll, collegeQuotaBlocked, saveStudentToCloud, incrementVisitors, readVisitorCount, knownVisitorCount, patchStudent, safePhoto, knownRole, issueChatPass, readChatPass, listRecentChatMessages, saveChatMessage, listChatPeople, clearAttendanceCloud, readBrandPhotos, saveBrandPhotos, listPhotoRoster, readPhotoBatch, saveAttendanceMarks, readLive, publishBestVolunteer, publishServiceHours, purgeCloudIds, deleteChatMessages, chatIdsInThread } from "@/lib/nss/firestore";
+import { loadCollegeCloud, loadPublicBoard, loadOfficerRoll, collegeQuotaBlocked, saveStudentToCloud, incrementVisitors, readVisitorCount, knownVisitorCount, patchStudent, safePhoto, knownRole, issueChatPass, readChatPass, listRecentChatMessages, saveChatMessage, listChatPeople, clearAttendanceCloud, readBrandPhotos, saveBrandPhotos, listPhotoRoster, readPhotoBatch, saveAttendanceMarks, readLive, publishBestVolunteer, publishServiceHours, purgeCloudIds, deleteChatMessages, chatIdsInThread, readChatMedia } from "@/lib/nss/firestore";
 import { passwordOk } from "@/lib/nss/seal.server";
 import { createFileRoute } from "@tanstack/react-router";
 
@@ -417,7 +417,7 @@ export const Route = createFileRoute("/api/nss-cloud")({
             const saved = await saveStudentToCloud({ ...body, nssRole: "Volunteer" });
             return Response.json(saved);
           }
-          if (body.action === "chat-sync" || body.action === "chat-send" || body.action === "chat-delete" || body.action === "chat-clear" || body.action === "set-role" || body.action === "set-status") {
+          if (body.action === "chat-sync" || body.action === "chat-send" || body.action === "chat-delete" || body.action === "chat-clear" || body.action === "chat-media" || body.action === "set-role" || body.action === "set-status") {
             const user = await readChatPass(text(body.chatToken));
             if (!user) return Response.json({ ok: false, error: "Sign in again to use NSS Chat." }, { status: 401 });
             if (body.action === "set-role" || body.action === "set-status") {
@@ -438,6 +438,14 @@ export const Route = createFileRoute("/api/nss-cloud")({
                 await patchStudent(text(target.id), { status: next, updatedAt: new Date().toISOString() });
               }
               return Response.json({ ok: true });
+            }
+            if (body.action === "chat-media") {
+              const ids = Array.isArray(body.ids) ? body.ids.map((id) => text(id)).slice(0, 6) : [];
+              const rows = await readChatMedia(ids);
+              const media = rows
+                .filter((row) => canSeeThread(user, canonicalThread(row.threadId)))
+                .map((row) => ({ id: row.id, media: row.media, mediaType: row.mediaType }));
+              return Response.json({ ok: true, media });
             }
             if (body.action === "chat-delete" || body.action === "chat-clear") {
               const recent = await listRecentChatMessages(300);

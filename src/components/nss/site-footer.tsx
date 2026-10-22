@@ -14,7 +14,7 @@ function DualStatus() {
       setPending(await outboxCount());
     };
     void tick();
-    const timer = window.setInterval(() => void tick(), 15000);
+    const timer = window.setInterval(() => void tick(), 60000);
     window.addEventListener("online", tick);
     window.addEventListener("offline", tick);
     return () => {

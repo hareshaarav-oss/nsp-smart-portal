@@ -1,6 +1,6 @@
 import { createFileRoute, Navigate } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
-import { ArrowLeft, CheckCheck, Copy, Eraser, MessageCircle, Paperclip, Phone, Reply, Search, SendHorizonal, Smile, Trash2, X } from "lucide-react";
+import { ArrowLeft, CheckCheck, Copy, Eraser, Paperclip, Phone, Reply, Search, SendHorizonal, Smile, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { AppShell } from "@/components/nss/shell";
 import { Button } from "@/components/ui/button";
@@ -47,14 +47,14 @@ async function shrinkImage(file: File) {
     img.onerror = () => reject(new Error("Photo could not be opened."));
     img.src = src;
   });
-  const scale = Math.min(1, 960 / Math.max(image.width, image.height));
+  const scale = Math.min(1, 720 / Math.max(image.width, image.height));
   const canvas = document.createElement("canvas");
   canvas.width = Math.max(1, Math.round(image.width * scale));
   canvas.height = Math.max(1, Math.round(image.height * scale));
   const ctx = canvas.getContext("2d");
   if (!ctx) return "";
   ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
-  return canvas.toDataURL("image/jpeg", 0.62);
+  return canvas.toDataURL("image/jpeg", 0.52);
 }
 
 function canonicalThread(threadId: string) {
@@ -112,6 +112,7 @@ function ChatPage() {
   const [pending, setPending] = useState<{ media: string; mediaType: "image" | "video" } | null>(null);
   const scroller = useRef<HTMLDivElement>(null);
   const stick = useRef(true);
+  const mediaBag = useRef(new Map<string, { media: string; mediaType: "image" | "video" }>());
   const token = session?.chatToken || "";
   const setSession = useSessionStore((s) => s.setSession);
   const poWhatsapp = useNssStore((s) => s.settings.poWhatsapp);
@@ -168,7 +169,19 @@ function ChatPage() {
         const desk = data.me.role === "po" || data.me.role === "admin";
         setMe(data.me);
         setPeople(desk ? (data.people ?? []).map((person) => ({ ...person, mobile: undefined })) : []);
-        setMessages(data.messages ?? []);
+        const incoming = (data.messages ?? []).map((row) => {
+          const kept = mediaBag.current.get(row.id);
+          return kept && !row.media ? { ...row, media: kept.media, mediaType: kept.mediaType } : row;
+        });
+        setMessages((current) => {
+          if (
+            current.length === incoming.length &&
+            current.every((row, index) => row.id === incoming[index]?.id && row.text === incoming[index]?.text && row.media === incoming[index]?.media)
+          ) {
+            return current;
+          }
+          return incoming;
+        });
         setLiveAt(Date.now());
       } catch {
         /* keep the last messages on screen */
@@ -186,6 +199,39 @@ function ChatPage() {
       window.removeEventListener("focus", wake);
     };
   }, [token]);
+
+  useEffect(() => {
+    if (!token) return;
+    const thread = canonicalThread(active);
+    const missing = messages
+      .filter((message) => canonicalThread(message.threadId) === thread && message.mediaType && !message.media && !mediaBag.current.has(message.id))
+      .slice(0, 4)
+      .map((message) => message.id);
+    if (!missing.length) return;
+    let stop = false;
+    void fetch("/api/nss-cloud", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ action: "chat-media", chatToken: token, ids: missing }),
+    })
+      .then((res) => res.json())
+      .then((data: { ok?: boolean; media?: { id: string; media: string; mediaType: "image" | "video" }[] }) => {
+        if (stop || !data.ok || !data.media?.length) return;
+        for (const row of data.media) {
+          if (row.media) mediaBag.current.set(row.id, { media: row.media, mediaType: row.mediaType });
+        }
+        setMessages((current) =>
+          current.map((message) => {
+            const kept = mediaBag.current.get(message.id);
+            return kept && !message.media ? { ...message, media: kept.media, mediaType: kept.mediaType } : message;
+          }),
+        );
+      })
+      .catch(() => undefined);
+    return () => {
+      stop = true;
+    };
+  }, [token, active, messages]);
 
   useEffect(() => {
     const node = scroller.current;
@@ -398,7 +444,7 @@ function ChatPage() {
             if (!node) return;
             stick.current = node.scrollHeight - node.scrollTop - node.clientHeight < 90;
           }}
-          className="min-h-0 flex-1 space-y-2 overflow-y-auto bg-[radial-gradient(#e4d5b4_0.7px,transparent_0.7px)] bg-[length:14px_14px] px-3 py-4"
+          className="min-h-0 flex-1 space-y-1 overflow-y-auto bg-[#efeae2] bg-[radial-gradient(#d9d0c3_0.6px,transparent_0.6px)] bg-[length:16px_16px] px-3 py-3"
         >
           {list.map((message, index) => {
             const mine = message.senderId === me?.id || message.senderId === meId;
@@ -411,7 +457,7 @@ function ChatPage() {
                   <div
                     role="button"
                     tabIndex={0}
-                    className={`max-w-[85%] rounded-2xl px-3 py-2 text-left shadow-sm ${mine ? "rounded-br-sm bg-forest text-white" : "rounded-bl-sm bg-white text-navy"} ${picked === message.id ? "ring-2 ring-saffron" : ""}`}
+                    className={`max-w-[82%] rounded-lg px-2 py-1 text-left shadow-sm ${mine ? "rounded-tr-none bg-[#d9fdd3] text-[#111b21]" : "rounded-tl-none bg-white text-[#111b21]"} ${picked === message.id ? "ring-2 ring-[#25d366]" : ""}`}
                     onClick={() => {
                       setAsk("");
                       setPicked((current) => (current === message.id ? "" : message.id));
@@ -420,14 +466,15 @@ function ChatPage() {
                       if (e.key === "Enter") setPicked((current) => (current === message.id ? "" : message.id));
                     }}
                   >
-                    {showNames && !mine ? <p className="text-[11px] font-semibold text-saffron">{message.senderName}</p> : null}
-                    {message.replyText ? <p className="mb-1 border-l-2 border-saffron pl-2 text-[11px] opacity-80">{message.replyName ? `${message.replyName}: ` : ""}{message.replyText}</p> : null}
-                    {message.mediaType === "image" && message.media ? <img src={message.media} alt="" className="mb-1 max-h-64 rounded-lg object-cover" /> : null}
-                    {message.mediaType === "video" && message.media ? <video src={message.media} controls className="mb-1 max-h-64 w-full rounded-lg" onClick={(e) => e.stopPropagation()} /> : null}
-                    {message.text ? <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">{message.text}</p> : null}
-                    <p className={`mt-1 flex items-center justify-end gap-1 text-[10px] ${mine ? "text-white/75" : "text-muted-foreground"}`}>
+                    {showNames && !mine ? <p className="px-1 text-[12px] font-semibold text-[#0b846d]">{message.senderName}</p> : null}
+                    {message.replyText ? <p className="mb-1 rounded-md bg-black/5 px-2 py-1 text-[11px] text-[#111b21]">{message.replyName ? `${message.replyName}: ` : ""}{message.replyText}</p> : null}
+                    {message.mediaType === "image" && message.media ? <img src={message.media} alt="" className="mb-1 max-h-64 rounded-md object-cover" /> : null}
+                    {message.mediaType === "video" && message.media ? <video src={message.media} controls className="mb-1 max-h-64 w-full rounded-md" onClick={(e) => e.stopPropagation()} /> : null}
+                    {message.mediaType && !message.media ? <p className="px-1 text-xs text-[#667781]">Loading…</p> : null}
+                    {message.text ? <p className="whitespace-pre-wrap break-words px-1 text-[14.5px] leading-snug">{message.text}</p> : null}
+                    <p className="mt-0.5 flex items-center justify-end gap-1 px-1 text-[11px] text-[#667781]">
                       {clock(message.createdAt)}
-                      {mine ? <CheckCheck className="size-3.5" /> : null}
+                      {mine ? <CheckCheck className="size-3.5 text-[#53bdeb]" /> : null}
                     </p>
                   </div>
                 </div>
@@ -468,7 +515,7 @@ function ChatPage() {
             </span>
           </div>
         ) : null}
-        <form className="border-t border-border bg-card p-3" onSubmit={(e) => void send(e, threadId)}>
+        <form className="bg-[#f0f2f5] px-2 py-2" onSubmit={(e) => void send(e, threadId)}>
           {reply ? (
             <div className="mb-2 flex items-start justify-between gap-2 rounded-lg bg-muted px-3 py-2 text-xs text-navy">
               <span className="min-w-0 truncate">{reply.name}: {reply.text}</span>
@@ -507,9 +554,9 @@ function ChatPage() {
               }}
               rows={1}
               placeholder="Message"
-              className="max-h-28 min-h-11 flex-1 resize-none rounded-full border border-border bg-muted/40 px-4 py-2.5 text-sm outline-none focus:border-forest"
+              className="max-h-28 min-h-11 flex-1 resize-none rounded-lg border-0 bg-white px-3 py-2.5 text-sm outline-none"
             />
-            <Button type="submit" disabled={sending || (!draft.trim() && !pending) || !threadId} className="size-11 rounded-full bg-forest p-0 text-primary-foreground hover:bg-forest/90" aria-label="Send">
+            <Button type="submit" disabled={sending || (!draft.trim() && !pending) || !threadId} className="size-11 rounded-full bg-[#00a884] p-0 text-white hover:bg-[#008f72]" aria-label="Send">
               <SendHorizonal />
             </Button>
           </div>
@@ -528,13 +575,14 @@ function ChatPage() {
     const threadMessages = messages.filter((message) => poThread && canonicalThread(message.threadId) === poThread);
     return (
       <AppShell eyebrow="NSS CHAT" current="page">
-        <div className="mx-auto flex h-[calc(100dvh-13.5rem)] w-full max-w-3xl flex-col overflow-hidden border-y border-border bg-[#efe7d6] md:my-4 md:h-[calc(100dvh-8.5rem)] md:rounded-2xl md:border">
-          <header className="flex items-center gap-2 bg-navy px-4 py-3 text-paper">
+        <div className="mx-auto flex h-[calc(100dvh-13.5rem)] w-full max-w-3xl flex-col overflow-hidden border-y border-[#d1d7db] bg-[#efeae2] md:my-4 md:h-[calc(100dvh-8.5rem)] md:rounded-xl md:border">
+          <header className="flex items-center gap-3 bg-[#075e54] px-3 py-2 text-white">
+            <span className="flex size-10 items-center justify-center rounded-full bg-[#128c7e] text-xs font-semibold">PO</span>
             <div className="min-w-0 flex-1">
-              <p className="font-medium">Programme Officer</p>
-              <p className="text-xs text-paper/70">{me?.name || session.name}</p>
+              <p className="truncate font-medium">Programme Officer</p>
+              <p className="truncate text-xs text-white/70">{me?.name || session.name}</p>
             </div>
-            <button type="button" className="rounded-md p-2 hover:bg-white/10" aria-label="Clear chat" onClick={() => { setPicked(""); setAsk("clear"); }}>
+            <button type="button" className="rounded-full p-2 hover:bg-white/10" aria-label="Clear chat" onClick={() => { setPicked(""); setAsk("clear"); }}>
               <Eraser className="size-4" />
             </button>
           </header>
@@ -596,22 +644,18 @@ function ChatPage() {
 
   return (
     <AppShell eyebrow="NSS CHAT" current="page">
-      <div className="mx-auto flex h-[calc(100dvh-13.5rem)] w-full max-w-6xl overflow-hidden border-y border-border bg-[#efe7d6] md:my-4 md:h-[calc(100dvh-8.5rem)] md:rounded-2xl md:border">
-        <aside className={`${mobileList ? "flex" : "hidden"} w-full flex-col bg-card md:flex md:w-80 md:border-r md:border-border`}>
-          <div className="bg-navy px-4 py-3 text-paper">
-            <p className="font-display text-lg">NSS Chat</p>
-            <p className="text-xs text-paper/70">{me?.name || session.name}</p>
+      <div className="mx-auto flex h-[calc(100dvh-13.5rem)] w-full max-w-6xl overflow-hidden border-y border-[#d1d7db] bg-[#efeae2] md:my-4 md:h-[calc(100dvh-8.5rem)] md:rounded-xl md:border">
+        <aside className={`${mobileList ? "flex" : "hidden"} w-full flex-col bg-white md:flex md:w-80 md:border-r md:border-[#d1d7db]`}>
+          <div className="bg-[#075e54] px-4 py-3 text-white">
+            <p className="font-medium">Chats</p>
+            <p className="text-xs text-white/70">{me?.name || session.name}</p>
           </div>
           {officer ? (
-          <div className="border-b border-border p-3">
+          <div className="border-b border-[#d1d7db] bg-white p-2">
               <div className="relative">
-                <Search className="pointer-events-none absolute left-3 top-2.5 size-4 text-muted-foreground" />
-                <Input id="chat-search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search a volunteer" className="pl-9" />
+                <Search className="pointer-events-none absolute left-3 top-2.5 size-4 text-[#667781]" />
+                <Input id="chat-search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search" className="rounded-lg border-0 bg-[#f0f2f5] pl-9" />
               </div>
-              <Button className="mt-2 w-full bg-forest text-primary-foreground hover:bg-forest/90" onClick={() => document.getElementById("chat-search")?.focus()}>
-                <MessageCircle />
-                Personal volunteers ({directory.length})
-              </Button>
           </div>
           ) : null}
           <div className="min-h-0 flex-1 overflow-y-auto">
@@ -657,13 +701,13 @@ function ChatPage() {
           </div>
         </aside>
         <section className={`${mobileList ? "hidden" : "flex"} min-w-0 flex-1 flex-col md:flex`}>
-          <header className="flex items-center gap-3 bg-navy px-3 py-3 text-paper">
+          <header className="flex items-center gap-3 bg-[#075e54] px-2 py-2 text-white">
             <button type="button" className="rounded-md p-2 hover:bg-white/10 md:hidden" onClick={() => setMobileList(true)} aria-label="Back to chats">
               <ArrowLeft className="size-5" />
             </button>
             <div className="min-w-0 flex-1">
               <p className="truncate font-medium">{threadTitle(active)}</p>
-              <p className="truncate text-xs text-paper/70">
+              <p className="truncate text-xs text-white/70">
                 {active.startsWith("dm:") ? `Personal chat${activePerson ? ` · ${activePerson.unit}` : ""}` : GROUPS.find((group) => group.id === active)?.subtitle}
                 {""}
               </p>

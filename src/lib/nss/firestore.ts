@@ -1548,10 +1548,10 @@ export async function listRecentChatMessages(limit = 60): Promise<ChatRow[]> {
   if (collegeQuotaBlocked()) return chatCache?.rows.slice(-limit) ?? [];
   const mapRows = (docs: Record<string, unknown>[]) =>
     docs
-      .filter((row) => text(row.kind) === "chat" && text(row.threadId) && (text(row.text) || text(row.media)))
+      .filter((row) => text(row.kind) === "chat" && text(row.threadId) && (text(row.text) || text(row.mediaType) || text(row.media)))
       .map((row) => {
         const mediaType: "" | "image" | "video" = text(row.mediaType) === "video" ? "video" : text(row.mediaType) === "image" ? "image" : "";
-        const media = mediaType ? openText(text(row.media)) : "";
+        const media = mediaType && text(row.media) ? openText(text(row.media)) : "";
         const safeMedia = media.startsWith(mediaType === "video" ? "data:video/" : "data:image/") && media.length < 800000 ? media : "";
         return {
           id: text(row._id),
@@ -1563,7 +1563,7 @@ export async function listRecentChatMessages(limit = 60): Promise<ChatRow[]> {
           replyName: openText(text(row.replyName)).slice(0, 80),
           replyText: openText(text(row.replyText)).slice(0, 140),
           media: safeMedia,
-          mediaType: safeMedia ? mediaType : "",
+          mediaType,
         };
       })
       .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
@@ -1580,6 +1580,9 @@ export async function listRecentChatMessages(limit = 60): Promise<ChatRow[]> {
       },
       orderBy: [{ field: { fieldPath: "createdAt" }, direction: "DESCENDING" }],
       limit,
+      select: {
+        fields: ["kind", "threadId", "text", "senderId", "senderName", "createdAt", "replyName", "replyText", "mediaType"].map((fieldPath) => ({ fieldPath })),
+      },
     });
     const docs = ordered ?? (await runQuery({
       from: [{ collectionId: "notices" }],
@@ -1591,6 +1594,9 @@ export async function listRecentChatMessages(limit = 60): Promise<ChatRow[]> {
         },
       },
       limit,
+      select: {
+        fields: ["kind", "threadId", "text", "senderId", "senderName", "createdAt", "replyName", "replyText", "mediaType"].map((fieldPath) => ({ fieldPath })),
+      },
     })) ?? [];
     const rows = mapRows(docs);
     if (rows.length) chatCache = { at: Date.now(), rows };
@@ -1598,6 +1604,19 @@ export async function listRecentChatMessages(limit = 60): Promise<ChatRow[]> {
   } catch {
     return chatCache?.rows.slice(-limit) ?? [];
   }
+}
+
+export async function readChatMedia(ids: string[]) {
+  const unique = [...new Set(ids.map((id) => text(id)).filter((id) => /^chat[a-z0-9]{4,40}$/i.test(id)))].slice(0, 6);
+  const docs = await Promise.all(unique.map((id) => getDocument(`notices/${id}`).catch(() => null)));
+  return docs.flatMap((row) => {
+    if (!row || text(row.kind) !== "chat") return [];
+    const mediaType: "" | "image" | "video" = text(row.mediaType) === "video" ? "video" : text(row.mediaType) === "image" ? "image" : "";
+    const media = mediaType ? openText(text(row.media)) : "";
+    const safe = media.startsWith(mediaType === "video" ? "data:video/" : "data:image/") && media.length < 800000 ? media : "";
+    if (!safe) return [];
+    return [{ id: text(row._id), threadId: text(row.threadId), media: safe, mediaType }];
+  });
 }
 
 export async function saveChatMessage(input: { threadId: string; text: string; senderId: string; senderName: string; replyName?: string; replyText?: string; media?: string; mediaType?: "" | "image" | "video" }) {
