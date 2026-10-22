@@ -1,5 +1,6 @@
 import { cleanPersonName, latinDigits, padId, parseDob, titleFirstName } from "./format";
 import { nssHourRule } from "./hours";
+import { attendanceDocId as sealedAttendanceId, openText, passwordRecord, sealText, tokenDocId } from "./seal.server";
 import type {
   AttendanceRecord,
   GalleryItem,
@@ -89,9 +90,30 @@ const STUDENT_FIELDS = [
   "unit",
   "photoUrl",
   "password",
+  "mpin",
   "createdAt",
   "updatedAt",
 ];
+
+const SEAL_KEYS = new Set([
+  "mobile",
+  "email",
+  "address",
+  "fatherName",
+  "dob",
+  "bloodGroup",
+  "parentMobile",
+  "emergencyContact",
+  "abcId",
+  "myBharatId",
+  "mpin",
+]);
+
+function reveal(row: Record<string, unknown>, keys: string[]) {
+  for (const key of keys) {
+    if (typeof row[key] === "string") row[key] = openText(row[key]);
+  }
+}
 
 function collectionUrl(name: string, token?: string, opts?: { photos?: boolean }) {
   const params = new URLSearchParams({ pageSize: "300" });
@@ -280,6 +302,7 @@ async function loadCollegeCloudFresh(opts: { gallery?: boolean; photos?: boolean
   );
 
   const numbers = rollNumbers(sorted);
+  for (const row of sorted) reveal(row, [...SEAL_KEYS, "password"]);
   const volunteers: Volunteer[] = sorted.map((s) => {
     const n = numbers.get(s) ?? 1;
     const semester = latinDigits(text(s.semester) || "1");
@@ -315,6 +338,7 @@ async function loadCollegeCloudFresh(opts: { gallery?: boolean; photos?: boolean
       myBharatId: text(s.myBharatId),
       photoUrl: safePhoto(s.photoUrl),
       loginPassword: text(s.password),
+      mpin: text(s.mpin) || undefined,
       createdAt: isoDate(s.createdAt) || isoDate(s.updatedAt),
       status: isAlumni ? "alumni" : "active",
     };
@@ -379,6 +403,7 @@ async function loadCollegeCloudFresh(opts: { gallery?: boolean; photos?: boolean
   const attendance: AttendanceRecord[] = [];
   const seen = new Set<string>();
   for (const row of attendanceDocs) {
+    reveal(row, ["studentMobile", "mobile", "studentName", "name"]);
     const name = text(row.eventName) || text(row.title);
     const date = isoDate(row.date);
     if (!name) continue;
@@ -533,6 +558,7 @@ function publicBoardShape(data: CloudPortal): CloudPortal {
       mobile: "",
       email: "",
       loginPassword: "",
+      mpin: "",
       address: "",
       bloodGroup: "",
       parentMobile: "",
@@ -720,7 +746,7 @@ export async function loadPublicBoard(opts: { gallery?: boolean } = {}): Promise
   const fresh = await loadCollegeCloud({ gallery: true, photos: false });
   if (fresh && fresh.volunteers.length >= 20) {
     const packed = omitPurged(fresh);
-    const clean = { ...packed, gallery: packGallery(packed.gallery) };
+    const clean = publicBoardShape(packed);
     publicCache = { at: Date.now(), data: clean, galleryReady: true };
     void writeBoard(clean).catch(() => undefined);
     return clean;
@@ -978,15 +1004,20 @@ function rollNumbers(sorted: Record<string, unknown>[]) {
   return numbers;
 }
 
-export async function patchStudent(docId: string, values: Record<string, unknown>) {
-  invalidateCollegeCache();
-  rosterCache = null;
+export async function patchStudent(docId: string, values: Record<string, unknown>, opts?: { quiet?: boolean }) {
+  if (!opts?.quiet) {
+    invalidateCollegeCache();
+    rosterCache = null;
+  }
   const id = text(docId);
   if (!id) throw new Error("Student record was not found.");
   const fields: Record<string, unknown> = {};
   const params = new URLSearchParams();
   for (const [key, value] of Object.entries(values)) {
-    fields[key] = encodeValue(value);
+    let stored: unknown = value;
+    if (key === "password") stored = passwordRecord(text(value));
+    else if (SEAL_KEYS.has(key) && typeof value === "string") stored = sealText(value);
+    fields[key] = encodeValue(stored);
     params.append("updateMask.fieldPaths", key);
   }
   const res = await fetch(`${FIRESTORE_BASE}/students/${encodeURIComponent(id)}?${params}`, {
@@ -998,7 +1029,7 @@ export async function patchStudent(docId: string, values: Record<string, unknown
     const body = await res.text();
     throw new Error(body.slice(0, 180) || "Could not update the student record");
   }
-  void markBoardStale();
+  if (!opts?.quiet) void markBoardStale();
 }
 
 export async function saveStudentToCloud(input: Record<string, unknown>) {
@@ -1020,8 +1051,8 @@ export async function saveStudentToCloud(input: Record<string, unknown>) {
   const fullName = titleFirstName(cleanPersonName(text(input.fullName)));
   const fields: Record<string, unknown> = {
     fullName: encodeValue(fullName),
-    mobile: encodeValue(mobile),
-    email: encodeValue(input.email),
+    mobile: encodeValue(sealText(mobile)),
+    email: encodeValue(sealText(text(input.email))),
     course: encodeValue(input.course),
     semester: encodeValue(semester),
     unit: encodeValue(unit),
@@ -1029,15 +1060,15 @@ export async function saveStudentToCloud(input: Record<string, unknown>) {
     enrollment: encodeValue(enrollment),
     nssRole: encodeValue("Volunteer"),
     status: encodeValue("active"),
-    fatherName: encodeValue(input.fatherName),
-    dob: encodeValue(input.dob),
+    fatherName: encodeValue(sealText(text(input.fatherName))),
+    dob: encodeValue(sealText(text(input.dob))),
     gender: encodeValue(input.gender),
-    bloodGroup: encodeValue(input.bloodGroup),
-    address: encodeValue(input.address),
-    parentMobile: encodeValue(input.parentMobile),
-    emergencyContact: encodeValue(input.emergencyContact),
-    abcId: encodeValue(input.abcId),
-    myBharatId: encodeValue(input.myBharatId),
+    bloodGroup: encodeValue(sealText(text(input.bloodGroup))),
+    address: encodeValue(sealText(text(input.address))),
+    parentMobile: encodeValue(sealText(text(input.parentMobile))),
+    emergencyContact: encodeValue(sealText(text(input.emergencyContact))),
+    abcId: encodeValue(sealText(text(input.abcId))),
+    myBharatId: encodeValue(sealText(text(input.myBharatId))),
     createdAt: encodeValue(now.slice(0, 10)),
     updatedAt: encodeValue(now),
   };
@@ -1333,6 +1364,10 @@ export async function clearAttendanceCloud(eventName = "", opts?: { all?: boolea
 }
 
 function attendanceDocId(mobile: string, eventName: string) {
+  return sealedAttendanceId(mobile, eventName);
+}
+
+function legacyAttendanceDocId(mobile: string, eventName: string) {
   const phone = digits(mobile).slice(-10);
   const slug = text(eventName).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 48);
   if (phone.length < 10 || !slug) return "";
@@ -1350,10 +1385,10 @@ export async function saveAttendanceMark(input: { mobile: string; name: string; 
     title: encodeValue(input.eventName),
     status: encodeValue(status),
     attendance: encodeValue(status),
-    studentMobile: encodeValue(phone),
-    mobile: encodeValue(phone),
-    studentName: encodeValue(input.name),
-    name: encodeValue(input.name),
+    studentMobile: encodeValue(sealText(phone)),
+    mobile: encodeValue(sealText(phone)),
+    studentName: encodeValue(sealText(input.name)),
+    name: encodeValue(sealText(input.name)),
     date: encodeValue(input.date || new Date().toISOString().slice(0, 10)),
     updatedAt: encodeValue(new Date().toISOString()),
   };
@@ -1363,6 +1398,10 @@ export async function saveAttendanceMark(input: { mobile: string; name: string; 
     headers: { "content-type": "application/json" },
     body,
   });
+  const legacy = legacyAttendanceDocId(input.mobile, input.eventName);
+  if (legacy && legacy !== id) {
+    void fetch(`${FIRESTORE_BASE}/attendance/${encodeURIComponent(legacy)}`, { method: "DELETE" });
+  }
   if (patch.ok) return true;
   const create = await fetch(`${FIRESTORE_BASE}/attendance?documentId=${encodeURIComponent(id)}`, {
     method: "POST",
@@ -1394,7 +1433,18 @@ export function computeServiceHours(events: { id: string; hours?: number }[], at
 }
 
 export type ChatPerson = { id: string; name: string; unit: string; role: string; mobile?: string };
-export type ChatRow = { id: string; threadId: string; text: string; senderId: string; senderName: string; createdAt: string };
+export type ChatRow = {
+  id: string;
+  threadId: string;
+  text: string;
+  senderId: string;
+  senderName: string;
+  createdAt: string;
+  replyName?: string;
+  replyText?: string;
+  media?: string;
+  mediaType?: "" | "image" | "video";
+};
 
 async function createDocument(collection: string, id: string, values: Record<string, unknown>) {
   const fields: Record<string, unknown> = {};
@@ -1411,28 +1461,28 @@ async function createDocument(collection: string, id: string, values: Record<str
 }
 
 export async function issueChatPass(pass: { token: string; senderId: string; senderName: string; role: string; unit: string; docId: string }) {
-  await createDocument("notices", pass.token, {
+  await createDocument("notices", tokenDocId(pass.token), {
     kind: "chat-auth",
     title: "NSS_CHAT_AUTH",
-    senderId: pass.senderId,
-    senderName: pass.senderName,
+    senderId: sealText(pass.senderId),
+    senderName: sealText(pass.senderName),
     role: pass.role,
-    unit: pass.unit,
-    docId: pass.docId,
+    unit: sealText(pass.unit),
+    docId: sealText(pass.docId),
     createdAt: new Date().toISOString(),
   });
 }
 
 export async function readChatPass(token: string) {
   if (!/^[a-f0-9]{32,64}$/.test(token)) return null;
-  const row = await getDocument(`notices/${token}`);
+  const row = (await getDocument(`notices/${tokenDocId(token)}`)) || (await getDocument(`notices/${token}`));
   if (!row || text(row.kind) !== "chat-auth" || !text(row.senderId)) return null;
   return {
-    id: text(row.senderId),
-    name: text(row.senderName) || "NSS",
+    id: openText(text(row.senderId)),
+    name: openText(text(row.senderName)) || "NSS",
     role: text(row.role) || "volunteer",
-    unit: text(row.unit),
-    docId: text(row.docId),
+    unit: openText(text(row.unit)),
+    docId: openText(text(row.docId)),
   };
 }
 
@@ -1481,7 +1531,7 @@ export async function listChatPeople(opts?: { includeMobile?: boolean }): Promis
         role: knownRole(s.nssRole),
       };
       if (opts?.includeMobile) {
-        const mobile = digits(s.mobile).slice(-10);
+        const mobile = digits(openText(text(s.mobile))).slice(-10);
         if (mobile.length === 10) person.mobile = mobile;
       }
       return person;
@@ -1493,20 +1543,29 @@ export async function listChatPeople(opts?: { includeMobile?: boolean }): Promis
 
 let chatCache: { at: number; rows: ChatRow[] } | null = null;
 
-export async function listRecentChatMessages(limit = 80): Promise<ChatRow[]> {
-  if (chatCache && Date.now() - chatCache.at < 3 * 60 * 1000) return chatCache.rows.slice(-limit);
+export async function listRecentChatMessages(limit = 60): Promise<ChatRow[]> {
+  if (chatCache && Date.now() - chatCache.at < 8 * 1000) return chatCache.rows.slice(-limit);
   if (collegeQuotaBlocked()) return chatCache?.rows.slice(-limit) ?? [];
   const mapRows = (docs: Record<string, unknown>[]) =>
     docs
-      .filter((row) => text(row.kind) === "chat" && text(row.threadId) && text(row.text))
-      .map((row) => ({
-        id: text(row._id),
-        threadId: text(row.threadId),
-        text: text(row.text).slice(0, 1000),
-        senderId: text(row.senderId),
-        senderName: text(row.senderName).slice(0, 80),
-        createdAt: text(row.createdAt),
-      }))
+      .filter((row) => text(row.kind) === "chat" && text(row.threadId) && (text(row.text) || text(row.media)))
+      .map((row) => {
+        const mediaType: "" | "image" | "video" = text(row.mediaType) === "video" ? "video" : text(row.mediaType) === "image" ? "image" : "";
+        const media = mediaType ? openText(text(row.media)) : "";
+        const safeMedia = media.startsWith(mediaType === "video" ? "data:video/" : "data:image/") && media.length < 800000 ? media : "";
+        return {
+          id: text(row._id),
+          threadId: text(row.threadId),
+          text: openText(text(row.text)).slice(0, 1000),
+          senderId: text(row.senderId),
+          senderName: text(row.senderName).slice(0, 80),
+          createdAt: text(row.createdAt),
+          replyName: openText(text(row.replyName)).slice(0, 80),
+          replyText: openText(text(row.replyText)).slice(0, 140),
+          media: safeMedia,
+          mediaType: safeMedia ? mediaType : "",
+        };
+      })
       .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
       .slice(-limit);
   try {
@@ -1541,18 +1600,69 @@ export async function listRecentChatMessages(limit = 80): Promise<ChatRow[]> {
   }
 }
 
-export async function saveChatMessage(input: { threadId: string; text: string; senderId: string; senderName: string }) {
+export async function saveChatMessage(input: { threadId: string; text: string; senderId: string; senderName: string; replyName?: string; replyText?: string; media?: string; mediaType?: "" | "image" | "video" }) {
   const createdAt = new Date().toISOString();
   const id = `chat${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
+  const replyName = text(input.replyName).slice(0, 80);
+  const replyText = text(input.replyText).slice(0, 140);
+  const mediaType = input.mediaType === "video" ? "video" : input.mediaType === "image" ? "image" : "";
+  const media = mediaType && input.media && input.media.length < 700000 ? input.media : "";
   await createDocument("notices", id, {
     kind: "chat",
     title: "NSS_CHAT_INTERNAL",
+    threadId: input.threadId,
+    text: sealText(input.text.slice(0, 1000)),
+    senderId: input.senderId,
+    senderName: input.senderName.slice(0, 80),
+    replyName: replyName ? sealText(replyName) : "",
+    replyText: replyText ? sealText(replyText) : "",
+    media: media ? sealText(media) : "",
+    mediaType: media ? mediaType : "",
+    createdAt,
+  });
+  chatCache = null;
+  return {
+    id,
     threadId: input.threadId,
     text: input.text.slice(0, 1000),
     senderId: input.senderId,
     senderName: input.senderName.slice(0, 80),
     createdAt,
-  });
+    replyName,
+    replyText,
+    media,
+    mediaType: media ? mediaType : "",
+  };
+}
+
+async function deleteNoticeDoc(id: string) {
+  if (!/^chat[a-z0-9]{4,40}$/i.test(id)) return;
+  await fetch(`${FIRESTORE_BASE}/notices/${encodeURIComponent(id)}`, { method: "DELETE" });
+}
+
+export async function deleteChatMessages(ids: string[]) {
+  const unique = [...new Set(ids.map((id) => text(id)).filter(Boolean))].slice(0, 80);
+  await Promise.all(unique.map((id) => deleteNoticeDoc(id)));
   chatCache = null;
-  return { id, ...input, text: input.text.slice(0, 1000), createdAt };
+}
+
+export async function chatIdsInThread(threadId: string) {
+  const wanted = text(threadId);
+  if (!wanted) return [];
+  const docs =
+    (await runQuery({
+      from: [{ collectionId: "notices" }],
+      where: {
+        fieldFilter: {
+          field: { fieldPath: "kind" },
+          op: "EQUAL",
+          value: { stringValue: "chat" },
+        },
+      },
+      limit: 300,
+    })) ?? [];
+  return docs
+    .filter((row) => text(row.kind) === "chat" && text(row.threadId) === wanted)
+    .map((row) => text(row._id))
+    .filter((id) => id.startsWith("chat"));
 }

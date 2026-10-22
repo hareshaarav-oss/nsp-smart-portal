@@ -1,4 +1,4 @@
-import { loadCollegeCloud, loadPublicBoard, loadOfficerRoll, collegeQuotaBlocked, saveStudentToCloud, incrementVisitors, readVisitorCount, knownVisitorCount, patchStudent, safePhoto, knownRole, issueChatPass, readChatPass, listRecentChatMessages, saveChatMessage, listChatPeople, clearAttendanceCloud, readBrandPhotos, saveBrandPhotos, listPhotoRoster, readPhotoBatch, saveAttendanceMarks, readLive, publishBestVolunteer, publishServiceHours, purgeCloudIds } from "@/lib/nss/firestore";
+import { loadCollegeCloud, loadPublicBoard, loadOfficerRoll, collegeQuotaBlocked, saveStudentToCloud, incrementVisitors, readVisitorCount, knownVisitorCount, patchStudent, safePhoto, knownRole, issueChatPass, readChatPass, listRecentChatMessages, saveChatMessage, listChatPeople, clearAttendanceCloud, readBrandPhotos, saveBrandPhotos, listPhotoRoster, readPhotoBatch, saveAttendanceMarks, readLive, publishBestVolunteer, publishServiceHours, purgeCloudIds, deleteChatMessages, chatIdsInThread } from "@/lib/nss/firestore";
 import { passwordOk } from "@/lib/nss/seal.server";
 import { createFileRoute } from "@tanstack/react-router";
 
@@ -271,6 +271,11 @@ export const Route = createFileRoute("/api/nss-cloud")({
             chatToken?: string;
             threadId?: string;
             text?: string;
+            messageId?: string;
+            replyName?: string;
+            replyText?: string;
+            media?: string;
+            mediaType?: string;
             nssRole?: string;
             status?: string;
             eventName?: string;
@@ -412,7 +417,7 @@ export const Route = createFileRoute("/api/nss-cloud")({
             const saved = await saveStudentToCloud({ ...body, nssRole: "Volunteer" });
             return Response.json(saved);
           }
-          if (body.action === "chat-sync" || body.action === "chat-send" || body.action === "set-role" || body.action === "set-status") {
+          if (body.action === "chat-sync" || body.action === "chat-send" || body.action === "chat-delete" || body.action === "chat-clear" || body.action === "set-role" || body.action === "set-status") {
             const user = await readChatPass(text(body.chatToken));
             if (!user) return Response.json({ ok: false, error: "Sign in again to use NSS Chat." }, { status: 401 });
             if (body.action === "set-role" || body.action === "set-status") {
@@ -434,14 +439,52 @@ export const Route = createFileRoute("/api/nss-cloud")({
               }
               return Response.json({ ok: true });
             }
+            if (body.action === "chat-delete" || body.action === "chat-clear") {
+              const recent = await listRecentChatMessages(300);
+              if (body.action === "chat-delete") {
+                const messageId = text(body.messageId);
+                const row = recent.find((item) => item.id === messageId);
+                if (!row || !canSeeThread(user, canonicalThread(row.threadId))) {
+                  return Response.json({ ok: false, error: "That message is not in your chat." }, { status: 404 });
+                }
+                const officer = user.role === "po" || user.role === "admin";
+                if (!officer && row.senderId !== user.id) {
+                  return Response.json({ ok: false, error: "You can delete only your own message." }, { status: 403 });
+                }
+                await deleteChatMessages([messageId]);
+                return Response.json({ ok: true, removed: [messageId] });
+              }
+              const threadId = canonicalThread(text(body.threadId));
+              if (!validThread(threadId) || !canSeeThread(user, threadId)) {
+                return Response.json({ ok: false, error: "You cannot clear that chat." }, { status: 403 });
+              }
+              const ids = await chatIdsInThread(threadId);
+              await deleteChatMessages(ids);
+              return Response.json({ ok: true, removed: ids });
+            }
             if (body.action === "chat-send") {
               const threadId = canonicalThread(text(body.threadId));
               const message = String(body.text ?? "").split("\u0000").join("").trim().slice(0, 1000);
+              const mediaType = body.mediaType === "video" ? "video" : body.mediaType === "image" ? "image" : "";
+              const rawMedia = typeof body.media === "string" ? body.media.trim() : "";
+              const mediaOk =
+                (mediaType === "image" && rawMedia.startsWith("data:image/") && rawMedia.length < 700000) ||
+                (mediaType === "video" && rawMedia.startsWith("data:video/") && rawMedia.length < 700000);
+              if (rawMedia && !mediaOk) return Response.json({ ok: false, error: "That photo or video is too large." }, { status: 400 });
               if (!validThread(threadId) || !canSeeThread(user, threadId)) {
                 return Response.json({ ok: false, error: "You cannot send to that chat." }, { status: 403 });
               }
-              if (!message) return Response.json({ ok: false, error: "Type a message first." }, { status: 400 });
-              const saved = await saveChatMessage({ threadId, text: message, senderId: user.id, senderName: user.name });
+              if (!message && !mediaOk) return Response.json({ ok: false, error: "Type a message first." }, { status: 400 });
+              const saved = await saveChatMessage({
+                threadId,
+                text: message,
+                senderId: user.id,
+                senderName: user.name,
+                replyName: text(body.replyName).slice(0, 80),
+                replyText: text(body.replyText).slice(0, 140),
+                media: mediaOk ? rawMedia : "",
+                mediaType: mediaOk ? mediaType : "",
+              });
               return Response.json({ ok: true, message: saved });
             }
             const messages = (await listRecentChatMessages()).filter((row) => canSeeThread(user, canonicalThread(row.threadId)));

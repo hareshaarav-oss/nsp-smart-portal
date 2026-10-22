@@ -1,6 +1,6 @@
 import { createFileRoute, Navigate } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
-import { ArrowLeft, CheckCheck, MessageCircle, Phone, Search, SendHorizonal } from "lucide-react";
+import { ArrowLeft, CheckCheck, Copy, Eraser, MessageCircle, Paperclip, Phone, Reply, Search, SendHorizonal, Smile, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { AppShell } from "@/components/nss/shell";
 import { Button } from "@/components/ui/button";
@@ -12,7 +12,7 @@ import { openWhatsApp } from "@/lib/nss/whatsapp";
 export const Route = createFileRoute("/chat")({ component: ChatPage });
 
 type Person = { id: string; name: string; unit: string; role: string; mobile?: string };
-type ChatMessage = { id: string; threadId: string; text: string; senderId: string; senderName: string; createdAt: string };
+type ChatMessage = { id: string; threadId: string; text: string; senderId: string; senderName: string; createdAt: string; replyName?: string; replyText?: string; media?: string; mediaType?: "" | "image" | "video" };
 type Me = { id: string; name: string; role: string; unit: string };
 
 const GROUPS = [
@@ -22,12 +22,40 @@ const GROUPS = [
   { id: "leaders", title: "Leaders", subtitle: "Leaders and Programme Officer" },
 ];
 
-const QUICK = [
-  "Please come for the NSS activity.",
-  "Bring your ID card and uniform.",
-  "Your attendance is updated.",
-  "Please reply when you see this.",
-];
+const EMOJI = ["😀", "😁", "😂", "😊", "😍", "🙏", "👍", "👏", "🎉", "💪", "✅", "❤️", "🔥", "🌟", "🇮🇳", "📚", "🏆", "⏰"];
+
+function previewLine(message: { text?: string; mediaType?: string }) {
+  if (message.mediaType === "image") return message.text || "Photo";
+  if (message.mediaType === "video") return message.text || "Video";
+  return message.text || "";
+}
+
+function readData(file: File) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(new Error("Could not read the file."));
+    reader.readAsDataURL(file);
+  });
+}
+
+async function shrinkImage(file: File) {
+  const src = await readData(file);
+  const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error("Photo could not be opened."));
+    img.src = src;
+  });
+  const scale = Math.min(1, 960 / Math.max(image.width, image.height));
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(1, Math.round(image.width * scale));
+  canvas.height = Math.max(1, Math.round(image.height * scale));
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return "";
+  ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+  return canvas.toDataURL("image/jpeg", 0.62);
+}
 
 function canonicalThread(threadId: string) {
   if (!threadId.startsWith("dm:")) return threadId;
@@ -77,6 +105,11 @@ function ChatPage() {
   const [seen, setSeen] = useState<Record<string, string>>({});
   const [liveAt, setLiveAt] = useState(0);
   const [alsoWa, setAlsoWa] = useState(false);
+  const [emojiOn, setEmojiOn] = useState(false);
+  const [reply, setReply] = useState<{ name: string; text: string } | null>(null);
+  const [picked, setPicked] = useState("");
+  const [ask, setAsk] = useState<"" | "clear" | "delete">("");
+  const [pending, setPending] = useState<{ media: string; mediaType: "image" | "video" } | null>(null);
   const scroller = useRef<HTMLDivElement>(null);
   const stick = useRef(true);
   const token = session?.chatToken || "";
@@ -230,10 +263,42 @@ function ChatPage() {
     localStorage.setItem("nsp-chat-seen", JSON.stringify(next));
   }
 
+  async function attachFile(file: File | undefined) {
+    if (!file) return;
+    try {
+      if (file.type.startsWith("video/")) {
+        if (file.size > 380000) {
+          toast.error("Video is too large.");
+          return;
+        }
+        const media = await readData(file);
+        if (!media.startsWith("data:video/") || media.length > 520000) {
+          toast.error("Video is too large.");
+          return;
+        }
+        setPending({ media, mediaType: "video" });
+        return;
+      }
+      if (!file.type.startsWith("image/")) {
+        toast.error("Choose a photo or a video.");
+        return;
+      }
+      const media = await shrinkImage(file);
+      if (!media.startsWith("data:image/") || media.length > 520000) {
+        toast.error("Photo is too large.");
+        return;
+      }
+      setPending({ media, mediaType: "image" });
+    } catch {
+      toast.error("Could not attach that file.");
+    }
+  }
+
   async function send(e?: React.FormEvent, threadId = active) {
     e?.preventDefault();
     const text = draft.trim();
-    if (!text || sending) return;
+    const attachment = pending;
+    if ((!text && !attachment) || sending) return;
     const desk = session?.role === "po" || session?.role === "admin";
     const mine = me?.id || session?.volunteerId || "";
     const thread = desk ? canonicalThread(threadId) : mine ? canonicalThread(`dm:${mine}:po`) : "";
@@ -243,16 +308,73 @@ function ChatPage() {
       const res = await fetch("/api/nss-cloud", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ action: "chat-send", chatToken: token, threadId: thread, text }),
+        body: JSON.stringify({
+          action: "chat-send",
+          chatToken: token,
+          threadId: thread,
+          text,
+          replyName: reply?.name || "",
+          replyText: reply?.text || "",
+          media: attachment?.media || "",
+          mediaType: attachment?.mediaType || "",
+        }),
       });
       const data = (await res.json()) as { ok?: boolean; error?: string; message?: ChatMessage };
       if (!res.ok || !data.ok || !data.message) throw new Error(data.error || "Message was not sent.");
       setMessages((current) => [...current.filter((row) => row.id !== data.message?.id), data.message!]);
       setDraft("");
+      setReply(null);
+      setPending(null);
+      setEmojiOn(false);
       stick.current = true;
       if ((session?.role === "po" || session?.role === "admin") && active.startsWith("dm:") && alsoWa && phoneFor(otherId())) openWhatsAppChat(text);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Message was not sent.");
+    } finally {
+      setSending(false);
+    }
+  }
+
+  async function erase(messageId: string) {
+    if (!messageId || sending) return;
+    setSending(true);
+    try {
+      const res = await fetch("/api/nss-cloud", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ action: "chat-delete", chatToken: token, messageId }),
+      });
+      const data = (await res.json()) as { ok?: boolean; error?: string };
+      if (!res.ok || !data.ok) throw new Error(data.error || "Message was not deleted.");
+      setMessages((current) => current.filter((row) => row.id !== messageId));
+      setPicked("");
+      setAsk("");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Message was not deleted.");
+    } finally {
+      setSending(false);
+    }
+  }
+
+  async function clearThread(threadId: string) {
+    if (!threadId || sending) return;
+    setSending(true);
+    try {
+      const res = await fetch("/api/nss-cloud", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ action: "chat-clear", chatToken: token, threadId: canonicalThread(threadId) }),
+      });
+      const data = (await res.json()) as { ok?: boolean; error?: string };
+      if (!res.ok || !data.ok) throw new Error(data.error || "Chat was not cleared.");
+      const gone = canonicalThread(threadId);
+      setMessages((current) => current.filter((row) => canonicalThread(row.threadId) !== gone));
+      setPicked("");
+      setAsk("");
+      setReply(null);
+      setPending(null);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Chat was not cleared.");
     } finally {
       setSending(false);
     }
@@ -264,73 +386,159 @@ function ChatPage() {
   const meId = me?.id || (session.role === "po" ? "po" : session.role === "admin" ? "admin" : session.volunteerId || "");
   const poThread = meId && meId !== "po" ? canonicalThread(`dm:${meId}:po`) : "";
 
+  function talk(list: ChatMessage[], threadId: string, showNames: boolean) {
+    const chosen = list.find((message) => message.id === picked);
+    const canDelete = Boolean(chosen && (officer || chosen.senderId === me?.id || chosen.senderId === meId));
+    return (
+      <>
+        <div
+          ref={scroller}
+          onScroll={() => {
+            const node = scroller.current;
+            if (!node) return;
+            stick.current = node.scrollHeight - node.scrollTop - node.clientHeight < 90;
+          }}
+          className="min-h-0 flex-1 space-y-2 overflow-y-auto bg-[radial-gradient(#e4d5b4_0.7px,transparent_0.7px)] bg-[length:14px_14px] px-3 py-4"
+        >
+          {list.map((message, index) => {
+            const mine = message.senderId === me?.id || message.senderId === meId;
+            const previous = list[index - 1];
+            const showDay = !previous || previous.createdAt.slice(0, 10) !== message.createdAt.slice(0, 10);
+            return (
+              <div key={message.id}>
+                {showDay ? <p className="mx-auto my-2 w-fit rounded-full bg-white/80 px-3 py-1 text-[11px] text-muted-foreground">{dayLabel(message.createdAt)}</p> : null}
+                <div className={`flex ${mine ? "justify-end" : "justify-start"}`}>
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    className={`max-w-[85%] rounded-2xl px-3 py-2 text-left shadow-sm ${mine ? "rounded-br-sm bg-forest text-white" : "rounded-bl-sm bg-white text-navy"} ${picked === message.id ? "ring-2 ring-saffron" : ""}`}
+                    onClick={() => {
+                      setAsk("");
+                      setPicked((current) => (current === message.id ? "" : message.id));
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") setPicked((current) => (current === message.id ? "" : message.id));
+                    }}
+                  >
+                    {showNames && !mine ? <p className="text-[11px] font-semibold text-saffron">{message.senderName}</p> : null}
+                    {message.replyText ? <p className="mb-1 border-l-2 border-saffron pl-2 text-[11px] opacity-80">{message.replyName ? `${message.replyName}: ` : ""}{message.replyText}</p> : null}
+                    {message.mediaType === "image" && message.media ? <img src={message.media} alt="" className="mb-1 max-h-64 rounded-lg object-cover" /> : null}
+                    {message.mediaType === "video" && message.media ? <video src={message.media} controls className="mb-1 max-h-64 w-full rounded-lg" onClick={(e) => e.stopPropagation()} /> : null}
+                    {message.text ? <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">{message.text}</p> : null}
+                    <p className={`mt-1 flex items-center justify-end gap-1 text-[10px] ${mine ? "text-white/75" : "text-muted-foreground"}`}>
+                      {clock(message.createdAt)}
+                      {mine ? <CheckCheck className="size-3.5" /> : null}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        {chosen ? (
+          <div className="flex items-center gap-1 border-t border-border bg-white px-2 py-1">
+            <button type="button" className="inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-xs text-navy hover:bg-muted" onClick={() => { setReply({ name: chosen.senderName, text: previewLine(chosen).slice(0, 140) }); setPicked(""); }}>
+              <Reply className="size-3.5" /> Reply
+            </button>
+            <button type="button" className="inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-xs text-navy hover:bg-muted" onClick={() => { void navigator.clipboard?.writeText(chosen.text || previewLine(chosen)); setPicked(""); }}>
+              <Copy className="size-3.5" /> Copy
+            </button>
+            {canDelete ? (
+              <button type="button" className="inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-xs text-red-700 hover:bg-red-50" onClick={() => setAsk("delete")}>
+                <Trash2 className="size-3.5" /> Delete
+              </button>
+            ) : null}
+          </div>
+        ) : null}
+        {ask === "delete" && chosen ? (
+          <div className="flex items-center justify-between gap-2 border-t border-border bg-white px-3 py-2 text-sm text-navy">
+            <span>Delete this message</span>
+            <span className="flex gap-2">
+              <button type="button" className="rounded-full bg-red-700 px-3 py-1 text-xs font-semibold text-white" onClick={() => void erase(chosen.id)}>Delete</button>
+              <button type="button" className="rounded-full px-3 py-1 text-xs" onClick={() => setAsk("")}>Cancel</button>
+            </span>
+          </div>
+        ) : null}
+        {ask === "clear" ? (
+          <div className="flex items-center justify-between gap-2 border-t border-border bg-white px-3 py-2 text-sm text-navy">
+            <span>Clear this chat</span>
+            <span className="flex gap-2">
+              <button type="button" className="rounded-full bg-red-700 px-3 py-1 text-xs font-semibold text-white" onClick={() => void clearThread(threadId)}>Clear</button>
+              <button type="button" className="rounded-full px-3 py-1 text-xs" onClick={() => setAsk("")}>Cancel</button>
+            </span>
+          </div>
+        ) : null}
+        <form className="border-t border-border bg-card p-3" onSubmit={(e) => void send(e, threadId)}>
+          {reply ? (
+            <div className="mb-2 flex items-start justify-between gap-2 rounded-lg bg-muted px-3 py-2 text-xs text-navy">
+              <span className="min-w-0 truncate">{reply.name}: {reply.text}</span>
+              <button type="button" aria-label="Cancel reply" onClick={() => setReply(null)}><X className="size-3.5" /></button>
+            </div>
+          ) : null}
+          {pending ? (
+            <div className="mb-2 flex items-center justify-between gap-2 rounded-lg bg-muted px-3 py-2 text-xs text-navy">
+              {pending.mediaType === "image" ? <img src={pending.media} alt="" className="size-10 rounded object-cover" /> : <span>Video</span>}
+              <button type="button" aria-label="Remove attachment" onClick={() => setPending(null)}><X className="size-3.5" /></button>
+            </div>
+          ) : null}
+          {emojiOn ? (
+            <div className="mb-2 flex flex-wrap gap-1">
+              {EMOJI.map((emoji) => (
+                <button key={emoji} type="button" className="rounded-md px-1.5 py-1 text-lg hover:bg-muted" onClick={() => setDraft((current) => `${current}${emoji}`)}>{emoji}</button>
+              ))}
+            </div>
+          ) : null}
+          <div className="flex items-end gap-2">
+            <button type="button" className="flex size-11 items-center justify-center rounded-full text-navy hover:bg-muted" aria-label="Emoji" onClick={() => setEmojiOn((on) => !on)}>
+              <Smile className="size-5" />
+            </button>
+            <label className="flex size-11 cursor-pointer items-center justify-center rounded-full text-navy hover:bg-muted" aria-label="Photo or video">
+              <Paperclip className="size-5" />
+              <input type="file" accept="image/*,video/*" className="sr-only" onChange={(e) => { const file = e.target.files?.[0]; e.target.value = ""; void attachFile(file); }} />
+            </label>
+            <textarea
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  void send(undefined, threadId);
+                }
+              }}
+              rows={1}
+              placeholder="Message"
+              className="max-h-28 min-h-11 flex-1 resize-none rounded-full border border-border bg-muted/40 px-4 py-2.5 text-sm outline-none focus:border-forest"
+            />
+            <Button type="submit" disabled={sending || (!draft.trim() && !pending) || !threadId} className="size-11 rounded-full bg-forest p-0 text-primary-foreground hover:bg-forest/90" aria-label="Send">
+              <SendHorizonal />
+            </Button>
+          </div>
+          {officer && threadId.startsWith("dm:") ? (
+            <label className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
+              <input type="checkbox" checked={alsoWa} onChange={(e) => setAlsoWa(e.target.checked)} />
+              Also open WhatsApp
+            </label>
+          ) : null}
+        </form>
+      </>
+    );
+  }
+
   if (!officer) {
     const threadMessages = messages.filter((message) => poThread && canonicalThread(message.threadId) === poThread);
     return (
       <AppShell eyebrow="NSS CHAT" current="page">
         <div className="mx-auto flex h-[calc(100dvh-13.5rem)] w-full max-w-3xl flex-col overflow-hidden border-y border-border bg-[#efe7d6] md:my-4 md:h-[calc(100dvh-8.5rem)] md:rounded-2xl md:border">
-          <header className="bg-navy px-4 py-3 text-paper">
-            <p className="font-medium">Programme Officer</p>
-            <p className="text-xs text-paper/70">{me?.name || session.name}</p>
+          <header className="flex items-center gap-2 bg-navy px-4 py-3 text-paper">
+            <div className="min-w-0 flex-1">
+              <p className="font-medium">Programme Officer</p>
+              <p className="text-xs text-paper/70">{me?.name || session.name}</p>
+            </div>
+            <button type="button" className="rounded-md p-2 hover:bg-white/10" aria-label="Clear chat" onClick={() => { setPicked(""); setAsk("clear"); }}>
+              <Eraser className="size-4" />
+            </button>
           </header>
-          {!token ? (
-            <div className="flex-1" />
-          ) : (
-            <>
-              <div
-                ref={scroller}
-                className="min-h-0 flex-1 space-y-2 overflow-y-auto bg-[radial-gradient(#e4d5b4_0.7px,transparent_0.7px)] bg-[length:14px_14px] px-3 py-4"
-              >
-                {threadMessages.map((message, index) => {
-                  const mine = message.senderId === me?.id || message.senderId === meId;
-                  const previous = threadMessages[index - 1];
-                  const showDay = !previous || previous.createdAt.slice(0, 10) !== message.createdAt.slice(0, 10);
-                  return (
-                    <div key={message.id}>
-                      {showDay ? <p className="mx-auto my-2 w-fit rounded-full bg-white/80 px-3 py-1 text-[11px] text-muted-foreground">{dayLabel(message.createdAt)}</p> : null}
-                      <div className={`flex ${mine ? "justify-end" : "justify-start"}`}>
-                        <div className={`max-w-[85%] rounded-2xl px-3 py-2 shadow-sm ${mine ? "rounded-br-sm bg-forest text-white" : "rounded-bl-sm bg-white text-navy"}`}>
-                          <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">{message.text}</p>
-                          <p className={`mt-1 flex items-center justify-end gap-1 text-[10px] ${mine ? "text-white/75" : "text-muted-foreground"}`}>
-                            {clock(message.createdAt)}
-                            {mine ? <CheckCheck className="size-3.5" /> : null}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-              <form
-                className="border-t border-border bg-card p-3"
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  if (poThread) setActive(poThread);
-                  void send(e);
-                }}
-              >
-                <div className="flex items-end gap-2">
-                  <textarea
-                    value={draft}
-                    onChange={(e) => setDraft(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" && !e.shiftKey) {
-                        e.preventDefault();
-                        if (poThread) setActive(poThread);
-                        void send();
-                      }
-                    }}
-                    rows={1}
-                    placeholder="Message"
-                    className="max-h-28 min-h-11 flex-1 resize-none rounded-full border border-border bg-muted/40 px-4 py-2.5 text-sm outline-none focus:border-forest"
-                  />
-                  <Button type="submit" disabled={sending || !draft.trim() || !poThread} className="size-11 rounded-full bg-forest p-0 text-primary-foreground hover:bg-forest/90" aria-label="Send">
-                    <SendHorizonal />
-                  </Button>
-                </div>
-              </form>
-            </>
-          )}
+          {!token ? <div className="flex-1" /> : talk(threadMessages, poThread, false)}
         </div>
       </AppShell>
     );
@@ -378,7 +586,7 @@ function ChatPage() {
             <span className="shrink-0 text-[11px] text-muted-foreground">{last ? clock(last.createdAt) : ""}</span>
           </span>
           <span className="mt-0.5 flex items-center justify-between gap-2">
-            <span className="truncate text-xs text-muted-foreground">{last?.text || group?.subtitle || "Personal chat"}</span>
+            <span className="truncate text-xs text-muted-foreground">{last ? previewLine(last) : group?.subtitle || "Personal chat"}</span>
             {count > 0 ? <span className="min-w-5 rounded-full bg-forest px-1.5 text-center text-[10px] font-semibold text-white">{count}</span> : null}
           </span>
         </span>
@@ -466,6 +674,9 @@ function ChatPage() {
                 WhatsApp
               </button>
             ) : null}
+            <button type="button" className="rounded-md p-2 hover:bg-white/10" aria-label="Clear chat" onClick={() => { setPicked(""); setAsk("clear"); }}>
+              <Eraser className="size-4" />
+            </button>
           </header>
           {active.startsWith("dm:") && activeRoll ? (
             <div className="flex flex-wrap items-center gap-2 border-b border-border bg-white px-3 py-2 text-xs text-navy">
@@ -475,77 +686,7 @@ function ChatPage() {
               <span>{activeRoll.course} Sem {activeRoll.semester}</span>
             </div>
           ) : null}
-          {!token ? (
-            <div className="flex flex-1 flex-col items-center justify-center gap-2 px-6 text-center" />
-          ) : (
-            <>
-              <div
-                ref={scroller}
-                onScroll={() => {
-                  const node = scroller.current;
-                  if (!node) return;
-                  stick.current = node.scrollHeight - node.scrollTop - node.clientHeight < 90;
-                }}
-                className="min-h-0 flex-1 space-y-2 overflow-y-auto bg-[radial-gradient(#e4d5b4_0.7px,transparent_0.7px)] bg-[length:14px_14px] px-3 py-4"
-              >
-                {threadMessages.map((message, index) => {
-                  const mine = message.senderId === me?.id;
-                  const previous = threadMessages[index - 1];
-                  const showDay = !previous || previous.createdAt.slice(0, 10) !== message.createdAt.slice(0, 10);
-                  return (
-                    <div key={message.id}>
-                      {showDay ? <p className="mx-auto my-2 w-fit rounded-full bg-white/80 px-3 py-1 text-[11px] text-muted-foreground">{dayLabel(message.createdAt)}</p> : null}
-                      <div className={`flex ${mine ? "justify-end" : "justify-start"}`}>
-                        <div className={`max-w-[85%] rounded-2xl px-3 py-2 shadow-sm ${mine ? "rounded-br-sm bg-forest text-white" : "rounded-bl-sm bg-white text-navy"}`}>
-                          {!mine && !active.startsWith("dm:") ? <p className="text-[11px] font-semibold text-saffron">{message.senderName}</p> : null}
-                          <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">{message.text}</p>
-                          <p className={`mt-1 flex items-center justify-end gap-1 text-[10px] ${mine ? "text-white/75" : "text-muted-foreground"}`}>
-                            {clock(message.createdAt)}
-                            {mine ? <CheckCheck className="size-3.5" /> : null}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-              <form className="border-t border-border bg-card p-3" onSubmit={(e) => void send(e)}>
-                {active.startsWith("dm:") ? (
-                  <div className="mb-2 flex gap-2 overflow-x-auto">
-                    {QUICK.map((line) => (
-                      <button key={line} type="button" className="shrink-0 rounded-full border border-border bg-muted/50 px-3 py-1 text-xs text-navy" onClick={() => setDraft(line)}>
-                        {line}
-                      </button>
-                    ))}
-                  </div>
-                ) : null}
-                <div className="flex items-end gap-2">
-                  <textarea
-                    value={draft}
-                    onChange={(e) => setDraft(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" && !e.shiftKey) {
-                        e.preventDefault();
-                        void send();
-                      }
-                    }}
-                    rows={1}
-                    placeholder={active.startsWith("dm:") ? "Personal message" : "Message the group"}
-                    className="max-h-28 min-h-11 flex-1 resize-none rounded-full border border-border bg-muted/40 px-4 py-2.5 text-sm outline-none focus:border-forest"
-                  />
-                  <Button type="submit" disabled={sending || !draft.trim()} className="size-11 rounded-full bg-forest p-0 text-primary-foreground hover:bg-forest/90" aria-label="Send">
-                    <SendHorizonal />
-                  </Button>
-                </div>
-                {officer && active.startsWith("dm:") ? (
-                  <label className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
-                    <input type="checkbox" checked={alsoWa} onChange={(e) => setAlsoWa(e.target.checked)} />
-                    Also open WhatsApp
-                  </label>
-                ) : null}
-              </form>
-            </>
-          )}
+          {!token ? <div className="flex flex-1" /> : talk(threadMessages, canonicalThread(active), !active.startsWith("dm:"))}
         </section>
       </div>
     </AppShell>
