@@ -1,6 +1,6 @@
 import { createFileRoute, Link, Navigate } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
-import { ArrowLeft, Camera, Check, CheckCheck, Copy, FileText, Lock, MapPin, Mic, MoreVertical, Paperclip, Phone, PhoneOff, Reply, Search, SendHorizonal, Smile, Star, Trash2, UserRound, Video, X } from "lucide-react";
+import { ArrowLeft, Camera, Check, CheckCheck, Copy, Download, FileText, Lock, MapPin, Mic, MoreVertical, Paperclip, Phone, PhoneOff, Reply, Search, SendHorizonal, Smile, Star, Trash2, UserRound, Video, X } from "lucide-react";
 import { toast } from "sonner";
 import { AppShell } from "@/components/nss/shell";
 import { Button } from "@/components/ui/button";
@@ -61,6 +61,7 @@ type Prefs = {
   mutes: string[];
   archives: string[];
   marked: string[];
+  favs: string[];
   wallpaper: string;
   dark: boolean;
   lock: string;
@@ -68,7 +69,7 @@ type Prefs = {
 };
 
 function blankPrefs(): Prefs {
-  return { stars: [], hidden: [], pins: [], mutes: [], archives: [], marked: [], wallpaper: "#efeae2", dark: false, lock: "", disappear: {} };
+  return { stars: [], hidden: [], pins: [], mutes: [], archives: [], marked: [], favs: [], wallpaper: "#efeae2", dark: false, lock: "", disappear: {} };
 }
 
 function loadPrefs(): Prefs {
@@ -84,6 +85,7 @@ function loadPrefs(): Prefs {
       mutes: Array.isArray(raw.mutes) ? raw.mutes.filter((id) => typeof id === "string") : [],
       archives: Array.isArray(raw.archives) ? raw.archives.filter((id) => typeof id === "string") : [],
       marked: Array.isArray(raw.marked) ? raw.marked.filter((id) => typeof id === "string") : [],
+      favs: Array.isArray(raw.favs) ? raw.favs.filter((id) => typeof id === "string") : [],
       wallpaper: typeof raw.wallpaper === "string" ? raw.wallpaper : base.wallpaper,
       disappear: raw.disappear && typeof raw.disappear === "object" ? raw.disappear : {},
     };
@@ -181,7 +183,7 @@ function canonicalThread(threadId: string) {
 function clock(iso: string) {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return "";
-  return date.toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit", timeZone: "Asia/Kolkata" });
+  return date.toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit", hour12: true, timeZone: "Asia/Kolkata" });
 }
 
 function dayLabel(iso: string) {
@@ -229,7 +231,7 @@ function ChatPage() {
   const [prefs, setPrefs] = useState<Prefs>(blankPrefs);
   const [menu, setMenu] = useState(false);
   const [menuMore, setMenuMore] = useState(false);
-  const [listTab, setListTab] = useState<"all" | "unread">("all");
+  const [listTab, setListTab] = useState<"all" | "unread" | "fav">("all");
   const [finder, setFinder] = useState("");
   const [unlocked, setUnlocked] = useState(false);
   const [pinDraft, setPinDraft] = useState("");
@@ -244,6 +246,7 @@ function ChatPage() {
   const [callOn, setCallOn] = useState<"" | "audio" | "video">("");
   const [viewOnce, setViewOnce] = useState(false);
   const [forwarded, setForwarded] = useState(false);
+  const [away, setAway] = useState(false);
   const scroller = useRef<HTMLDivElement>(null);
   const stick = useRef(true);
   const mediaBag = useRef(new Map<string, { media: string; mediaType: "image" | "video" | "audio" | "file" }>());
@@ -257,6 +260,56 @@ function ChatPage() {
   useEffect(() => {
     setSeen(readSeen());
     setPrefs(loadPrefs());
+    try {
+      const saved = JSON.parse(localStorage.getItem("nsp-chat-box") || "[]") as ChatMessage[];
+      if (Array.isArray(saved) && saved.length) setMessages((current) => (current.length ? current : saved));
+    } catch {
+      /* keep an empty chat */
+    }
+  }, []);
+
+  useEffect(() => {
+    const light = messages.slice(-40).map((row) => ({ ...row, media: row.media && row.media.length < 80000 ? row.media : "" }));
+    try {
+      localStorage.setItem("nsp-chat-box", JSON.stringify(light));
+    } catch {
+      /* the phone is full */
+    }
+  }, [messages]);
+
+  useEffect(() => {
+    if (!token) return;
+    let stop = false;
+    async function flush() {
+      if (stop || !navigator.onLine) return;
+      const queued = JSON.parse(localStorage.getItem("nsp-chat-out") || "[]") as Record<string, unknown>[];
+      if (!queued.length) return;
+      localStorage.setItem("nsp-chat-out", "[]");
+      for (const body of queued) {
+        await fetch("/api/nss-cloud", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ ...body, chatToken: token }),
+        }).catch(() => undefined);
+      }
+    }
+    void flush();
+    window.addEventListener("online", flush);
+    return () => {
+      stop = true;
+      window.removeEventListener("online", flush);
+    };
+  }, [token]);
+
+  useEffect(() => {
+    if (localVideo.current && localStream.current) localVideo.current.srcObject = localStream.current;
+    if (remoteVideo.current && remoteStream.current) remoteVideo.current.srcObject = remoteStream.current;
+  }, [callOn]);
+
+  useEffect(() => {
+    const onVis = () => setAway(document.hidden);
+    document.addEventListener("visibilitychange", onVis);
+    return () => document.removeEventListener("visibilitychange", onVis);
   }, []);
 
   useEffect(() => {
@@ -409,12 +462,12 @@ function ChatPage() {
         .catch(() => undefined);
     };
     push();
-    const timer = window.setInterval(push, 15000);
+    const timer = window.setInterval(push, callOn ? 2500 : 12000);
     return () => {
       stop = true;
       window.clearInterval(timer);
     };
-  }, [token, active, me?.id]);
+  }, [token, active, me?.id, callOn]);
 
   useEffect(() => {
     const node = scroller.current;
@@ -577,26 +630,28 @@ function ChatPage() {
     setForwarded(false);
     setSheet(false);
     stick.current = true;
+    const payload = {
+      action: "chat-send",
+      chatToken: token,
+      threadId: thread,
+      text,
+      replyName: localMessage.replyName,
+      replyText: localMessage.replyText,
+      media: attachment?.media || "",
+      mediaType: attachment?.mediaType || "",
+      fileName: attachment?.name || "",
+      kind: pollOn ? "poll" : attachment?.mediaType === "file" ? "file" : "",
+      pollOptions: pollOn ? pollOptions.split(",").map((item) => item.trim()).filter(Boolean) : [],
+      expiresAt: hours ? new Date(Date.now() + hours * 3600000).toISOString() : "",
+      viewOnce,
+      forwarded,
+    };
     try {
+      if (!navigator.onLine) throw new Error("offline");
       const res = await fetch("/api/nss-cloud", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          action: "chat-send",
-          chatToken: token,
-          threadId: thread,
-          text,
-          replyName: localMessage.replyName,
-          replyText: localMessage.replyText,
-          media: attachment?.media || "",
-          mediaType: attachment?.mediaType || "",
-          fileName: attachment?.name || "",
-          kind: pollOn ? "poll" : attachment?.mediaType === "file" ? "file" : "",
-          pollOptions: pollOn ? pollOptions.split(",").map((item) => item.trim()).filter(Boolean) : [],
-          expiresAt: hours ? new Date(Date.now() + hours * 3600000).toISOString() : "",
-          viewOnce,
-          forwarded,
-        }),
+        body: JSON.stringify(payload),
       });
       const data = (await res.json()) as { ok?: boolean; error?: string; message?: ChatMessage };
       if (!res.ok || !data.ok || !data.message) throw new Error(data.error || "Message was not sent.");
@@ -604,9 +659,15 @@ function ChatPage() {
       setMessages((current) => [...current.filter((row) => row.id !== localId && row.id !== data.message?.id), { ...data.message!, media: data.message!.media || attachment?.media || "", mediaType: data.message!.mediaType || attachment?.mediaType || "" }]);
       if ((session?.role === "po" || session?.role === "admin") && active.startsWith("dm:") && alsoWa && phoneFor(otherId())) openWhatsAppChat(text);
     } catch (error) {
+      if (!navigator.onLine) {
+        const queued = JSON.parse(localStorage.getItem("nsp-chat-out") || "[]") as unknown[];
+        queued.push(payload);
+        localStorage.setItem("nsp-chat-out", JSON.stringify(queued.slice(-15)));
+        return;
+      }
       setMessages((current) => current.filter((row) => row.id !== localId));
       setDraft(text);
-      toast.error(error instanceof Error ? error.message : "Message was not sent.");
+      toast.error(error instanceof Error && error.message !== "offline" ? error.message : "Message was not sent.");
     }
   }
 
@@ -615,7 +676,7 @@ function ChatPage() {
     localStorage.setItem("nsp-chat-prefs", JSON.stringify(next));
   }
 
-  function togglePref(key: "stars" | "hidden" | "pins" | "mutes" | "archives" | "marked", id: string) {
+  function togglePref(key: "stars" | "hidden" | "pins" | "mutes" | "archives" | "marked" | "favs", id: string) {
     const has = prefs[key].includes(id);
     savePrefs({ ...prefs, [key]: has ? prefs[key].filter((item) => item !== id) : [...prefs[key], id] });
   }
@@ -692,8 +753,31 @@ function ChatPage() {
   }
 
   const callPeer = useRef<RTCPeerConnection | null>(null);
+  const localStream = useRef<MediaStream | null>(null);
+  const remoteStream = useRef<MediaStream | null>(null);
+  const localVideo = useRef<HTMLVideoElement>(null);
+  const remoteVideo = useRef<HTMLVideoElement>(null);
+
+  function waitIce(pc: RTCPeerConnection) {
+    if (pc.iceGatheringState === "complete") return Promise.resolve();
+    return new Promise<void>((resolve) => {
+      const done = () => {
+        if (pc.iceGatheringState === "complete") {
+          clearTimeout(timer);
+          pc.removeEventListener("icegatheringstatechange", done);
+          resolve();
+        }
+      };
+      const timer = setTimeout(() => {
+        pc.removeEventListener("icegatheringstatechange", done);
+        resolve();
+      }, 2200);
+      pc.addEventListener("icegatheringstatechange", done);
+    });
+  }
 
   async function ring(kind: "" | "audio" | "video" | "answer", sdp = "") {
+    if (!navigator.onLine) return;
     await fetch("/api/nss-cloud", {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -702,6 +786,10 @@ function ChatPage() {
   }
 
   function endCall() {
+    localStream.current?.getTracks().forEach((track) => track.stop());
+    remoteStream.current?.getTracks().forEach((track) => track.stop());
+    localStream.current = null;
+    remoteStream.current = null;
     callPeer.current?.close();
     callPeer.current = null;
     setCallOn("");
@@ -711,23 +799,31 @@ function ChatPage() {
   async function startCall(kind: "audio" | "video", remoteSdp?: string) {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: kind === "video" });
+      localStream.current = stream;
       const pc = new RTCPeerConnection({ iceServers: [{ urls: "stun:stun.l.google.com:19302" }] });
       callPeer.current = pc;
       stream.getTracks().forEach((track) => pc.addTrack(track, stream));
-      pc.ontrack = () => setCallOn(kind);
+      pc.ontrack = (event) => {
+        const remote = event.streams[0];
+        if (!remote) return;
+        remoteStream.current = remote;
+        if (remoteVideo.current) remoteVideo.current.srcObject = remote;
+      };
+      setCallOn(kind);
       if (remoteSdp) {
         await pc.setRemoteDescription({ type: "offer", sdp: remoteSdp });
         await pc.setLocalDescription(await pc.createAnswer());
-        await new Promise((resolve) => setTimeout(resolve, 1200));
+        await waitIce(pc);
         await ring("answer", pc.localDescription?.sdp || "");
       } else {
         await pc.setLocalDescription(await pc.createOffer());
-        await new Promise((resolve) => setTimeout(resolve, 1200));
+        await waitIce(pc);
         await ring(kind, pc.localDescription?.sdp || "");
       }
-      setCallOn(kind);
+      if (localVideo.current) localVideo.current.srcObject = stream;
     } catch {
-      toast.error("Call could not start.");
+      endCall();
+      toast.error("Allow the microphone to start the call.");
     }
   }
 
@@ -756,8 +852,12 @@ function ChatPage() {
   }
 
   async function erase(messageId: string) {
-    if (!messageId || sending) return;
-    setSending(true);
+    if (!messageId) return;
+    const previous = messages;
+    setMessages((current) => current.filter((row) => row.id !== messageId));
+    setPicked("");
+    setAsk("");
+    if (messageId.startsWith("local-") || !navigator.onLine) return;
     try {
       const res = await fetch("/api/nss-cloud", {
         method: "POST",
@@ -766,14 +866,27 @@ function ChatPage() {
       });
       const data = (await res.json()) as { ok?: boolean; error?: string };
       if (!res.ok || !data.ok) throw new Error(data.error || "Message was not deleted.");
-      setMessages((current) => current.filter((row) => row.id !== messageId));
-      setPicked("");
-      setAsk("");
     } catch (error) {
+      setMessages(previous);
       toast.error(error instanceof Error ? error.message : "Message was not deleted.");
-    } finally {
-      setSending(false);
     }
+  }
+
+  async function saveToGallery(message: ChatMessage) {
+    if (!message.media) return;
+    const blob = await (await fetch(message.media)).blob();
+    const name = message.extra?.fileName || (message.mediaType === "video" ? "nss-video.mp4" : message.mediaType === "audio" ? "nss-audio.webm" : message.mediaType === "file" ? "nss-file" : "nss-photo.jpg");
+    const file = new File([blob], name, { type: blob.type || "application/octet-stream" });
+    if (navigator.canShare?.({ files: [file] })) {
+      await navigator.share({ files: [file] });
+      return;
+    }
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = name;
+    link.click();
+    URL.revokeObjectURL(url);
   }
 
   async function clearThread(threadId: string) {
@@ -910,23 +1023,24 @@ function ChatPage() {
                 Edit
               </button>
             ) : null}
-            <button type="button" className="inline-flex items-center gap-1 rounded-full px-2 py-1.5 text-xs text-navy" onClick={() => { togglePref("hidden", chosen.id); setPicked(""); }}>
-              Delete for me
-            </button>
-            {canDelete ? (
-              <button type="button" className="inline-flex items-center gap-1 rounded-full px-2 py-1.5 text-xs text-red-700" onClick={() => setAsk("delete")}>
-                <Trash2 className="size-3.5" /> Delete for everyone
+            {chosen.media ? (
+              <button type="button" className="inline-flex items-center gap-1 rounded-full px-2 py-1.5 text-xs text-navy" onClick={() => void saveToGallery(chosen).catch(() => toast.error("Could not save that file."))}>
+                <Download className="size-3.5" /> Save
               </button>
             ) : null}
+            <button type="button" className="inline-flex items-center gap-1 rounded-full px-2 py-1.5 text-xs text-red-700" onClick={() => setAsk("delete")}>
+              <Trash2 className="size-3.5" /> Delete
+            </button>
           </div>
         ) : null}
         {ask === "delete" && chosen ? (
-          <div className="flex items-center justify-between gap-2 border-t border-border bg-white px-3 py-2 text-sm text-navy">
-            <span>Delete for everyone</span>
-            <span className="flex gap-2">
-              <button type="button" className="rounded-full bg-red-700 px-3 py-1 text-xs font-semibold text-white" onClick={() => void erase(chosen.id)}>Delete</button>
-              <button type="button" className="rounded-full px-3 py-1 text-xs" onClick={() => setAsk("")}>Cancel</button>
-            </span>
+          <div className="absolute inset-x-0 bottom-0 z-30 rounded-t-2xl bg-white px-4 pb-6 pt-3 text-[#111b21] shadow-2xl">
+            <p className="text-center text-sm text-[#667781]">Delete message?</p>
+            {canDelete ? (
+              <button type="button" className="mt-2 block w-full py-3 text-center text-red-600" onClick={() => void erase(chosen.id)}>Delete for everyone</button>
+            ) : null}
+            <button type="button" className="block w-full border-t py-3 text-center text-red-600" onClick={() => { togglePref("hidden", chosen.id); setPicked(""); setAsk(""); }}>Delete for me</button>
+            <button type="button" className="block w-full border-t py-3 text-center" onClick={() => setAsk("")}>Cancel</button>
           </div>
         ) : null}
         {ask === "clear" ? (
@@ -1095,6 +1209,7 @@ function ChatPage() {
     if (archivesOn ? !archived : archived) return null;
     const count = prefs.mutes.includes(id) ? 0 : prefs.marked.includes(id) ? Math.max(1, unreadCount(id)) : unreadCount(id);
     if (listTab === "unread" && count === 0) return null;
+    if (listTab === "fav" && !prefs.favs.includes(id)) return null;
     return (
       <button key={id} type="button" className={`flex w-full items-center gap-3 px-3 py-2.5 text-left ${active === id ? "bg-[#f0f2f5]" : "hover:bg-[#f5f6f6]"}`} onClick={() => openThread(id)}>
         <span className={`flex size-11 shrink-0 items-center justify-center rounded-full text-xs font-semibold text-paper ${group ? "bg-navy" : "bg-forest"}`}>{group ? group.title.slice(0, 1) : threadTitle(id).slice(0, 1)}</span>
@@ -1126,7 +1241,8 @@ function ChatPage() {
 
   return (
     <AppShell eyebrow="NSS CHAT" current="page">
-      <div className={`fixed inset-0 z-50 flex ${prefs.dark ? "bg-[#0b141a]" : "bg-[#efeae2]"}`}>
+      <div className={`fixed inset-0 z-50 flex ${prefs.dark ? "bg-[#0b141a]" : "bg-[#efeae2]"}`} onContextMenu={(event) => event.preventDefault()}>
+        {away ? <div className="absolute inset-0 z-[60] bg-[#075e54]" /> : null}
         <aside className={`${mobileList ? "flex" : "hidden"} h-full w-full flex-col md:flex md:w-96 md:border-r md:border-[#d1d7db] ${prefs.dark ? "bg-[#111b21] text-white" : "bg-white"}`}>
           <div className="flex items-center gap-3 bg-[#075e54] px-3 py-3 text-white">
             <Link to={session.role === "po" ? "/po" : session.role === "admin" ? "/admin-dashboard" : "/student-dashboard"} className="rounded-full p-1 hover:bg-white/10" aria-label="Back">
@@ -1140,6 +1256,7 @@ function ChatPage() {
           <div className="flex gap-2 bg-white px-3 py-2">
             <button type="button" className={`rounded-full px-3 py-1 text-sm ${listTab === "all" ? "bg-[#d9fdd3] text-[#008069]" : "bg-[#f0f2f5] text-[#54656f]"}`} onClick={() => setListTab("all")}>All</button>
             <button type="button" className={`rounded-full px-3 py-1 text-sm ${listTab === "unread" ? "bg-[#d9fdd3] text-[#008069]" : "bg-[#f0f2f5] text-[#54656f]"}`} onClick={() => setListTab("unread")}>Unread</button>
+            <button type="button" className={`rounded-full px-3 py-1 text-sm ${listTab === "fav" ? "bg-[#d9fdd3] text-[#008069]" : "bg-[#f0f2f5] text-[#54656f]"}`} onClick={() => setListTab("fav")}>Favourites</button>
           </div>
           {officer ? (
           <div className="border-b border-[#d1d7db] bg-white p-2">
@@ -1151,7 +1268,7 @@ function ChatPage() {
           ) : null}
           <div className="min-h-0 flex-1 overflow-y-auto">
             <p className="px-4 pt-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">Personal</p>
-            {meId && meId !== "po" ? (
+            {meId && meId !== "po" && (listTab !== "fav" || prefs.favs.includes(canonicalThread(`dm:${meId}:po`))) ? (
               <button type="button" className="flex w-full items-center gap-3 border-b border-border px-4 py-3 text-left hover:bg-muted" onClick={() => openThread(canonicalThread(`dm:${meId}:po`))}>
                 <span className="flex size-10 items-center justify-center rounded-full bg-navy text-xs font-semibold text-paper">PO</span>
                 <span>
@@ -1175,6 +1292,7 @@ function ChatPage() {
                   const thread = canonicalThread(`dm:${meId}:${person.id}`);
                   const archived = prefs.archives.includes(thread);
                   if (archivesOn ? !archived : archived) return null;
+                  if (listTab === "fav" && !prefs.favs.includes(thread)) return null;
                   const photo = roll.find((row) => row.volunteerId === person.id || row.id === person.id)?.photoUrl;
                   const count = unreadCount(thread);
                   return (
@@ -1229,6 +1347,7 @@ function ChatPage() {
                 ["View chat", () => setMenu(false)],
                 ["Search", () => setFinder(" ")],
                 ["Mute notifications", () => togglePref("mutes", canonicalThread(active))],
+                ["Favourite", () => togglePref("favs", canonicalThread(active))],
                 ["Disappearing messages", () => { const hours = prefs.disappear[canonicalThread(active)] ? 0 : 24; savePrefs({ ...prefs, disappear: { ...prefs.disappear, [canonicalThread(active)]: hours } }); }],
                 ["Wallpaper", () => { const next = WALLS[(WALLS.indexOf(prefs.wallpaper) + 1) % WALLS.length]; savePrefs({ ...prefs, wallpaper: next }); }],
                 ["More", () => setMenuMore((on) => !on)],
@@ -1267,12 +1386,16 @@ function ChatPage() {
             </div>
           ) : null}
           {callOn ? (
-            <div className="flex items-center justify-between bg-[#111b21] px-3 py-2 text-sm text-white">
-              <span>{callOn === "video" ? "Video call" : "Voice call"}</span>
-              <button type="button" className="rounded-full bg-red-600 p-2" aria-label="End call" onClick={() => endCall()}><PhoneOff className="size-4" /></button>
+            <div className="absolute inset-0 z-40 flex flex-col bg-[#111b21] text-white">
+              <video ref={remoteVideo} autoPlay playsInline className={`min-h-0 flex-1 bg-black object-cover ${callOn === "audio" ? "hidden" : ""}`} />
+              {callOn === "audio" ? <div className="flex flex-1 flex-col items-center justify-center"><span className="flex size-24 items-center justify-center rounded-full bg-[#00a884] text-3xl">{threadTitle(active).slice(0, 1)}</span><p className="mt-4 text-lg">{threadTitle(active)}</p><p className="text-sm text-white/70">Voice call</p></div> : null}
+              <video ref={localVideo} autoPlay muted playsInline className={`absolute right-3 top-4 h-36 w-24 rounded-xl object-cover ${callOn === "audio" ? "hidden" : ""}`} />
+              <div className="flex justify-center pb-8 pt-4">
+                <button type="button" className="rounded-full bg-red-600 p-4" aria-label="End call" onClick={() => endCall()}><PhoneOff className="size-6" /></button>
+              </div>
             </div>
-          ) : (peer?.call === "audio" || peer?.call === "video") && peer.callThread === canonicalThread(active) && !callOn ? (
-            <div className="flex items-center justify-between bg-[#111b21] px-3 py-2 text-sm text-white">
+          ) : (peer?.call === "audio" || peer?.call === "video") && peer.callThread === canonicalThread(active) ? (
+            <div className="absolute inset-x-0 top-16 z-30 mx-3 flex items-center justify-between rounded-2xl bg-[#111b21] px-4 py-3 text-sm text-white">
               <span>Incoming {peer.call} call</span>
               <button type="button" className="rounded-full bg-[#00a884] px-3 py-1" onClick={() => void startCall(peer.call === "video" ? "video" : "audio", peer.sdp)}>Answer</button>
             </div>

@@ -28,7 +28,7 @@ export function NspPwaRoot() {
     void (async () => {
       if ("caches" in window) {
         const keys = await caches.keys();
-        await Promise.all(keys.map((key) => caches.delete(key)));
+        await Promise.all(keys.filter((key) => key !== "nsp-shell-v1").map((key) => caches.delete(key)));
       }
       if (!("serviceWorker" in navigator)) return;
       const regs = await navigator.serviceWorker.getRegistrations();
