@@ -31,13 +31,13 @@ export function PageNav({
 
   return (
     <nav className="bg-navy text-paper">
-      <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-2 px-4 py-2 md:px-6">
-        <div className="flex flex-wrap items-center gap-1 text-sm">
+      <div className="mx-auto flex max-w-6xl items-center gap-2 px-3 py-1.5 md:px-6">
+        <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto text-sm [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {current !== "home" ? (
             <button
               type="button"
               onClick={goBack}
-              className="inline-flex items-center gap-1 rounded-sm px-3 py-2 hover:bg-white/10"
+              className="inline-flex h-10 shrink-0 items-center gap-1 rounded-full px-3 hover:bg-white/10"
             >
               <ArrowLeft className="size-4" />
               {t("back")}
@@ -46,60 +46,60 @@ export function PageNav({
           <Link
             to="/"
             className={cn(
-              "rounded-sm px-3 py-2 hover:bg-white/10",
-              current === "home" ? "bg-white/10" : "",
+              "shrink-0 rounded-full px-3 py-2 hover:bg-white/10",
+              current === "home" ? "bg-white/15" : "",
             )}
           >
             {t("home")}
           </Link>
-          <Link to="/gallery" className="rounded-sm px-3 py-2 hover:bg-white/10">
+          <Link to="/gallery" className="shrink-0 rounded-full px-3 py-2 hover:bg-white/10">
             {t("gallery")}
           </Link>
-          <Link to="/contact" className="rounded-sm px-3 py-2 hover:bg-white/10">
+          <Link to="/contact" className="shrink-0 rounded-full px-3 py-2 hover:bg-white/10">
             {t("contact")}
           </Link>
           {showDashboard && session ? (
             <Link
               to={session ? dash : "/login"}
               className={cn(
-                "rounded-sm px-3 py-2 hover:bg-white/10",
-                current === "dashboard" ? "bg-white/10" : "",
+                "shrink-0 rounded-full px-3 py-2 hover:bg-white/10",
+                current === "dashboard" ? "bg-white/15" : "",
               )}
             >
               {officer ? t("desk") : t("dashboard")}
             </Link>
           ) : null}
           {session ? (
-            <Link to="/chat" className="relative rounded-sm px-3 py-2 hover:bg-white/10">
+            <Link to="/chat" className="relative shrink-0 rounded-full px-3 py-2 hover:bg-white/10">
               {t("chat")}
               {unread > 0 ? <span className="ml-1 rounded-full bg-[#25d366] px-1.5 text-[10px] font-semibold text-[#111b21]">{unread > 9 ? "9+" : unread}</span> : null}
             </Link>
           ) : null}
           {officer ? (
             <>
-              <Link to="/po/attendance" className="rounded-sm px-3 py-2 hover:bg-white/10">
+              <Link to="/po/attendance" className="shrink-0 rounded-full px-3 py-2 hover:bg-white/10">
                 {t("attendance")}
               </Link>
-              <Link to="/po/reports" className="rounded-sm px-3 py-2 hover:bg-white/10">
+              <Link to="/po/reports" className="shrink-0 rounded-full px-3 py-2 hover:bg-white/10">
                 {t("reports")}
               </Link>
             </>
           ) : null}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex shrink-0 items-center gap-1">
           <Button
             size="sm"
             variant="outline"
-            className="h-9 border-white/20 bg-transparent text-paper hover:bg-white/10"
+            className="h-9 border-white/20 bg-transparent px-2 text-paper hover:bg-white/10"
             asChild
           >
-            <Link to="/install">
+            <Link to="/install" aria-label={t("install")}>
               <Download />
-              {t("install")}
+              <span className="hidden md:inline">{t("install")}</span>
             </Link>
           </Button>
-          <button type="button" className="rounded-sm px-2 py-2 text-xs hover:bg-white/10" onClick={() => setLang(lang === "gu" ? "en" : "gu")}>{lang === "gu" ? "EN" : "ગુ"}</button>
-          <button type="button" className="rounded-sm px-2 py-2 text-xs hover:bg-white/10" onClick={toggleDark}>{dark ? "Light" : "Dark"}</button>
+          <button type="button" className="h-9 rounded-full px-2.5 text-xs font-semibold hover:bg-white/10" onClick={() => setLang(lang === "gu" ? "en" : "gu")}>{lang === "gu" ? "EN" : "ગુ"}</button>
+          <button type="button" className="h-9 rounded-full px-2.5 text-xs font-semibold hover:bg-white/10" onClick={toggleDark}>{dark ? "Light" : "Dark"}</button>
           {session ? (
             <>
               <span className="hidden text-xs text-paper/70 sm:inline">{session.name}</span>

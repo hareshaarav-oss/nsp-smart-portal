@@ -55,9 +55,11 @@ export function AppShell({
   return (
     <div className="touch-ui flex min-h-dvh flex-col bg-bg text-foreground">
       {offline ? <div className="bg-[#111b21] px-4 py-1.5 text-center text-xs font-semibold text-white">Offline</div> : null}
-      <BrandHeader eyebrow={eyebrow} compact={compactHeader} />
-      <TricolourStrip />
-      <PageNav showDashboard={showDashboard} current={current} />
+      <div className="sticky top-0 z-40 bg-surface/95 backdrop-blur">
+        <BrandHeader eyebrow={eyebrow} compact={compactHeader} />
+        <TricolourStrip />
+        <PageNav showDashboard={showDashboard} current={current} />
+      </div>
       <main className="flex-1">{children}</main>
       <SiteFooter />
     </div>

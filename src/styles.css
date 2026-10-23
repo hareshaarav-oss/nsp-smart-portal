@@ -77,6 +77,30 @@ html.dark {
   [role="button"]:not(:disabled) {
     cursor: pointer;
   }
+  input, select, textarea {
+    font: inherit;
+  }
+  select {
+    min-height: 2.75rem;
+    border-radius: 0.75rem;
+    border: 1px solid var(--color-border);
+    background: var(--color-card);
+    padding-inline: 0.75rem;
+  }
+  table {
+    border-collapse: separate;
+    border-spacing: 0;
+  }
+  thead th {
+    font-size: 0.75rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--color-muted-foreground);
+    font-weight: 600;
+  }
+  tbody tr + tr td {
+    border-top: 1px solid var(--color-border);
+  }
 }
 
 .tri-strip {
@@ -108,6 +132,10 @@ html.dark {
 }
 .feed-scroll::-webkit-scrollbar { width: 6px; }
 .feed-scroll::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: 999px; }
+
+html.dark .text-navy { color: var(--color-foreground); }
+html.dark .bg-white { background: var(--color-card); }
+html.dark .text-paper { color: #f7f3ea; }
 
 @keyframes splash-rise {
   from { opacity: 0; transform: translateY(10px); }

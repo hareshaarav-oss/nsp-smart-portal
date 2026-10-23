@@ -25,6 +25,7 @@ export function BrandHeader({
             )}
           />
           <div className="min-w-0 flex-1 text-center">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-saffron">NSS Smart Portal</p>
             <p
               className={cn(
                 "text-balance font-display font-semibold leading-tight text-navy",
@@ -35,11 +36,11 @@ export function BrandHeader({
             </p>
             <p
               className={cn(
-                "mt-0.5 uppercase tracking-[0.18em] text-forest",
+                "mt-0.5 text-forest",
                 compact ? "text-[10px] md:text-xs" : "text-xs md:text-sm",
               )}
             >
-              {eyebrow ?? "Mansa · National Service Scheme"}
+              {eyebrow ?? "National Service Scheme"}
             </p>
           </div>
           <img

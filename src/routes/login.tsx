@@ -192,18 +192,21 @@ function LoginPage() {
           </CardHeader>
           <CardContent>
             <form className="space-y-4" onSubmit={onSubmit}>
-              <div className="space-y-1.5">
-                <Label htmlFor="role">Login as</Label>
-                <select
-                  id="role"
-                  className="flex h-10 w-full rounded-md border border-border bg-card px-3 text-sm"
-                  value={role}
-                  onChange={(e) => setRole(e.target.value as typeof role)}
-                >
-                  <option value="volunteer">Student / Volunteer</option>
-                  <option value="po">Programme Officer</option>
-                  <option value="admin">Admin</option>
-                </select>
+              <div className="grid grid-cols-3 gap-2">
+                {([
+                  ["volunteer", "Student"],
+                  ["po", "Officer"],
+                  ["admin", "Admin"],
+                ] as const).map(([value, label]) => (
+                  <button
+                    key={value}
+                    type="button"
+                    className={`h-11 rounded-xl text-sm font-semibold ${role === value ? "bg-navy text-paper" : "bg-muted text-foreground"}`}
+                    onClick={() => setRole(value)}
+                  >
+                    {label}
+                  </button>
+                ))}
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="id">{staff ? "Username" : "Username"}</Label>

@@ -63,7 +63,7 @@ export function PoNav({ current }: { current: string }) {
     Settings: "settings",
   };
   return (
-    <nav className="flex gap-1 overflow-x-auto pb-1 sm:flex-wrap">
+    <nav className="mt-3 flex gap-1 overflow-x-auto border-b border-border pb-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
       {ITEMS.map((item) => {
         const active = current === item.to;
         const Icon = item.icon;
@@ -72,10 +72,10 @@ export function PoNav({ current }: { current: string }) {
             key={item.to}
             to={item.to}
             className={cn(
-              "inline-flex h-10 shrink-0 items-center gap-2 rounded-md px-3 text-sm font-medium",
+              "inline-flex h-11 shrink-0 items-center gap-2 border-b-2 px-3 text-sm font-medium",
               active
-                ? "bg-primary text-primary-foreground"
-                : "bg-card text-foreground ring-1 ring-border hover:bg-muted",
+                ? "border-saffron text-navy"
+                : "border-transparent text-muted-foreground hover:text-foreground",
             )}
           >
             <Icon className="size-4" />
