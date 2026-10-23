@@ -43,6 +43,9 @@ export function WhatsAppGroupButtons({
   return (
     <div className="space-y-2 rounded-lg border border-forest/30 bg-forest/5 p-3">
       <p className="text-sm font-medium">WhatsApp groups</p>
+      <p className="text-xs text-muted-foreground">
+        Message is copied, then the group opens. Paste and send. Group invite links cannot pre-fill text.
+      </p>
       <div className="flex flex-wrap gap-2">
         {list.map((g) => (
           <Button key={g.id} type="button" size="sm" variant="forest" onClick={() => void sendGroup(g)}>
@@ -162,6 +165,10 @@ export function WhatsAppSendPanel({
                 Previous
               </Button>
             </div>
+            <p className="mt-2 text-xs text-muted-foreground">
+              WhatsApp will open with the message ready. Send it, return here, then continue. Group buttons
+              above post to girls / boys / leaders groups.
+            </p>
           </div>
         ) : (
           <p className="text-sm text-muted-foreground">No mobile numbers on file.</p>

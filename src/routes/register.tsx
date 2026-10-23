@@ -140,10 +140,11 @@ function RegisterPage() {
                 <p className="text-muted-foreground">{done.name} is now on the NSS roll.</p>
                 <div className="rounded-lg border border-border bg-muted/60 px-4 py-3 text-left text-sm">
                   <p>
-                    Username: <strong>{done.name.trim().split(/\s+/)[0]?.toUpperCase()}</strong>
+                    Username (first name in CAPITAL):{" "}
+                    <strong>{done.name.trim().split(/\s+/)[0]?.toUpperCase()}</strong>
                   </p>
                   <p>
-                    Password: <strong>{done.mobile}</strong>
+                    Password: registered mobile <strong>{done.mobile}</strong>
                   </p>
                   <p>
                     Volunteer ID: <strong>{done.id}</strong> · Enrollment: <strong>{done.enrollment}</strong>
@@ -174,7 +175,7 @@ function RegisterPage() {
                       Photo
                     </div>
                   )}
-                  <Label>Photograph</Label>
+                  <Label>Passport photograph (auto-compressed)</Label>
                   <input
                     type="file"
                     accept="image/*"

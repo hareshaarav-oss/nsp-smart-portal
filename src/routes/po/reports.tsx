@@ -54,6 +54,10 @@ function ReportsPage() {
       <OfficialLetterhead title="Official reports" compact />
       <div>
         <h2 className="font-display text-xl font-semibold">Reports</h2>
+        <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
+          Every downloaded report carries the college name, NSS SMART PORTAL, title and date. Print / PDF
+          embeds the College logo and NSS logo so the page is never blank. Excel uses the same letterhead rows.
+        </p>
       </div>
 
       <Card className="border-forest/30">
@@ -61,6 +65,10 @@ function ReportsPage() {
           <CardTitle className="text-base">Event-wise press report</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
+          <p className="text-sm text-muted-foreground">
+            Dedicated Press desk: choose the event, photos load from Gallery, write or paste Gujarati, attendance
+            prints at the foot, then View. English NAAC report is generated from the same file.
+          </p>
           <Button asChild>
             <Link to="/po/press">
               <Eye />
@@ -75,6 +83,10 @@ function ReportsPage() {
           <CardTitle className="text-base">Attendance — yearly & monthly (event-wise columns)</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
+          <p className="text-sm text-muted-foreground">
+            One Excel: Sr. No., Volunteer ID, Name, Unit, then a column for every event (Event name + date)
+            with Present / Absent. Full yearly covers academic year {academicYear()}. Monthly uses the month you pick.
+          </p>
           <div className="flex flex-wrap items-end gap-2">
             <Button onClick={() => downloadAttendanceExcel(state, { mode: "yearly" })}>
               <Download />
@@ -212,6 +224,7 @@ function ReportsPage() {
 function ReportCard({
   id,
   title,
+  body,
   onExcel,
   onPrint,
   preview,
@@ -234,6 +247,7 @@ function ReportCard({
         <CardTitle className="text-base">{title}</CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
+        <p className="text-sm text-muted-foreground">{body}</p>
         <div className="flex flex-wrap gap-2">
           <Button onClick={onExcel}>
             <Download />

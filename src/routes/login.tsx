@@ -68,7 +68,7 @@ function LoginPage() {
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!captcha || captchaIn.trim().toUpperCase() !== captcha) {
-      toast.error("Captcha does not match.");
+      toast.error("Captcha does not match. Please type the letters again.");
       refreshCaptcha();
       return;
     }
@@ -176,23 +176,9 @@ function LoginPage() {
     }
   }
 
-  async function recoverPassword() {
-    try {
-      const res = await fetch("/api/nss-cloud", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ action: "reset-password", username: helpName, mobile: helpMobile }),
-      });
-      const data = (await res.json()) as { ok?: boolean; error?: string };
-      if (!res.ok || !data.ok) {
-        toast.error(data.error || "Could not reset the password.");
-        return;
-      }
-      toast.success("Password reset.");
-      setHelp("none");
-    } catch {
-      toast.error("Could not reach the college server.");
-    }
+  function recoverPassword() {
+    toast("Your password is the mobile number you registered with.");
+    setHelp("none");
   }
 
   const staff = role !== "volunteer";
@@ -322,7 +308,7 @@ function LoginPage() {
             ) : null}
             {help === "pass" ? (
               <div className="mt-4 space-y-2 rounded-md border border-border p-3">
-                <p className="text-sm font-medium">Forgot password</p>
+                <p className="text-sm font-medium">Forgot password — resets to registered mobile</p>
                 <Input
                   placeholder="FIRST NAME in CAPITAL"
                   value={helpName}

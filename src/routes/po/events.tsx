@@ -384,6 +384,19 @@ function EventsPage() {
         Events
       </h2>
 
+      <Card className="border-saffron/40">
+        <CardContent className="grid gap-3 pt-5 sm:grid-cols-4">
+          <div className="sm:col-span-4">
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-saffron">NSS નિયમ મુજબ સેવા કલાક</p>
+            <p className="mt-1 text-sm text-muted-foreground">A volunteer completes 120 regular hours in a year. The special camp is extra.</p>
+          </div>
+          <div className="rounded-xl border border-border bg-muted/40 p-3"><p className="text-xs text-muted-foreground">One-day activity</p><p className="font-display text-2xl font-semibold text-navy">6</p><p className="text-xs">Plantation, blood donation, cleanliness, rally</p></div>
+          <div className="rounded-xl border border-border bg-muted/40 p-3"><p className="text-xs text-muted-foreground">Half-day activity</p><p className="font-display text-2xl font-semibold text-navy">4</p><p className="text-xs">Parade, national day, lecture</p></div>
+          <div className="rounded-xl border border-border bg-muted/40 p-3"><p className="text-xs text-muted-foreground">Orientation</p><p className="font-display text-2xl font-semibold text-navy">2</p><p className="text-xs">One session. Yearly block is 20 hours.</p></div>
+          <div className="rounded-xl border border-navy/20 bg-navy p-3 text-paper"><p className="text-xs text-paper/70">Special camp</p><p className="font-display text-2xl font-semibold">56</p><p className="text-xs text-paper/80">7 days × 8 hours</p></div>
+        </CardContent>
+      </Card>
+
       <Card>
         <CardContent className="pt-5">
           <form
@@ -482,10 +495,11 @@ function EventsPage() {
             </div>
 
             <div className="space-y-1.5 sm:col-span-2">
-              <Label>Service hours</Label>
+              <Label>Service hours, set by NSS rule</Label>
               <div className="rounded-xl border border-saffron/40 bg-saffron/10 px-3 py-3">
                 <p className="font-display text-2xl font-semibold text-navy">{nssHourRule(form).hours} hours</p>
                 <p className="text-sm font-medium text-navy">{nssHourRule(form).label}</p>
+                <p className="mt-1 text-xs text-muted-foreground">{nssHourRule(form).note}</p>
               </div>
             </div>
 
@@ -498,6 +512,7 @@ function EventsPage() {
                 />
                 Enable GPS / Geofence attendance
               </label>
+              <p className="text-xs text-muted-foreground">When enabled, QR attendance must be marked within the configured radius of this event location.</p>
               {form.geofenceEnabled ? (
                 <div className="grid gap-2 sm:grid-cols-3">
                   <Input type="number" step="any" placeholder="Latitude" value={form.geofenceLatitude ?? ""} onChange={(e) => setForm({ ...form, geofenceLatitude: e.target.value ? Number(e.target.value) : undefined })} />
@@ -579,8 +594,15 @@ function EventsPage() {
 
             <div className="space-y-2 sm:col-span-2">
               <Label>
-                Assign volunteers
+                Assign volunteers (optional)
               </Label>
+
+              <p className="text-xs text-muted-foreground">
+                Leave empty to assign by the
+                selected audience. Select specific
+                volunteers when this event is for a
+                fixed group.
+              </p>
 
               <div className="grid max-h-48 gap-2 overflow-auto rounded-xl border border-border p-3 sm:grid-cols-2">
                 {activeVolunteers(state).map(
@@ -930,6 +952,12 @@ function EventsPage() {
                 __html: qrSvgMarkup,
               }}
             />
+
+            <p className="max-w-md text-xs text-muted-foreground">
+              Event-specific QR. Duplicate
+              attendance for the same volunteer
+              and event is prevented.
+            </p>
 
             <div className="flex flex-wrap justify-center gap-2">
               <Button
