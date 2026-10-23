@@ -1698,15 +1698,24 @@ export async function readOneChat(id: string): Promise<ChatRow | null> {
 export async function readChatMedia(ids: string[]) {
   const unique = [...new Set(ids.map((id) => text(id)).filter((id) => /^chat[a-z0-9]{4,40}$/i.test(id)))].slice(0, 6);
   const docs = await Promise.all(unique.map((id) => getDocument(`notices/${id}`).catch(() => null)));
-  return docs.flatMap((row) => {
-    if (!row || text(row.kind) !== "chat") return [];
+  const out: { id: string; threadId: string; media: string; mediaType: "image" | "video" | "audio" | "file" }[] = [];
+  for (const row of docs) {
+    if (!row || text(row.kind) !== "chat") continue;
     const mediaType = text(row.mediaType) === "video" ? "video" : text(row.mediaType) === "audio" ? "audio" : text(row.mediaType) === "file" ? "file" : text(row.mediaType) === "image" ? "image" : "";
-    const media = mediaType ? openText(text(row.media)) : "";
+    if (!mediaType) continue;
+    const partCount = Number(text(row.parts)) || 0;
+    let media = openText(text(row.media));
+    if (!media && partCount > 0 && partCount <= 8) {
+      const chunks = await Promise.all(
+        Array.from({ length: partCount }, (_, index) => getDocument(`notices/${text(row._id)}p${index}`).catch(() => null)),
+      );
+      media = chunks.map((part) => openText(text(part?.media))).join("");
+    }
     const prefix = mediaType === "video" ? "data:video/" : mediaType === "audio" ? "data:audio/" : mediaType === "file" ? "data:" : "data:image/";
-    const safe = media.startsWith(prefix) && media.length < 800000 ? media : "";
-    if (!safe) return [];
-    return [{ id: text(row._id), threadId: text(row.threadId), media: safe, mediaType }];
-  });
+    if (!media.startsWith(prefix) || media.length >= 3400000) continue;
+    out.push({ id: text(row._id), threadId: text(row.threadId), media, mediaType });
+  }
+  return out;
 }
 
 export async function saveChatMessage(input: { threadId: string; text: string; senderId: string; senderName: string; replyName?: string; replyText?: string; media?: string; mediaType?: "" | "image" | "video" | "audio" | "file"; extra?: ChatExtra }) {
@@ -1715,8 +1724,23 @@ export async function saveChatMessage(input: { threadId: string; text: string; s
   const replyName = text(input.replyName).slice(0, 80);
   const replyText = text(input.replyText).slice(0, 140);
   const mediaType = input.mediaType === "video" || input.mediaType === "audio" || input.mediaType === "file" || input.mediaType === "image" ? input.mediaType : "";
-  const media = mediaType && input.media && input.media.length < 700000 ? input.media : "";
+  const incoming = mediaType && input.media && input.media.length < 3400000 ? input.media : "";
   const extra = input.extra;
+  let media = incoming.length <= 480000 ? incoming : "";
+  let parts = "";
+  if (incoming && !media) {
+    const size = 400000;
+    const count = Math.ceil(incoming.length / size);
+    if (count > 8) throw new Error("That file is too large.");
+    parts = String(count);
+    for (let index = 0; index < count; index += 1) {
+      await createDocument("notices", `${id}p${index}`, {
+        kind: "chat-part",
+        title: "NSS_CHAT_INTERNAL",
+        media: sealText(incoming.slice(index * size, (index + 1) * size)),
+      });
+    }
+  }
   await createDocument("notices", id, {
     kind: "chat",
     title: "NSS_CHAT_INTERNAL",
@@ -1727,7 +1751,8 @@ export async function saveChatMessage(input: { threadId: string; text: string; s
     replyName: replyName ? sealText(replyName) : "",
     replyText: replyText ? sealText(replyText) : "",
     media: media ? sealText(media) : "",
-    mediaType: media ? mediaType : "",
+    mediaType: incoming ? mediaType : "",
+    parts,
     extra: packExtra(extra),
     createdAt,
   });

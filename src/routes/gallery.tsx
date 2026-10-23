@@ -24,7 +24,6 @@ function GalleryPage() {
       <div className="mx-auto max-w-6xl px-4 pb-16">
         <OfficialLetterhead title="Activity photographs" compact className="mb-6" />
         <h1 className="font-display text-2xl font-semibold">Activity photographs</h1>
-        <p className="mt-1 text-sm text-muted-foreground">Event-wise folders. Photos saved from the PO desk also appear on Home.</p>
         <div className="mt-4 flex flex-wrap gap-2">
           <Button size="sm" variant={folder === "all" ? "default" : "outline"} onClick={() => setFolder("all")}>
             All
@@ -35,9 +34,6 @@ function GalleryPage() {
             </Button>
           ))}
         </div>
-        {shown.length === 0 ? (
-          <p className="mt-8 text-sm text-muted-foreground">No photographs yet. They appear here after the gallery desk uploads them.</p>
-        ) : null}
         <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {shown.map((item) => (
             <figure key={item.id} className="overflow-hidden rounded-xl border border-border bg-card">

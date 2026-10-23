@@ -66,7 +66,7 @@ function SmartCommandPage() {
 
   return <div className="space-y-6">
     <Card className="overflow-hidden border-primary/20 bg-gradient-to-br from-primary/5 via-card to-forest/5">
-      <CardHeader><CardTitle className="flex items-center gap-2"><BrainCircuit className="size-6 text-primary" /> NSS Smart Command Center <Badge tone="forest">Offline-ready</Badge></CardTitle><p className="text-sm text-muted-foreground">Ask in simple English or Gujarati. This assistant analyses the portal data locally; no external AI key is required.</p></CardHeader>
+      <CardHeader><CardTitle className="flex items-center gap-2"><BrainCircuit className="size-6 text-primary" /> NSS Smart Command Center <Badge tone="forest">Offline-ready</Badge></CardTitle></CardHeader>
       <CardContent>
         <div className="flex gap-2"><Input value={query} onChange={(e) => setQuery(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") run(); }} placeholder="Ask: attendance below 75…" /><button type="button" onClick={() => run()} className="inline-flex h-10 shrink-0 items-center gap-2 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground"><Search className="size-4" />Ask</button></div>
         <div className="mt-3 flex flex-wrap gap-2">{suggestions.map((x) => <button key={x} type="button" onClick={() => { setQuery(x); run(x); }} className="rounded-full border border-border bg-card px-3 py-1.5 text-xs hover:bg-muted">{x}</button>)}</div>

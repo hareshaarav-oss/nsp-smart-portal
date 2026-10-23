@@ -196,9 +196,9 @@ function CertificatesPage() {
           ) : null}
 
           <div className="flex flex-wrap gap-2">
-            <Button type="button" onClick={generate}>
+            <Button type="button" variant="forest" onClick={() => void printSelected().then(() => send())}>
               <Award />
-              Generate certificate
+              Issue now
             </Button>
             <Button type="button" variant="forest" onClick={send}>
               <Send />

@@ -6,6 +6,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { daysUntilBirthday, formatLongDate, isBirthdayOn, todayIso, byFullName } from "@/lib/nss/format";
 import { liveServiceHours, useNssStore } from "@/lib/nss/store";
+import { TomorrowBanner } from "@/components/nss/tomorrow";
 
 export const Route = createFileRoute("/po/")({ component: PoHome });
 
@@ -42,6 +43,7 @@ function PoHome() {
     { label: "Birthdays next 7 days", value: upcomingBirthdays },
   ];
   return <div className="space-y-6">
+    <TomorrowBanner />
     <div className="rounded-2xl bg-navy p-5 text-paper md:p-6">
       <h2 className="font-display text-2xl font-semibold">Desk</h2>
       <div className="mt-4 grid grid-cols-2 gap-2 lg:grid-cols-6"><HeroStat icon={Users} value={volunteers.length} label="Volunteers"/><HeroStat icon={GraduationCap} value={alumni} label="Alumni"/><HeroStat icon={ClipboardCheck} value={`${attendancePct}%`} label="Attendance"/><HeroStat icon={Clock} value={hours} label="Hours"/><HeroStat icon={CalendarDays} value={state.events.length} label="Events"/><HeroStat icon={Users} value={state.visitors} label="Visitors"/></div>

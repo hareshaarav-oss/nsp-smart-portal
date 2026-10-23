@@ -509,6 +509,19 @@ function AttendancePage() {
     setManualPayload("");
   }
 
+  const markIndex = useMemo(() => {
+    const att = new Map<string, boolean>();
+    const rsvp = new Map<string, "will_attend" | "will_not_attend">();
+    if (!current) return { att, rsvp };
+    for (const row of state.attendance ?? []) {
+      if (row.eventId === current.id) att.set(row.volunteerId, row.present);
+    }
+    for (const row of state.eventRsvps ?? []) {
+      if (row.eventId === current.id) rsvp.set(row.volunteerId, row.status);
+    }
+    return { att, rsvp };
+  }, [state.attendance, state.eventRsvps, current]);
+
   const attendanceSummary = useMemo(() => {
     if (!current) {
       return {
@@ -1029,20 +1042,9 @@ function AttendancePage() {
 
                 <tbody>
                   {volunteers.map((v) => {
-                    const rec = attendanceOf(
-                      state,
-                      v.id,
-                      current.id,
-                    );
-
-                    const rsvp = rsvpOf(
-                      state,
-                      v.id,
-                      current.id,
-                    );
-
-                    const present =
-                      rec?.present === true;
+                    const present = markIndex.att.get(v.id) === true;
+                    const rec = markIndex.att.has(v.id);
+                    const rsvpStatus = markIndex.rsvp.get(v.id);
 
                     return (
                       <tr
@@ -1062,11 +1064,11 @@ function AttendancePage() {
                         </td>
 
                         <td className="px-3 py-2">
-                          {!rsvp ? (
+                          {!rsvpStatus ? (
                             <span className="text-muted-foreground">
                               No Response
                             </span>
-                          ) : rsvp.status ===
+                          ) : rsvpStatus ===
                             "will_attend" ? (
                             <span className="font-medium">
                               Will Attend
@@ -1087,13 +1089,15 @@ function AttendancePage() {
                                   ? "forest"
                                   : "outline"
                               }
-                              onClick={() =>
+                              onClick={() => {
+                                const already = present && rec;
                                 state.setAttendance(
                                   v.id,
                                   current.id,
                                   true,
-                                )
-                              }
+                                );
+                                if (!already) toast.success(`${current.hours || 0} hours added for ${v.fullName}.`);
+                              }}
                             >
                               Present
                             </Button>

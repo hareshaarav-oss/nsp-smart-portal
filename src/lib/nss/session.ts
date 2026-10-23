@@ -152,7 +152,7 @@ export function loginVolunteer(
   if (!list.length) {
     return {
       ok: false,
-      error: "Username not found. Type your FIRST NAME in CAPITAL letters (example: MAHI). Use Forgot username if you need help.",
+      error: "Username not found.",
     };
   }
   const matched = list.filter((v) => passwordMatches(v, password));
@@ -162,13 +162,13 @@ export function loginVolunteer(
   if (list.length > 1 && !matched.length) {
     return {
       ok: false,
-      error: "More than one volunteer shares this first name. Enter the registered mobile number as password.",
+      error: "Wrong password.",
     };
   }
   if (!matched.length) {
     return {
       ok: false,
-      error: "Password is your registered mobile number (or the new password you set).",
+      error: "Wrong password.",
     };
   }
   return { ok: true, session: toSession(matched[0]) };
@@ -179,7 +179,7 @@ export function loginWithMpin(username: string, mpin: string, volunteers: Volunt
   const pin = mpin.trim();
   if (!/^\d{4}$/.test(pin)) return { ok: false, error: "MPIN must be 4 digits." };
   const v = list.find((s) => s.mpin === pin);
-  if (!v) return { ok: false, error: "MPIN does not match. Set MPIN from your student dashboard first." };
+  if (!v) return { ok: false, error: "MPIN does not match." };
   return { ok: true, session: toSession(v) };
 }
 

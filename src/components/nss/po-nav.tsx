@@ -19,6 +19,7 @@ import {
   Users,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useUi } from "@/lib/nss/ui-prefs";
 
 const ITEMS = [
   { to: "/po", label: "Dashboard", icon: LayoutDashboard },
@@ -41,6 +42,26 @@ const ITEMS = [
 ] as const;
 
 export function PoNav({ current }: { current: string }) {
+  const { t } = useUi();
+  const label: Record<string, string> = {
+    Dashboard: "dashboard",
+    Chat: "chat",
+    Volunteers: "volunteers",
+    Alumni: "alumni",
+    Attendance: "attendance",
+    Events: "events",
+    Press: "press",
+    Certificates: "certificates",
+    Notices: "notices",
+    Reports: "reports",
+    Birthdays: "birthdays",
+    Gallery: "gallery",
+    Logs: "logs",
+    "Smart Command": "smart",
+    "NSS Impact": "impact",
+    Backup: "backup",
+    Settings: "settings",
+  };
   return (
     <nav className="flex gap-1 overflow-x-auto pb-1 sm:flex-wrap">
       {ITEMS.map((item) => {
@@ -58,7 +79,7 @@ export function PoNav({ current }: { current: string }) {
             )}
           >
             <Icon className="size-4" />
-            {item.label}
+            {t(label[item.label] || item.label)}
           </Link>
         );
       })}

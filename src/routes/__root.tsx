@@ -42,6 +42,11 @@ export const Route = createRootRoute({
         <HeadContent />
       </head>
       <body>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: "try{if(localStorage.getItem('nsp-dark')==='1')document.documentElement.classList.add('dark')}catch(e){}",
+          }}
+        />
         <PreviewHostBridge />
         <AuthProvider>
           <HydrateGate>

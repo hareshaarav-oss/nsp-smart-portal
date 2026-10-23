@@ -97,17 +97,11 @@ function PressPage() {
       <OfficialLetterhead title="Press report" compact />
       <div>
         <h2 className="font-display text-xl font-semibold">Press report</h2>
-        <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-          Select an event. Photographs from the Gallery folder for that event load automatically. Write or
-          paste the Gujarati note. Present volunteers appear at the bottom. Then View the report — nothing
-          downloads until you print from the preview. The same file also makes the English NAAC report.
-        </p>
       </div>
 
       <Card className="border-forest/30">
         <CardHeader><CardTitle className="text-base">External Press Report Upload</CardTitle></CardHeader>
         <CardContent className="space-y-3">
-          <p className="text-sm text-muted-foreground">Upload a PDF, DOC or DOCX prepared outside the portal. It is automatically added to this Press Desk and remains available here for download.</p>
           <Input type="file" accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onChange={(e) => { void uploadExternal(e.target.files?.[0]); e.currentTarget.value = ""; }} />
           {pressReports.length ? <div className="space-y-2">{pressReports.map((r) => <div key={r.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border p-3 text-sm"><span className="flex min-w-0 items-center gap-3"><span className="rounded-lg bg-primary/10 p-2 text-primary"><FileText /></span><span className="min-w-0"><strong className="block truncate">{r.fileName}</strong><span className="block text-xs text-muted-foreground">{r.name} · {formatLongDate(r.date)}</span></span></span><span className="flex shrink-0 gap-2"><Button size="sm" variant="outline" onClick={() => void downloadExternal(r.id)}><Download />Download</Button><Button size="sm" variant="ghost" onClick={() => state.removePressReport(r.id)}><Trash2 />Remove</Button></span></div>)}</div> : <p className="text-sm text-muted-foreground">No external press reports uploaded yet.</p>}
         </CardContent>
@@ -129,12 +123,6 @@ function PressPage() {
               </option>
             ))}
           </select>
-          {event ? (
-            <p className="text-sm text-muted-foreground">
-              {event.location} · {photos.length} photograph(s) · {present.length} present (hours stay 0 until
-              you mark Present)
-            </p>
-          ) : null}
         </CardContent>
       </Card>
 
@@ -143,12 +131,7 @@ function PressPage() {
           <CardTitle className="text-base">2. Photographs (from Gallery)</CardTitle>
         </CardHeader>
         <CardContent>
-          {photos.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              No photos for this event yet. Open Gallery, choose this event name, and add photographs. They
-              appear here automatically.
-            </p>
-          ) : (
+          {photos.length === 0 ? null : (
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
               {photos.slice(0, 12).map((item) => (
                 <div key={item.id} className="overflow-hidden rounded-md border border-border">
@@ -163,7 +146,7 @@ function PressPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">3. Gujarati write-up — type or paste</CardTitle>
+          <CardTitle className="text-base">Write-up</CardTitle>
         </CardHeader>
         <CardContent>
           <Textarea className="gu min-h-56" value={gu} onChange={(e) => setGu(e.target.value)} />
@@ -172,15 +155,10 @@ function PressPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">4. Attendance list (auto)</CardTitle>
+          <CardTitle className="text-base">Attendance</CardTitle>
         </CardHeader>
         <CardContent>
-          {present.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              Mark Present on the Attendance page. Names then print at the foot of the press note, like the
-              Rakshabandhan file.
-            </p>
-          ) : (
+          {present.length === 0 ? null : (
             <ol className="columns-2 text-sm">
               {present.map((v) => (
                 <li key={v.id} className="mb-1">
@@ -207,7 +185,7 @@ function PressPage() {
             if (!event) return;
             setGu(defaultGujaratiPress(event, state.settings, present.length));
             setEn(defaultNaacEnglish(event, state.settings, present));
-            toast.success("Draft restored from event details.");
+            toast.success("Draft restored.");
           }}
         >
           Restore draft

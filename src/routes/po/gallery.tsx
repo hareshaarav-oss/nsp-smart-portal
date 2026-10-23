@@ -122,7 +122,7 @@ function PoGallery() {
       <Card>
         <CardContent className="grid gap-3 pt-5 sm:grid-cols-2">
           <div className="space-y-1.5">
-            <Label>Event (folder fills automatically)</Label>
+            <Label>Event</Label>
             <select
               className="h-10 w-full rounded-md border border-border bg-card px-3 text-sm"
               value={eventId}
@@ -155,7 +155,7 @@ function PoGallery() {
           >
             <Label className="mb-2 flex items-center gap-2">
               <Upload className="size-4" />
-              Multi-select photos / videos — or drop files here
+              Photos
             </Label>
             <input
               type="file"
@@ -168,9 +168,7 @@ function PoGallery() {
                 e.target.value = "";
               }}
             />
-            <p className="mt-2 text-xs text-muted-foreground">
-              {busy ? "Compressing and saving…" : `Saving into folder: ${eventName}`}
-            </p>
+            {busy ? <p className="mt-2 text-xs text-muted-foreground">Saving…</p> : null}
           </div>
         </CardContent>
       </Card>

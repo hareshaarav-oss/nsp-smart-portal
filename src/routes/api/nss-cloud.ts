@@ -272,6 +272,7 @@ export const Route = createFileRoute("/api/nss-cloud")({
             chatToken?: string;
             threadId?: string;
             text?: string;
+            title?: string;
             messageId?: string;
             replyName?: string;
             replyText?: string;
@@ -436,7 +437,7 @@ export const Route = createFileRoute("/api/nss-cloud")({
             const saved = await saveStudentToCloud({ ...body, nssRole: "Volunteer" });
             return Response.json(saved);
           }
-          if (body.action === "chat-sync" || body.action === "chat-send" || body.action === "chat-delete" || body.action === "chat-clear" || body.action === "chat-media" || body.action === "chat-edit" || body.action === "chat-react" || body.action === "chat-vote" || body.action === "chat-once" || body.action === "chat-presence" || body.action === "chat-block" || body.action === "chat-status" || body.action === "set-role" || body.action === "set-status") {
+          if (body.action === "chat-sync" || body.action === "chat-send" || body.action === "chat-delete" || body.action === "chat-clear" || body.action === "chat-media" || body.action === "chat-edit" || body.action === "chat-react" || body.action === "chat-vote" || body.action === "chat-once" || body.action === "chat-presence" || body.action === "chat-block" || body.action === "chat-status" || body.action === "set-role" || body.action === "set-status" || body.action === "announce") {
             const user = await readChatPass(text(body.chatToken));
             if (!user) return Response.json({ ok: false, error: "Sign in again to use NSS Chat." }, { status: 401 });
             if (body.action === "set-role" || body.action === "set-status") {
@@ -593,6 +594,23 @@ export const Route = createFileRoute("/api/nss-cloud")({
               await deleteChatMessages(ids);
               return Response.json({ ok: true, removed: ids });
             }
+            if (body.action === "announce") {
+              if (user.role !== "po" && user.role !== "admin") return Response.json({ ok: false, error: "Officers only." }, { status: 403 });
+              const title = text(body.title).slice(0, 80) || "NSS notice";
+              const note = text(body.text).slice(0, 500);
+              if (!note) return Response.json({ ok: false, error: "Type a message first." }, { status: 400 });
+              const id = `note${Date.now().toString(36)}`;
+              await upsertNotice(id, {
+                kind: "notice",
+                title,
+                text: note,
+                body: note,
+                date: new Date().toISOString().slice(0, 10),
+                createdAt: new Date().toISOString(),
+                audience: "all",
+              });
+              return Response.json({ ok: true, id });
+            }
             if (body.action === "chat-send") {
               const threadId = canonicalThread(text(body.threadId));
               const officer = user.role === "po" || user.role === "admin";
@@ -601,9 +619,9 @@ export const Route = createFileRoute("/api/nss-cloud")({
               const rawMedia = typeof body.media === "string" ? body.media.trim() : "";
               const mediaOk =
                 (mediaType === "image" && rawMedia.startsWith("data:image/") && rawMedia.length < 700000) ||
-                (mediaType === "video" && rawMedia.startsWith("data:video/") && rawMedia.length < 700000) ||
-                (mediaType === "audio" && (rawMedia.startsWith("data:audio/") || rawMedia.startsWith("data:video/webm")) && rawMedia.length < 700000) ||
-                (mediaType === "file" && rawMedia.startsWith("data:") && rawMedia.length < 500000);
+                (mediaType === "video" && rawMedia.startsWith("data:video/") && rawMedia.length < 3200000) ||
+                (mediaType === "audio" && (rawMedia.startsWith("data:audio/") || rawMedia.startsWith("data:video/webm")) && rawMedia.length < 1800000) ||
+                (mediaType === "file" && rawMedia.startsWith("data:") && rawMedia.length < 900000);
               if (rawMedia && !mediaOk) return Response.json({ ok: false, error: "That file is too large." }, { status: 400 });
               if (!validThread(threadId) || !canSeeThread(user, threadId) || (threadId === "channel" && !officer)) {
                 return Response.json({ ok: false, error: "You cannot send to that chat." }, { status: 403 });

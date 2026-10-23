@@ -19,7 +19,6 @@ type Section = "college" | "home" | "birthday" | "certificate" | "whatsapp" | "s
 function SettingsPage() {
   const settings = useNssStore((s) => s.settings);
   const update = useNssStore((s) => s.updateSettings);
-  const resetDemo = useNssStore((s) => s.resetDemo);
   const [section, setSection] = useState<Section>("college");
   const [draft, setDraft] = useState(settings);
   useEffect(() => setDraft(settings), [settings]);
@@ -34,13 +33,13 @@ function SettingsPage() {
         poPhoto: draft.poPhoto || "",
         principalPhoto: draft.principalPhoto || "",
       }).then((result) => {
-        if (result.ok) toast.success("Settings saved on this device and the college cloud.");
-        else if (result.queued) toast.success("Settings saved on this device. Photographs will reach the cloud when the internet is back.");
-        else toast.error(result.error || "Photograph stayed on this phone only.");
+        if (result.ok) toast.success("Settings saved.");
+        else if (result.queued) toast.success("Settings saved.");
+        else toast.error(result.error || "Could not save the photograph.");
       });
       return;
     }
-    toast.success("Settings saved on this device.");
+    toast.success("Settings saved.");
   };
   const [busy, setBusy] = useState<"principal" | "po" | null>(null);
 
@@ -53,7 +52,7 @@ function SettingsPage() {
     try {
       const url = await blobToDataUrl(file);
       updateDraft(kind === "college" ? { collegeLogo: url } : { nssLogo: url });
-      toast.success("Logo ready — click Save settings to publish it.");
+      toast.success("Logo ready.");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not load logo");
     }
@@ -70,7 +69,7 @@ function SettingsPage() {
       const { blob } = await compressPortrait(file);
       const url = await blobToDataUrl(blob);
       updateDraft(kind === "principal" ? { principalPhoto: url } : { poPhoto: url });
-      toast.success(kind === "principal" ? "Principal photograph ready — click Save settings" : "PO photograph ready — click Save settings");
+      toast.success("Photograph ready.");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not save photograph");
     } finally {
@@ -78,30 +77,26 @@ function SettingsPage() {
     }
   }
 
-  const sections: Array<[Section, string, string]> = [
-    ["college", "College & Officers", "Identity, people and contact"],
-    ["home", "Home Page", "Index page and slider controls"],
-    ["birthday", "Birthday", "Birthday radar and wishes"],
-    ["certificate", "Certificate", "Certificate output controls"],
-    ["whatsapp", "WhatsApp", "Groups and communication"],
-    ["security", "Security", "Admin and PO access"],
-    ["system", "System", "Academic year and appearance"],
+  const sections: Array<[Section, string]> = [
+    ["college", "College & Officers"],
+    ["home", "Home Page"],
+    ["birthday", "Birthday"],
+    ["certificate", "Certificate"],
+    ["whatsapp", "WhatsApp"],
+    ["security", "Security"],
+    ["system", "System"],
   ];
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="font-display text-2xl font-semibold">NSP Control Center</h2>
-        <p className="text-sm text-muted-foreground">Change portal content and behaviour without editing code.</p>
-      </div>
+      <h2 className="font-display text-2xl font-semibold">NSP Control Center</h2>
 
       <div className="grid gap-5 lg:grid-cols-[230px_1fr]">
         <Card className="h-fit lg:sticky lg:top-4">
           <CardContent className="p-2">
-            {sections.map(([id, title, sub]) => (
+            {sections.map(([id, title]) => (
               <button key={id} type="button" onClick={() => setSection(id)} className={`mb-1 w-full rounded-xl p-3 text-left ${section === id ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}>
                 <p className="text-sm font-semibold">{title}</p>
-                <p className={`text-[11px] ${section === id ? "text-primary-foreground/75" : "text-muted-foreground"}`}>{sub}</p>
               </button>
             ))}
           </CardContent>
@@ -118,15 +113,6 @@ function SettingsPage() {
           {section === "system" && <SystemSection settings={draft} update={updateDraft} />}
 
           <div className="flex justify-end"><Button onClick={saveSettings}>Save all changes</Button></div>
-
-          <Card className="border-danger/30">
-            <CardHeader><CardTitle className="text-base">Danger zone</CardTitle></CardHeader>
-            <CardContent>
-              <Button variant="outline" onClick={() => { if (confirm("Reset portal data to the seeded college roll?")) { resetDemo(); setDraft(useNssStore.getState().settings); toast.success("Restored sample data"); } }}>
-                Restore sample roll
-              </Button>
-            </CardContent>
-          </Card>
         </div>
       </div>
     </div>
@@ -178,7 +164,6 @@ function BirthdaySection({ settings, update }: Props) {
     <Toggle label="Show Birthday radar on dashboards" value={settings.birthdayShowOnDashboard !== false} onChange={(v) => update({ birthdayShowOnDashboard: v })} />
     <Field label="Birthday button label"><Input value={settings.birthdayAutoWishLabel ?? "Birthday wishes"} onChange={(e) => update({ birthdayAutoWishLabel: e.target.value })} /></Field>
     <Field label="WhatsApp birthday message"><Textarea className="gu min-h-64" value={settings.birthdayTemplate ?? BIRTHDAY_TEMPLATE} onChange={(e) => update({ birthdayTemplate: e.target.value })} /></Field>
-    <p className="text-xs text-muted-foreground">Use <code>{"{{NAME}}"}</code> to insert the volunteer name automatically. The existing Today / Week / Month / All birthday screens and gender-wise WhatsApp groups remain enabled.</p>
   </CardContent></Card>;
 }
 
@@ -192,13 +177,12 @@ function CertificateSection({ settings, update }: Props) {
         if (!file) return;
         if (!file.type.startsWith("image/")) { toast.error("Please choose a certificate image."); return; }
         const reader = new FileReader();
-        reader.onload = () => { update({ certificateTemplateUrl: String(reader.result) }); toast.success("Certificate design loaded — click Save settings"); };
+        reader.onload = () => { update({ certificateTemplateUrl: String(reader.result) }); toast.success("Certificate design loaded."); };
         reader.readAsDataURL(file);
         e.currentTarget.value = "";
       }} />
     </Field>
     {settings.certificateTemplateUrl ? <div className="overflow-hidden rounded-xl border border-border bg-muted p-2"><img src={settings.certificateTemplateUrl} alt="Certificate template preview" className="w-full rounded-lg object-contain" /></div> : null}
-    <p className="text-xs text-muted-foreground">Upload your approved design from outside. It becomes the certificate background; student name, event, academic year, date, Certificate ID, PO and Principal remain dynamic. No logo redraw or certificate redesign is performed.</p>
   </CardContent></Card>;
 }
 
@@ -217,7 +201,6 @@ function SecuritySection({ settings, update }: Props) {
     <Field label="PO password"><Input type="password" value={settings.poPassword} onChange={(e) => update({ poPassword: e.target.value })} /></Field>
     <Field label="Admin username"><Input value={settings.adminUsername} onChange={(e) => update({ adminUsername: e.target.value })} /></Field>
     <Field label="Admin password"><Input type="password" value={settings.adminPassword} onChange={(e) => update({ adminPassword: e.target.value })} /></Field>
-    <p className="text-xs text-muted-foreground sm:col-span-2">For a production deployment, move credential verification to authenticated server-side/cloud functions rather than relying only on browser settings.</p>
   </CardContent></Card>;
 }
 

@@ -40,6 +40,23 @@
   --shadow-md: 0 8px 24px rgb(11 31 58 / 0.08);
 }
 
+html.dark {
+  color-scheme: dark;
+  --color-bg: #12110e;
+  --color-surface: #1c1916;
+  --color-paper: #1c1916;
+  --color-foreground: #f4efe6;
+  --color-card: #1c1916;
+  --color-card-foreground: #f4efe6;
+  --color-muted: #2a2622;
+  --color-muted-foreground: #c8bfb2;
+  --color-border: #3a342c;
+  --color-secondary: #2a2622;
+  --color-secondary-foreground: #f4efe6;
+  --color-cream: #1c1916;
+  --color-ink: #f4efe6;
+}
+
 @layer base {
   html {
     -webkit-font-smoothing: antialiased;

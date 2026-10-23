@@ -3,6 +3,7 @@ import { useRef, useState } from "react";
 import { BarChart, Bar, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { toast } from "sonner";
 import { Award, Cake, CreditCard, Fingerprint, KeyRound, Lock, LogOut, MessageCircle, Pencil, Star } from "lucide-react";
+import { TomorrowBanner } from "@/components/nss/tomorrow";
 import { AppShell } from "@/components/nss/shell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -121,7 +122,7 @@ function VolunteerDash() {
         toast.error(data.error || "Could not update the password.");
         return;
       }
-      toast.success("Password updated on the college roll. Use it the next time you sign in.");
+      toast.success("Password updated.");
       setCur("");
       setNext("");
       setConfirm("");
@@ -134,6 +135,7 @@ function VolunteerDash() {
   return (
     <AppShell eyebrow="NSS STUDENT DASHBOARD" current="dashboard">
       <div className="mx-auto w-full max-w-6xl space-y-4 px-3 pb-4 sm:space-y-6 sm:px-4 md:px-6">
+        <TomorrowBanner />
         <div className="overflow-hidden rounded-2xl bg-navy p-5 text-paper shadow-md md:p-7">
           <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="grid w-full grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-5 [&>*]:w-full">
@@ -247,7 +249,7 @@ function VolunteerDash() {
 
         <div className="grid gap-4 lg:grid-cols-2">
           <Card><CardHeader><CardTitle>Recent Activity Table</CardTitle></CardHeader><CardContent className="overflow-x-auto"><table className="w-full min-w-[520px] text-sm"><thead className="border-b border-border text-left text-muted-foreground"><tr><th className="py-2">Activity</th><th>Date</th><th>Attendance</th><th>Hours</th></tr></thead><tbody>{events.filter((e)=>myAtt.some((a)=>a.eventId===e.id)).sort((a,b)=>b.date.localeCompare(a.date)).slice(0,6).map((e)=>{const r=attendanceOf(portalState,me.id,e.id);return <tr key={e.id} className="border-b border-border"><td className="py-2 font-medium">{e.name}</td><td>{formatLongDate(e.date)}</td><td><Badge tone={r?.present?"forest":"danger"}>{r?.present?"Present":"Absent"}</Badge></td><td>{r?.present?e.hours:0}</td></tr>})}</tbody></table></CardContent></Card>
-          <Card><CardHeader><CardTitle>Upcoming Events & RSVP</CardTitle></CardHeader><CardContent className="space-y-3">{upcoming.length?upcoming.slice(0,5).map((e)=>{const rsvp=rsvpOf(portalState,me.id,e.id);return <div key={e.id} className="rounded-xl border border-border p-3"><div className="flex flex-wrap justify-between gap-2"><strong>{e.name}</strong><Badge tone="saffron">Upcoming</Badge></div><p className="mt-1 text-xs text-muted-foreground">{formatLongDate(e.date)}{e.endDate&&e.endDate!==e.date?` – ${formatLongDate(e.endDate)}`:""} · {e.location}</p><div className="mt-3 flex flex-wrap gap-2"><Button size="sm" variant={rsvp?.status === "will_attend" ? "forest" : "outline"} onClick={()=>setEventRSVP(me.id,e.id,"will_attend")}>🟢 હા, હું હાજર રહીશ</Button><Button size="sm" variant={rsvp?.status === "will_not_attend" ? "danger" : "outline"} onClick={()=>setEventRSVP(me.id,e.id,"will_not_attend")}>🔴 ના, હું હાજર રહીશ નહીં</Button></div>{rsvp?<p className="mt-2 text-xs text-muted-foreground">Your response: {rsvp.status === "will_attend" ? "Will Attend" : "Will Not Attend"}</p>:<p className="mt-2 text-xs text-muted-foreground">Please respond before the event.</p>}</div>}):<p className="text-sm text-muted-foreground">No upcoming events.</p>}</CardContent></Card>
+          <Card><CardHeader><CardTitle>Upcoming Events & RSVP</CardTitle></CardHeader><CardContent className="space-y-3">{upcoming.length?upcoming.slice(0,5).map((e)=>{const rsvp=rsvpOf(portalState,me.id,e.id);return <div key={e.id} className="rounded-xl border border-border p-3"><div className="flex flex-wrap justify-between gap-2"><strong>{e.name}</strong><Badge tone="saffron">Upcoming</Badge></div><p className="mt-1 text-xs text-muted-foreground">{formatLongDate(e.date)}{e.endDate&&e.endDate!==e.date?` – ${formatLongDate(e.endDate)}`:""} · {e.location}</p><div className="mt-3 flex flex-wrap gap-2"><Button size="sm" variant={rsvp?.status === "will_attend" ? "forest" : "outline"} onClick={()=>setEventRSVP(me.id,e.id,"will_attend")}>🟢 હા, હું હાજર રહીશ</Button><Button size="sm" variant={rsvp?.status === "will_not_attend" ? "danger" : "outline"} onClick={()=>setEventRSVP(me.id,e.id,"will_not_attend")}>🔴 ના, હું હાજર રહીશ નહીં</Button></div></div>}):<p className="text-sm text-muted-foreground">No upcoming events.</p>}</CardContent></Card>
         </div>
 
         {panel === "edit" ? <EditProfile volunteerId={me.id} /> : null}
@@ -263,7 +265,7 @@ function VolunteerDash() {
             <CardContent>
               <form className="grid gap-3 sm:max-w-md" onSubmit={changePassword}>
                 <div className="space-y-1.5">
-                  <Label>Current password (registered mobile)</Label>
+                  <Label>Current password</Label>
                   <Input type="password" value={cur} onChange={(e) => setCur(e.target.value)} required />
                 </div>
                 <div className="space-y-1.5">
@@ -282,8 +284,66 @@ function VolunteerDash() {
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">MPIN and fingerprint</CardTitle>
+            <CardTitle className="text-base">Photo, mobile and MPIN</CardTitle>
           </CardHeader>
+          <CardContent>
+            <form
+              className="grid gap-3 sm:grid-cols-[auto_1fr_auto] sm:items-end"
+              onSubmit={(e) => {
+                e.preventDefault();
+                const pin = (document.getElementById("quick-mpin") as HTMLInputElement | null)?.value ?? "";
+                const mobile = (document.getElementById("quick-mobile") as HTMLInputElement | null)?.value ?? me.mobile;
+                if (pin && !/^\d{4}$/.test(pin)) {
+                  toast.error("MPIN must be 4 digits.");
+                  return;
+                }
+                const session = useSessionStore.getState().session;
+                void fetch("/api/nss-cloud", {
+                  method: "POST",
+                  headers: { "content-type": "application/json" },
+                  body: JSON.stringify({
+                    action: "update-profile",
+                    username: session?.volunteerId || me.volunteerId || me.id,
+                    password: session?.mobile || me.mobile,
+                    volunteerId: me.id,
+                    mobile,
+                    mpin: pin || undefined,
+                  }),
+                }).then(() => toast.success("Saved."));
+                updateVolunteer(me.id, { mobile, ...(pin ? { mpin: pin } : {}) });
+              }}
+            >
+              <label className="text-sm">
+                Photo
+                <input type="file" accept="image/*" className="mt-1 block w-36 text-xs" onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  e.target.value = "";
+                  if (!file) return;
+                  void compressPassport(file).then(({ blob }) => blobToDataUrl(blob)).then((photoUrl) => {
+                    updateVolunteer(me.id, { photoUrl });
+                    const session = useSessionStore.getState().session;
+                    return fetch("/api/nss-cloud", {
+                      method: "POST",
+                      headers: { "content-type": "application/json" },
+                      body: JSON.stringify({ action: "update-profile", username: session?.volunteerId || me.volunteerId || me.id, password: session?.mobile || me.mobile, volunteerId: me.id, photoUrl }),
+                    });
+                  }).then(() => toast.success("Photo saved.")).catch(() => toast.error("Could not save the photo."));
+                }} />
+              </label>
+              <label className="text-sm">
+                Mobile
+                <Input id="quick-mobile" className="mt-1" defaultValue={me.mobile} inputMode="tel" />
+              </label>
+              <label className="text-sm">
+                MPIN
+                <Input id="quick-mpin" className="mt-1 w-28" inputMode="numeric" placeholder={me.mpin ? "••••" : "4 digits"} />
+              </label>
+              <Button type="submit" className="sm:col-span-3 w-fit">Save</Button>
+            </form>
+          </CardContent>
+        </Card>
+
+        <Card>
           <CardContent className="space-y-3">
             <form
               className="flex flex-wrap items-end gap-2"
@@ -295,14 +355,26 @@ function VolunteerDash() {
                   return;
                 }
                 updateVolunteer(me.id, { mpin: pin });
-                toast.success("MPIN saved. Use Login with MPIN next time.");
+                const session = useSessionStore.getState().session;
+                void fetch("/api/nss-cloud", {
+                  method: "POST",
+                  headers: { "content-type": "application/json" },
+                  body: JSON.stringify({
+                    action: "update-profile",
+                    username: session?.volunteerId || me.volunteerId || me.id,
+                    password: session?.mobile || me.mobile,
+                    volunteerId: me.id,
+                    mpin: pin,
+                  }),
+                });
+                toast.success("MPIN saved.");
                 const el = document.getElementById("mpin-set") as HTMLInputElement | null;
                 if (el) el.value = "";
               }}
             >
               <div className="space-y-1.5">
                 <Label htmlFor="mpin-set">Set 4-digit MPIN</Label>
-                <Input id="mpin-set" inputMode="numeric" placeholder={me.mpin ? "MPIN is set" : "1234"} />
+                <Input id="mpin-set" inputMode="numeric" placeholder={me.mpin ? "••••" : ""} />
               </div>
               <Button type="submit">
                 <KeyRound />
@@ -316,7 +388,7 @@ function VolunteerDash() {
                 void registerFingerprint(me)
                   .then((id) => {
                     updateVolunteer(me.id, { webauthnId: id });
-                    toast.success("Fingerprint enabled on this device.");
+                    toast.success("Fingerprint saved.");
                   })
                   .catch((error: unknown) => {
                     toast.error(error instanceof Error ? error.message : "Fingerprint not available.");
@@ -324,7 +396,7 @@ function VolunteerDash() {
               }}
             >
               <Fingerprint />
-              {me.webauthnId ? "Fingerprint enabled — tap to re-link" : "Enable fingerprint login"}
+              {me.webauthnId ? "Fingerprint on" : "Enable fingerprint"}
             </Button>
           </CardContent>
         </Card>
@@ -488,6 +560,7 @@ function EditProfile({ volunteerId }: { volunteerId: string }) {
           username: session?.volunteerId || volunteerId,
           password: session?.mobile || form.mobile,
           volunteerId,
+          mobile: form.mobile,
           email: form.email,
           address: form.address,
           bloodGroup: form.bloodGroup,
@@ -513,7 +586,13 @@ function EditProfile({ volunteerId }: { volunteerId: string }) {
         [volunteer?.volunteerId || "", volunteer?.id || "", (volunteer?.fullName || "").toLowerCase(), session?.volunteerId || ""],
         photoUrl,
       );
-      toast.success("Profile saved on the college roll.");
+      if (session) {
+        useSessionStore.getState().setSession({
+          ...session,
+          mobile: form.mobile.replace(/\D/g, "").slice(-10) || session.mobile,
+        });
+      }
+      toast.success("Profile saved.");
     } catch {
       toast.error("Could not reach the college server.");
     }

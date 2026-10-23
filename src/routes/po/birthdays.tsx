@@ -10,6 +10,7 @@ import { WhatsAppGroupButtons, WhatsAppSendPanel } from "@/components/nss/whatsa
 import { BIRTHDAY_TEMPLATE } from "@/lib/nss/constants";
 import { sendBirthdayWish } from "@/lib/nss/birthday-card";
 import { daysUntilBirthday, formatLongDate, isBirthdayOn, parseDob, todayIso } from "@/lib/nss/format";
+import { useSessionStore } from "@/lib/nss/session";
 import { birthdayWish } from "@/lib/nss/whatsapp";
 import { useNssStore } from "@/lib/nss/store";
 import type { PortalSettings, Volunteer } from "@/lib/nss/types";
@@ -73,7 +74,7 @@ function BirthdaysPage() {
 
   return (
     <div className="space-y-6">
-      {birthdayDisabled ? <Card><CardContent className="pt-5"><p className="font-medium">Birthday feature is disabled.</p><p className="mt-1 text-sm text-muted-foreground">Enable it from Settings → Birthday.</p></CardContent></Card> : null}
+      {birthdayDisabled ? <Card><CardContent className="pt-5"><p className="font-medium">Birthday feature is disabled.</p></CardContent></Card> : null}
       <div>
         <h2 className="font-display text-xl font-semibold">Birthdays</h2>
         <p className="text-sm text-muted-foreground">
@@ -140,7 +141,6 @@ function BirthdaysPage() {
       <div className="space-y-2">
         <p className="text-sm font-medium">Wish template</p>
         <Textarea className="gu min-h-48" value={template} onChange={(e) => { setTemplate(e.target.value); updateSettings({ birthdayTemplate: e.target.value }); }} />
-        <p className="text-xs text-muted-foreground">{"{{NAME}} is replaced with the volunteer’s name."}</p>
       </div>
 
       <WhatsAppSendPanel
@@ -204,6 +204,11 @@ function BirthdayRow({
                 {busy ? "Preparing…" : "Photo wish"}
               </Button>
               {isToday ? <WhatsAppGroupButtons text={text} gender={v.gender} /> : null}
+              <Button size="sm" variant="outline" onClick={() => {
+                const role = useSessionStore.getState().session?.role === "admin" ? "admin" : "po";
+                sessionStorage.setItem("nsp-wish", JSON.stringify({ thread: `dm:${role}:${v.volunteerId || v.id}`, text }));
+                window.location.href = "/chat";
+              }}>Wish in chat</Button>
             </div>
           </div>
         </div>

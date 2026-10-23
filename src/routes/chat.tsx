@@ -1,6 +1,7 @@
 import { createFileRoute, Link, Navigate } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { ArrowLeft, Camera, Check, CheckCheck, Copy, Download, FileText, Lock, MapPin, Mic, MoreVertical, Paperclip, Phone, PhoneOff, Reply, Search, SendHorizonal, Smile, Star, Trash2, UserRound, Video, X } from "lucide-react";
+import { useUi } from "@/lib/nss/ui-prefs";
 import { toast } from "sonner";
 import { AppShell } from "@/components/nss/shell";
 import { Button } from "@/components/ui/button";
@@ -247,6 +248,7 @@ function ChatPage() {
   const [viewOnce, setViewOnce] = useState(false);
   const [forwarded, setForwarded] = useState(false);
   const [away, setAway] = useState(false);
+  const { t: say } = useUi();
   const scroller = useRef<HTMLDivElement>(null);
   const stick = useRef(true);
   const mediaBag = useRef(new Map<string, { media: string; mediaType: "image" | "video" | "audio" | "file" }>());
@@ -260,6 +262,17 @@ function ChatPage() {
   useEffect(() => {
     setSeen(readSeen());
     setPrefs(loadPrefs());
+    try {
+      const wish = JSON.parse(sessionStorage.getItem("nsp-wish") || "null") as { thread?: string; text?: string } | null;
+      sessionStorage.removeItem("nsp-wish");
+      if (wish?.thread) {
+        setActive(canonicalThread(wish.thread));
+        setMobileList(false);
+      }
+      if (wish?.text) setDraft(wish.text);
+    } catch {
+      /* ignore a bad wish */
+    }
     try {
       const saved = JSON.parse(localStorage.getItem("nsp-chat-box") || "[]") as ChatMessage[];
       if (Array.isArray(saved) && saved.length) setMessages((current) => (current.length ? current : saved));
@@ -285,18 +298,28 @@ function ChatPage() {
       const queued = JSON.parse(localStorage.getItem("nsp-chat-out") || "[]") as Record<string, unknown>[];
       if (!queued.length) return;
       localStorage.setItem("nsp-chat-out", "[]");
+      const left: Record<string, unknown>[] = [];
       for (const body of queued) {
-        await fetch("/api/nss-cloud", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ ...body, chatToken: token }),
-        }).catch(() => undefined);
+        try {
+          const res = await fetch("/api/nss-cloud", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ ...body, chatToken: token }),
+          });
+          if (!res.ok) left.push(body);
+        } catch {
+          left.push(body);
+        }
       }
+      const newer = JSON.parse(localStorage.getItem("nsp-chat-out") || "[]") as Record<string, unknown>[];
+      if (!stop) localStorage.setItem("nsp-chat-out", JSON.stringify([...left, ...newer].slice(-15)));
     }
     void flush();
+    const timer = window.setInterval(() => void flush(), 20000);
     window.addEventListener("online", flush);
     return () => {
       stop = true;
+      window.clearInterval(timer);
       window.removeEventListener("online", flush);
     };
   }, [token]);
@@ -546,12 +569,12 @@ function ChatPage() {
     if (!file) return;
     try {
       if (file.type.startsWith("video/")) {
-        if (file.size > 380000) {
+        if (file.size > 2200000) {
           toast.error("Video is too large.");
           return;
         }
         const media = await readData(file);
-        if (!media.startsWith("data:video/") || media.length > 520000) {
+        if (!media.startsWith("data:video/") || media.length > 3200000) {
           toast.error("Video is too large.");
           return;
         }
@@ -559,12 +582,12 @@ function ChatPage() {
         return;
       }
       if (file.type.startsWith("audio/")) {
-        if (file.size > 380000) {
+        if (file.size > 1200000) {
           toast.error("Audio is too large.");
           return;
         }
         const media = await readData(file);
-        if (!media.startsWith("data:audio/") || media.length > 500000) {
+        if (!media.startsWith("data:audio/") || media.length > 1800000) {
           toast.error("Audio is too large.");
           return;
         }
@@ -572,12 +595,12 @@ function ChatPage() {
         return;
       }
       if (!file.type.startsWith("image/") || file.type === "image/gif") {
-        if (file.size > 380000) {
+        if (file.size > 650000) {
           toast.error("That file is too large.");
           return;
         }
         const media = await readData(file);
-        if (!media.startsWith("data:") || media.length > 500000) {
+        if (!media.startsWith("data:") || media.length > 900000) {
           toast.error("That file is too large.");
           return;
         }
@@ -708,12 +731,12 @@ function ChatPage() {
       rec.onstop = () => {
         stream.getTracks().forEach((track) => track.stop());
         const blob = new Blob(bits, { type: rec.mimeType || "audio/webm" });
-        if (blob.size > 380000) {
+        if (blob.size > 1200000) {
           toast.error("Voice message is too long.");
           return;
         }
         void readData(new File([blob], "voice.webm", { type: blob.type })).then((media) => {
-          if (media.startsWith("data:") && media.length < 520000) setPending({ media, mediaType: "audio", name: "Voice message" });
+          if (media.startsWith("data:") && media.length < 1800000) setPending({ media, mediaType: "audio", name: "Voice message" });
         });
       };
       recorder.current = rec;
@@ -800,7 +823,15 @@ function ChatPage() {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: kind === "video" });
       localStream.current = stream;
-      const pc = new RTCPeerConnection({ iceServers: [{ urls: "stun:stun.l.google.com:19302" }] });
+      const pc = new RTCPeerConnection({
+        iceServers: [
+          { urls: "stun:stun.l.google.com:19302" },
+          { urls: "stun:stun1.l.google.com:19302" },
+          { urls: "turn:openrelay.metered.ca:80", username: "openrelayproject", credential: "openrelayproject" },
+          { urls: "turn:openrelay.metered.ca:443", username: "openrelayproject", credential: "openrelayproject" },
+          { urls: "turn:openrelay.metered.ca:443?transport=tcp", username: "openrelayproject", credential: "openrelayproject" },
+        ],
+      });
       callPeer.current = pc;
       stream.getTracks().forEach((track) => pc.addTrack(track, stream));
       pc.ontrack = (event) => {
@@ -833,6 +864,11 @@ function ChatPage() {
     for (const person of directory.slice(0, 12)) {
       await postChat({ text, kind: "broadcast" }, canonicalThread(`dm:${meId}:${person.id}`)).catch(() => undefined);
     }
+    await fetch("/api/nss-cloud", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ action: "announce", chatToken: token, title: "Programme Officer", text }),
+    }).catch(() => undefined);
     setDraft("");
   }
 
@@ -1143,7 +1179,7 @@ function ChatPage() {
                   }
                 }}
                 rows={1}
-                placeholder="Message"
+                placeholder={say("message")}
                 className="max-h-28 min-h-12 flex-1 resize-none bg-transparent py-3 text-[16px] outline-none"
               />
               <button type="button" className="mb-1 flex size-10 items-center justify-center text-[#54656f]" aria-label="Attach" onClick={() => { setEmojiOn(false); setSheet((on) => !on); }}>

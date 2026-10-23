@@ -1,6 +1,8 @@
 import { Link, useRouter } from "@tanstack/react-router";
 import { ArrowLeft, Download } from "lucide-react";
 import { dashboardPath, isOfficer, useSessionStore } from "@/lib/nss/session";
+import { useUi } from "@/lib/nss/ui-prefs";
+import { useChatUnread } from "@/components/nss/chat-alert";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -16,6 +18,8 @@ export function PageNav({
   const router = useRouter();
   const dash = dashboardPath(session);
   const officer = isOfficer(session);
+  const { lang, dark, setLang, toggleDark, t } = useUi();
+  const unread = useChatUnread();
 
   function goBack() {
     if (window.history.length > 1) {
@@ -36,7 +40,7 @@ export function PageNav({
               className="inline-flex items-center gap-1 rounded-sm px-3 py-2 hover:bg-white/10"
             >
               <ArrowLeft className="size-4" />
-              Back
+              {t("back")}
             </button>
           ) : null}
           <Link
@@ -46,13 +50,13 @@ export function PageNav({
               current === "home" ? "bg-white/10" : "",
             )}
           >
-            Home
+            {t("home")}
           </Link>
           <Link to="/gallery" className="rounded-sm px-3 py-2 hover:bg-white/10">
-            Gallery
+            {t("gallery")}
           </Link>
           <Link to="/contact" className="rounded-sm px-3 py-2 hover:bg-white/10">
-            Contact
+            {t("contact")}
           </Link>
           {showDashboard && session ? (
             <Link
@@ -62,19 +66,22 @@ export function PageNav({
                 current === "dashboard" ? "bg-white/10" : "",
               )}
             >
-              {officer ? "Desk" : "Back to dashboard"}
+              {officer ? t("desk") : t("dashboard")}
+            </Link>
+          ) : null}
+          {session ? (
+            <Link to="/chat" className="relative rounded-sm px-3 py-2 hover:bg-white/10">
+              {t("chat")}
+              {unread > 0 ? <span className="ml-1 rounded-full bg-[#25d366] px-1.5 text-[10px] font-semibold text-[#111b21]">{unread > 9 ? "9+" : unread}</span> : null}
             </Link>
           ) : null}
           {officer ? (
             <>
-              <Link to="/chat" className="rounded-sm px-3 py-2 hover:bg-white/10">
-                Chat
-              </Link>
               <Link to="/po/attendance" className="rounded-sm px-3 py-2 hover:bg-white/10">
-                Attendance
+                {t("attendance")}
               </Link>
               <Link to="/po/reports" className="rounded-sm px-3 py-2 hover:bg-white/10">
-                Reports
+                {t("reports")}
               </Link>
             </>
           ) : null}
@@ -88,9 +95,11 @@ export function PageNav({
           >
             <Link to="/install">
               <Download />
-              Install NSP
+              {t("install")}
             </Link>
           </Button>
+          <button type="button" className="rounded-sm px-2 py-2 text-xs hover:bg-white/10" onClick={() => setLang(lang === "gu" ? "en" : "gu")}>{lang === "gu" ? "EN" : "ગુ"}</button>
+          <button type="button" className="rounded-sm px-2 py-2 text-xs hover:bg-white/10" onClick={toggleDark}>{dark ? "Light" : "Dark"}</button>
           {session ? (
             <>
               <span className="hidden text-xs text-paper/70 sm:inline">{session.name}</span>
@@ -103,7 +112,7 @@ export function PageNav({
                   window.location.href = "/";
                 }}
               >
-                Sign out
+                {t("signout")}
               </Button>
             </>
           ) : (
@@ -113,7 +122,7 @@ export function PageNav({
               className="h-9 border-white/20 bg-transparent text-paper hover:bg-white/10"
               asChild
             >
-              <Link to="/login">Sign in</Link>
+              <Link to="/login">{t("signin")}</Link>
             </Button>
           )}
         </div>

@@ -11,7 +11,7 @@ import { isOfficer, useSessionStore } from "./session";
 import { academicYear, byFullName, padId, parseDob, titleFirstName } from "./format";
 import { deleteMedia } from "./media";
 import { cloudPost, mirrorPortal, readPortalMirror } from "./dual-store";
-import { assignSequentialIds, certificateYear, formatCertificateSerial, nextCertificateSeq } from "./certificates";
+import { assignSequentialIds, certificateYear, nextCertificateSeq } from "./certificates";
 import { nssHourRule } from "./hours";
 
 function purgedKey(value: string) {
@@ -968,8 +968,7 @@ export const useNssStore =
                             ""
                           : "",
 
-                      mpin:
-                        prev?.mpin,
+                      mpin: self ? row.mpin || prev?.mpin || "" : "",
 
                       webauthnId:
                         prev?.webauthnId,
@@ -2186,11 +2185,7 @@ export const useNssStore =
               )
               .sort(byFullName)
               .map((volunteer) => {
-                const certificateId =
-                  formatCertificateSerial(
-                    year,
-                    seq,
-                  );
+                const certificateId = `NSS/${year}/${String(volunteer.volunteerId || seq).replace(/\s+/g, "").slice(0, 24)}`;
                 seq += 1;
                 return {
                   id: `crt-${eventId}-${volunteer.id}`,
