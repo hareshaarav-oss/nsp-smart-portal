@@ -32,7 +32,7 @@ export function PageNav({
   return (
     <nav className="bg-navy text-paper">
       <div className="mx-auto flex max-w-6xl items-center gap-2 px-3 py-1.5 md:px-6">
-        <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto text-sm [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1 text-sm">
           {current !== "home" ? (
             <button
               type="button"

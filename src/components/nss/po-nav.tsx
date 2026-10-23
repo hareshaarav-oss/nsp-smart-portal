@@ -63,7 +63,7 @@ export function PoNav({ current }: { current: string }) {
     Settings: "settings",
   };
   return (
-    <nav className="mt-3 flex gap-1 overflow-x-auto border-b border-border pb-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+    <nav className="mt-3 flex flex-wrap gap-x-1 border-b border-border">
       {ITEMS.map((item) => {
         const active = current === item.to;
         const Icon = item.icon;

@@ -126,9 +126,7 @@ html.dark {
   }
 }
 .feed-scroll {
-  max-height: 20rem;
   padding-right: 0.25rem;
-  overflow-y: auto;
 }
 .feed-scroll::-webkit-scrollbar { width: 6px; }
 .feed-scroll::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: 999px; }

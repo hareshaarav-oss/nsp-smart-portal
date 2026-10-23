@@ -134,46 +134,53 @@ function Home() {
           </section>
 
           <section className="mt-5 overflow-hidden rounded-3xl border border-border bg-card shadow-sm">
-            <div className="grid md:grid-cols-[1.4fr_0.8fr]">
+            <div className="flex flex-wrap items-end justify-between gap-3 border-b border-border px-5 py-4">
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-saffron">Welcome to NSP</p>
+                <h1 className="font-display text-2xl text-navy">NSS Smart Portal</h1>
+                <p className="text-sm text-muted-foreground">{settings.collegeName}</p>
+              </div>
+              <span className="rounded-full bg-forest/10 px-3 py-1.5 text-xs font-semibold text-forest">Cloud connected</span>
+            </div>
+            <div className="grid lg:grid-cols-[1.3fr_0.85fr_0.85fr]">
               <div className="p-5 md:p-7">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-saffron">Notice</p>
                 {latestNotices[0] ? (
                   <>
-                    <h1 className="mt-2 font-display text-3xl text-navy">{latestNotices[0].title}</h1>
+                    <h2 className="mt-2 font-display text-3xl text-navy">{latestNotices[0].title}</h2>
                     <p className="mt-1 text-xs text-muted-foreground">{formatLongDate(latestNotices[0].date)}</p>
-                    <p className="gu mt-3 max-w-2xl text-sm leading-relaxed text-foreground/80">{latestNotices[0].body}</p>
+                    <p className="gu mt-3 text-sm leading-relaxed">{latestNotices[0].body}</p>
                   </>
                 ) : (
-                  <>
-                    <h1 className="mt-2 font-display text-3xl text-navy">{settings.collegeShort || settings.collegeName}</h1>
-                    <p className="mt-3 text-sm text-muted-foreground">{t("emptyNotice")}</p>
-                  </>
+                  <p className="mt-3 text-sm text-muted-foreground">{t("emptyNotice")}</p>
                 )}
                 <div className="mt-6 grid grid-cols-2 gap-px overflow-hidden rounded-2xl border border-border bg-border sm:grid-cols-4">
                   <MiniStat label="Volunteers" value={shownVolunteers} />
-                  <MiniStat label="Hours" value={hours} />
+                  <MiniStat label="Service hours" value={hours} />
                   <MiniStat label="Alumni" value={alumniCount} />
-                  <MiniStat label="Visitors" value={visitors} />
+                  <MiniStat label="Portal visitors" value={visitors} />
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-3 border-t border-border bg-muted/40 p-5 md:grid-cols-1 md:border-t-0 md:border-l">
-                <HomeOfficer role="Programme Officer" name={settings.poName} photo={settings.poPhoto} />
-                <HomeOfficer role="Principal" name={settings.principalName} photo={settings.principalPhoto} />
+              <div className="border-t border-border p-5 lg:border-t-0 lg:border-l">
+                <HomeOfficer role="Programme Officer" name={settings.poName} quote={settings.poQuote} photo={settings.poPhoto} />
+              </div>
+              <div className="border-t border-border p-5 lg:border-t-0 lg:border-l">
+                <HomeOfficer role="Principal" name={settings.principalName} quote={settings.principalQuote} photo={settings.principalPhoto} />
               </div>
             </div>
-            {collegeGallery.length ? <div className="border-t border-border p-4"><PhotoCarousel items={collegeGallery} /></div> : null}
+            <div className="border-t border-border p-4"><PhotoCarousel items={collegeGallery} /></div>
           </section>
 
           {rollPhotos.length ? (
             <section className="mt-6">
               <Card className="shadow-md">
                 <CardContent className="p-5">
-                  <h2 className="font-display text-lg text-navy">Volunteers</h2>
-                  <div className="mt-4 grid grid-cols-4 gap-3 sm:grid-cols-6 md:grid-cols-8">
-                    {rollPhotos.slice(0, 16).map((v) => (
+                  <h2 className="font-display text-xl text-navy">Volunteer photographs</h2>
+                  <div className="mt-4 grid grid-cols-3 gap-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8">
+                    {rollPhotos.map((v) => (
                       <figure key={v.id} className="text-center">
                         <img src={v.photoUrl} alt="" className="mx-auto h-24 w-20 rounded-md object-cover ring-1 ring-border" />
-                        <figcaption className="mt-1 line-clamp-2 text-[11px] leading-tight text-navy">
+                        <figcaption className="mt-1 text-[11px] leading-tight text-navy">
                           {v.fullName}
                           <span className="mt-0.5 block font-semibold text-forest">{volunteerHours(portal, v.id)} hrs</span>
                         </figcaption>
@@ -188,8 +195,8 @@ function Home() {
           <section className="mt-6 grid gap-4 md:grid-cols-2">
             <Card>
               <CardContent className="p-5">
-                <h2 className="font-display text-lg text-navy">Notices</h2>
-                <div className="feed-scroll mt-3 space-y-3">
+                <h2 className="font-display text-xl text-navy">Latest news & notices</h2>
+                <div className="mt-3 space-y-3">
                   {latestNotices.length === 0 ? (
                     <p className="py-8 text-center text-sm text-muted-foreground">{t("emptyNotice")}</p>
                   ) : (
@@ -210,8 +217,8 @@ function Home() {
             </Card>
             <Card>
               <CardContent className="p-5">
-                <h2 className="font-display text-lg text-navy">Activities</h2>
-                <div className="feed-scroll mt-3 space-y-2">
+                <h2 className="font-display text-xl text-navy">Upcoming activities</h2>
+                <div className="mt-3 space-y-2">
                   {upcoming.length === 0 && completed.length === 0 ? (
                     <p className="py-8 text-center text-sm text-muted-foreground">No upcoming event.</p>
                   ) : null}
@@ -284,12 +291,13 @@ function MiniStat({ label, value }: { label: string; value: number }) {
   return <div className="bg-card px-3 py-3 text-center"><p className="font-display text-2xl text-navy">{value}</p><p className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</p></div>;
 }
 
-function HomeOfficer({ role, name, photo }: { role: string; name: string; photo?: string }) {
+function HomeOfficer({ role, name, quote, photo }: { role: string; name: string; quote: string; photo?: string }) {
   return (
     <div className="text-center">
-      {photo ? <img src={photo} alt="" className="mx-auto h-24 w-20 rounded-2xl object-cover" /> : <div className="mx-auto h-24 w-20 rounded-2xl bg-navy/10" />}
-      <p className="mt-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-forest">{role}</p>
-      <p className="text-sm font-medium text-navy">{name}</p>
+      <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-forest">{role}</p>
+      {photo ? <img src={photo} alt={name} className="mx-auto mt-3 h-28 w-24 rounded-2xl object-cover" /> : <div className="mx-auto mt-3 h-28 w-24 rounded-2xl bg-muted" />}
+      <p className="mt-3 text-sm font-semibold text-navy">{name}</p>
+      {quote ? <p className="gu mt-2 text-xs leading-relaxed text-muted-foreground">“{quote}”</p> : null}
     </div>
   );
 }
