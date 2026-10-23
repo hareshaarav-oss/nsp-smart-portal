@@ -1,4 +1,5 @@
 import { Link } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
 import {
   Award,
   BrainCircuit,
@@ -73,6 +74,12 @@ const GROUPS = [
 
 export function PoNav({ current }: { current: string }) {
   const { t, lang } = useUi();
+  const openName = GROUPS.find((group) => group.items.some((item) => item.to === current))?.en ?? "Desk";
+  const [open, setOpen] = useState(openName);
+  useEffect(() => {
+    setOpen(openName);
+  }, [openName]);
+  const group = GROUPS.find((item) => item.en === open) ?? GROUPS[0];
   const label: Record<string, string> = {
     Dashboard: "dashboard",
     Chat: "chat",
@@ -93,33 +100,46 @@ export function PoNav({ current }: { current: string }) {
     Settings: "settings",
   };
   return (
-    <nav className="mt-5 overflow-hidden border border-saffron/50 bg-surface">
-      {GROUPS.map((group) => (
-        <div key={group.en} className="grid grid-cols-1 border-b border-saffron/30 last:border-b-0 sm:grid-cols-[7.5rem_1fr]">
-          <p className="flex items-center bg-navy px-3 py-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-saffron">
-            {lang === "gu" ? group.gu : group.en}
-          </p>
-          <div className="flex flex-wrap items-center gap-x-1 px-2 py-1">
-            {group.items.map((item) => {
-              const active = current === item.to;
-              const Icon = item.icon;
-              return (
-                <Link
-                  key={item.to}
-                  to={item.to}
-                  className={cn(
-                    "inline-flex h-10 items-center gap-1.5 px-3 text-sm",
-                    active ? "font-semibold text-saffron underline decoration-saffron underline-offset-8" : "text-navy hover:text-saffron",
-                  )}
-                >
-                  <Icon className="size-3.5" />
-                  {t(label[item.label] || item.label)}
-                </Link>
-              );
-            })}
-          </div>
-        </div>
-      ))}
+    <nav className="mt-6">
+      <div role="tablist" className="flex gap-1 overflow-x-auto border-b border-saffron/70 [scrollbar-width:none]">
+        {GROUPS.map((item) => {
+          const on = item.en === group.en;
+          return (
+            <button
+              key={item.en}
+              type="button"
+              role="tab"
+              aria-selected={on}
+              onClick={() => setOpen(item.en)}
+              className={cn(
+                "-mb-px h-11 shrink-0 border px-4 text-[11px] font-semibold uppercase tracking-[0.16em]",
+                on ? "border-saffron/70 border-b-surface bg-surface text-navy" : "border-transparent text-muted-foreground hover:text-navy",
+              )}
+            >
+              {lang === "gu" ? item.gu : item.en}
+            </button>
+          );
+        })}
+      </div>
+      <div className="flex flex-wrap gap-2 border border-t-0 border-saffron/70 bg-surface px-3 py-3">
+        {group.items.map((item) => {
+          const active = current === item.to;
+          const Icon = item.icon;
+          return (
+            <Link
+              key={item.to}
+              to={item.to}
+              className={cn(
+                "inline-flex h-10 items-center gap-2 border px-3 text-sm",
+                active ? "border-navy bg-navy text-saffron" : "border-saffron/40 text-navy hover:border-navy",
+              )}
+            >
+              <Icon className="size-3.5" />
+              {t(label[item.label] || item.label)}
+            </Link>
+          );
+        })}
+      </div>
     </nav>
   );
 }
