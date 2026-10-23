@@ -2,7 +2,6 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useCallback, useMemo, useState, type ReactNode } from "react";
 import { Star } from "lucide-react";
 import { AppShell } from "@/components/nss/shell";
-import { PhotoCarousel } from "@/components/nss/photo-carousel";
 import { SplashScreen } from "@/components/nss/splash";
 import { Badge } from "@/components/ui/badge";
 import { daysUntilBirthday, formatLongDate, isBirthdayOn, todayIso } from "@/lib/nss/format";
@@ -29,7 +28,6 @@ function Home() {
   const dismiss = useCallback(() => setSplashing(false), []);
   const events = useNssStore((s) => s.events) ?? [];
   const notices = useNssStore((s) => s.notices) ?? [];
-  const gallery = useNssStore((s) => s.gallery) ?? [];
   const visitors = useNssStore((s) => s.visitors);
   const settings = useNssStore((s) => s.settings);
   const hours = useNssStore((s) => liveServiceHours(s));
@@ -55,11 +53,6 @@ function Home() {
   const today = todayIso();
   const volunteerSource = useNssStore((s) => s.volunteers);
   const volunteers = useMemo(() => volunteerSource ?? [], [volunteerSource]);
-  const portal = useNssStore();
-  const rollPhotos = useMemo(
-    () => volunteers.filter((v) => v.status !== "alumni" && v.photoUrl),
-    [volunteers],
-  );
   const birthdayVolunteers = useMemo(
     () =>
       volunteers
@@ -83,7 +76,6 @@ function Home() {
   const collegeReady = shownVolunteers >= 20;
   const collegeEvents = collegeReady ? events.filter((event) => !SEED_IDS.has(event.id)) : events;
   const collegeNotices = collegeReady ? notices.filter((notice) => !SEED_IDS.has(notice.id)) : notices;
-  const collegeGallery = collegeReady ? gallery.filter((item) => !SEED_IDS.has(item.id)) : gallery;
   const upcoming = useMemo(
     () =>
       collegeEvents
@@ -130,120 +122,57 @@ function Home() {
             <Link to="/verify" search={{ id: "" }} className="underline-offset-4 hover:underline">{t("verify")}</Link>
           </nav>
 
-          <nav className="mt-6 flex flex-wrap justify-center gap-x-6 gap-y-2">
-            {[
-              ["#officers", "Officers"],
-              ["#gallery", "Gallery"],
-              ["#volunteers", "Volunteers"],
-              ["#news", "Notices"],
-              ["#activities", "Activities"],
-              ["#birthdays", "Birthdays"],
-              ["#best", "Best"],
-            ].map(([href, label]) => (
-              <a key={href} href={href} className="text-[11px] font-semibold uppercase tracking-[0.16em] text-navy hover:text-saffron">
-                {label}
-              </a>
-            ))}
-          </nav>
-
-          <OpenTab id="notice" title="Notice">
-            {latestNotices[0] ? (
-              <>
-                <h2 className="font-display text-3xl text-navy">{latestNotices[0].title}</h2>
-                <p className="mt-1 text-xs text-muted-foreground">{formatLongDate(latestNotices[0].date)}</p>
-                <p className="gu mt-3 text-sm leading-relaxed">{latestNotices[0].body}</p>
-              </>
-            ) : (
-              <p className="text-sm text-muted-foreground">{t("emptyNotice")}</p>
-            )}
-            <div className="mt-8 grid grid-cols-2 gap-6 sm:grid-cols-4">
-              <MiniStat label="Volunteers" value={shownVolunteers} />
-              <MiniStat label="Service hours" value={hours} />
-              <MiniStat label="Alumni" value={alumniCount} />
-              <MiniStat label="Portal visitors" value={visitors} />
-            </div>
-          </OpenTab>
-
-          <OpenTab id="officers" title="Officers">
-            <div className="grid gap-6 sm:grid-cols-2">
-              <HomeOfficer role="Programme Officer" name={settings.poName} quote={settings.poQuote} photo={settings.poPhoto} />
-              <HomeOfficer role="Principal" name={settings.principalName} quote={settings.principalQuote} photo={settings.principalPhoto} />
-            </div>
-          </OpenTab>
-
-          <OpenTab id="gallery" title="Gallery">
-            <PhotoCarousel items={collegeGallery} />
-          </OpenTab>
-
-          <OpenTab id="volunteers" title="Volunteer photographs">
-            {rollPhotos.length ? (
-              <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8">
-                {rollPhotos.map((v) => (
-                  <figure key={v.id} className="press text-center">
-                    <img src={v.photoUrl} alt="" className="mx-auto h-24 w-20 object-cover ring-1 ring-saffron/40" />
-                    <figcaption className="mt-1 text-[11px] leading-tight text-navy">
-                      {v.fullName}
-                      <span className="mt-0.5 block font-semibold text-forest">{volunteerHours(portal, v.id)} hrs</span>
-                    </figcaption>
-                  </figure>
-                ))}
-              </div>
-            ) : (
-              <p className="text-sm text-muted-foreground">No photographs yet.</p>
-            )}
-          </OpenTab>
-
-          <OpenTab id="news" title="Latest news & notices">
-            {latestNotices.length === 0 ? (
-              <p className="text-sm text-muted-foreground">{t("emptyNotice")}</p>
-            ) : (
-              <div className="divide-y divide-saffron/20">
-                {latestNotices.map((notice) => (
-                  <article key={notice.id} className="press py-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <h3 className="font-medium text-navy">{notice.title}</h3>
-                      <Badge tone={notice.audience === "all" ? "muted" : "navy"}>
-                        {notice.audience === "all" ? formatLongDate(notice.date) : notice.audience}
-                      </Badge>
-                    </div>
-                    <p className="gu mt-2 text-sm leading-relaxed text-muted-foreground">{notice.body}</p>
-                  </article>
-                ))}
-              </div>
-            )}
-          </OpenTab>
-
-          <OpenTab id="activities" title="Upcoming activities">
-            {upcoming.length === 0 && completed.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No upcoming event.</p>
+          <div className="mt-6 space-y-3">
+            {settings.showHomeNotices !== false ? (
+              <RunBanner
+                label="Notice"
+                items={latestNotices.map((notice) => {
+                  const body = notice.body.replace(/\s+/g, " ").trim();
+                  return body ? `${notice.title} — ${body}` : notice.title;
+                })}
+                empty={t("emptyNotice")}
+              />
             ) : null}
-            <div className="divide-y divide-saffron/20">
-              {upcoming.map((event) => (
-                <div key={event.id} className="press flex items-start justify-between gap-3 py-3">
-                  <div>
-                    <p className="font-medium text-navy">{event.name}</p>
-                    {event.description ? <p className="mt-1 text-sm leading-relaxed text-muted-foreground">{event.description}</p> : null}
-                    <p className="text-xs text-muted-foreground">
-                      {formatLongDate(event.date)}{event.endDate && event.endDate !== event.date ? ` – ${formatLongDate(event.endDate)}` : ""} · {event.location}
-                    </p>
+
+            {settings.showHomeEvents !== false ? (
+              <RunBanner
+                label="Upcoming"
+                items={upcoming.map((event) => {
+                  const when = `${formatLongDate(event.date)}${event.endDate && event.endDate !== event.date ? ` – ${formatLongDate(event.endDate)}` : ""}`;
+                  const place = event.location ? ` · ${event.location}` : "";
+                  const note = event.description ? ` — ${event.description.replace(/\s+/g, " ").trim()}` : "";
+                  return `${event.name} · ${when}${place}${note}`;
+                })}
+                empty="No upcoming event."
+              />
+            ) : null}
+          </div>
+
+          <div className="mt-8 grid grid-cols-2 gap-6 sm:grid-cols-4">
+            <MiniStat label="Volunteers" value={shownVolunteers} />
+            <MiniStat label="Service hours" value={hours} />
+            <MiniStat label="Alumni" value={alumniCount} />
+            <MiniStat label="Portal visitors" value={visitors} />
+          </div>
+
+          {completed.length ? (
+            <OpenTab id="activities" title="Completed programmes">
+              <div className="divide-y divide-saffron/20">
+                {completed.map((event) => (
+                  <div key={event.id} className="press flex items-start justify-between gap-3 py-3">
+                    <div>
+                      <p className="font-medium text-navy">{event.name}</p>
+                      {event.description ? <p className="mt-1 text-sm leading-relaxed text-muted-foreground">{event.description}</p> : null}
+                      <p className="text-xs text-muted-foreground">
+                        {formatLongDate(event.date)}{event.endDate && event.endDate !== event.date ? ` – ${formatLongDate(event.endDate)}` : ""} · {event.location}
+                      </p>
+                    </div>
+                    <Badge tone="forest">Completed</Badge>
                   </div>
-                  <Badge tone="saffron">Upcoming</Badge>
-                </div>
-              ))}
-              {completed.map((event) => (
-                <div key={event.id} className="press flex items-start justify-between gap-3 py-3">
-                  <div>
-                    <p className="font-medium text-navy">{event.name}</p>
-                    {event.description ? <p className="mt-1 text-sm leading-relaxed text-muted-foreground">{event.description}</p> : null}
-                    <p className="text-xs text-muted-foreground">
-                      {formatLongDate(event.date)}{event.endDate && event.endDate !== event.date ? ` – ${formatLongDate(event.endDate)}` : ""} · {event.location}
-                    </p>
-                  </div>
-                  <Badge tone="forest">Completed</Badge>
-                </div>
-              ))}
-            </div>
-          </OpenTab>
+                ))}
+              </div>
+            </OpenTab>
+          ) : null}
 
           {settings.birthdayEnabled !== false ? (
             <OpenTab id="birthdays" title="NSS Birthday Wishes">
@@ -301,13 +230,28 @@ function MiniStat({ label, value }: { label: string; value: number }) {
   return <div className="bg-card px-3 py-3 text-center"><p className="font-display text-2xl text-navy">{value}</p><p className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</p></div>;
 }
 
-function HomeOfficer({ role, name, quote, photo }: { role: string; name: string; quote: string; photo?: string }) {
+function RunBanner({ label, items, empty }: { label: string; items: string[]; empty: string }) {
+  if (items.length === 0) {
+    return (
+      <div className="flex items-stretch overflow-hidden border-y border-navy/15">
+        <p className="flex shrink-0 items-center bg-navy px-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-[#e6d3a3]">{label}</p>
+        <p className="px-4 py-2.5 text-sm text-muted-foreground">{empty}</p>
+      </div>
+    );
+  }
+  const unit = items.join("      ·      ").trim();
+  const copies = unit.length >= 160 ? 1 : Math.ceil(160 / Math.max(unit.length, 1));
+  const line = Array.from({ length: copies }, () => unit).join("      ·      ");
+  const seconds = Math.max(22, Math.round(line.length / 4.2));
   return (
-    <div className="text-center">
-      <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-forest">{role}</p>
-      {photo ? <img src={photo} alt={name} className="mx-auto mt-3 h-28 w-24 rounded-2xl object-cover" /> : <div className="mx-auto mt-3 h-28 w-24 rounded-2xl bg-muted" />}
-      <p className="mt-3 text-sm font-semibold text-navy">{name}</p>
-      {quote ? <p className="gu mt-2 text-xs leading-relaxed text-muted-foreground">“{quote}”</p> : null}
+    <div className="run-banner flex items-stretch overflow-hidden border-y border-navy/15" role="region" aria-label={label}>
+      <p className="flex shrink-0 items-center bg-navy px-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-[#e6d3a3]">{label}</p>
+      <div className="min-w-0 flex-1 overflow-hidden py-2.5">
+        <div className="run-banner-track" style={{ animationDuration: `${seconds}s` }}>
+          <span className="gu px-8 text-sm text-navy">{line}</span>
+          <span className="gu px-8 text-sm text-navy" aria-hidden="true">{line}</span>
+        </div>
+      </div>
     </div>
   );
 }

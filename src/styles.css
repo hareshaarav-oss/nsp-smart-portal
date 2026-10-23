@@ -163,6 +163,21 @@ html.dark .text-paper { color: #f7f3ea; }
   animation: splash-rise 500ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
+.run-banner-track {
+  display: flex;
+  width: max-content;
+  animation: run-banner linear infinite;
+}
+.run-banner-track span {
+  white-space: nowrap;
+}
+@keyframes run-banner {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
 @media (prefers-reduced-motion: reduce) {
   .splash-rise { animation: none; }
+  .run-banner-track { animation: none; width: auto; flex-wrap: wrap; }
+  .run-banner-track span { white-space: normal; }
+  .run-banner-track span[aria-hidden="true"] { display: none; }
 }
