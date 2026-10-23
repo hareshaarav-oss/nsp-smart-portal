@@ -2,6 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { toast } from "sonner";
 import { AppShell } from "@/components/nss/shell";
+import { OfficialLetterhead } from "@/components/nss/official-letterhead";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -128,7 +129,8 @@ function RegisterPage() {
 
   return (
     <AppShell eyebrow="NSS STUDENT REGISTRATION">
-      <div className="mx-auto max-w-3xl space-y-4 px-4 pb-16">
+      <div className="mx-auto max-w-3xl space-y-4 px-4 pb-10">
+        <OfficialLetterhead title="Student registration" compact />
         <Card>
           <CardHeader>
             <CardTitle>Student registration form</CardTitle>

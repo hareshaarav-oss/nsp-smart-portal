@@ -22,12 +22,12 @@ function ContactPage() {
             <p className="font-display text-xl">{settings.collegeName}</p>
             <p className="text-sm text-muted-foreground">Mansa, Gandhinagar, Gujarat</p>
             <div>
-              <p className="text-xs uppercase tracking-[0.16em] text-forest">Programme Officer</p>
+              <p className="text-xs uppercase tracking-[0.16em] text-saffron">Programme Officer</p>
               <p className="font-medium">{settings.poName}</p>
               <p className="text-sm text-muted-foreground">Mobile / WhatsApp: {settings.poWhatsapp}</p>
             </div>
             <div>
-              <p className="text-xs uppercase tracking-[0.16em] text-forest">Principal</p>
+              <p className="text-xs uppercase tracking-[0.16em] text-saffron">Principal</p>
               <p className="font-medium">{settings.principalName}</p>
             </div>
             <div className="flex flex-wrap gap-2">

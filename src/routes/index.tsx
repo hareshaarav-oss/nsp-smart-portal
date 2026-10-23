@@ -117,30 +117,28 @@ function Home() {
     <>
       {splashing ? <SplashScreen onDone={dismiss} /> : null}
       <AppShell current="home" compactHeader>
-        <section className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 md:px-6 md:py-8">
-          <section className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-            <Button asChild className="h-12 bg-navy text-paper hover:bg-navy-deep">
-              <Link to="/login" search={{ role: "volunteer" }}>{t("studentLogin")}</Link>
-            </Button>
-            <Button asChild variant="outline" className="h-12">
-              <Link to="/register">{t("register")}</Link>
-            </Button>
-            <Button asChild variant="outline" className="h-12">
-              <Link to="/login" search={{ role: "po" }}>{t("adminLogin")}</Link>
-            </Button>
-            <Button asChild variant="outline" className="h-12">
-              <Link to="/verify" search={{ id: "" }}>{t("verify")}</Link>
-            </Button>
-          </section>
-
-          <section className="mt-5 overflow-hidden border border-saffron/50 bg-card">
-            <div className="flex flex-wrap items-end justify-between gap-3 border-b border-border px-5 py-4">
-              <div>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-saffron">Welcome to NSP</p>
-                <h1 className="font-display text-2xl text-navy">NSS Smart Portal</h1>
-                <p className="text-sm text-muted-foreground">{settings.collegeName}</p>
-              </div>
-              <span className="rounded-full bg-forest/10 px-3 py-1.5 text-xs font-semibold text-forest">Cloud connected</span>
+        <section className="mx-auto w-full max-w-6xl flex-1 px-4 md:px-6">
+          <section className="overflow-hidden border border-saffron/50 bg-card">
+            <div className="border-b border-saffron/40 px-5 py-6 text-center md:px-8">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.34em] text-saffron">Welcome to NSP</p>
+              <h1 className="mt-2 font-display text-3xl text-navy md:text-4xl">NSS Smart Portal</h1>
+              <span className="mx-auto mt-3 block h-px w-20 bg-saffron" />
+              <p className="mt-3 text-sm text-navy/80">{settings.collegeName}</p>
+              <p className="mt-1 text-xs uppercase tracking-[0.16em] text-forest">Cloud connected</p>
+            </div>
+            <div className="grid grid-cols-2 border-b border-saffron/30 sm:grid-cols-4">
+              <Button asChild className="h-12 rounded-none bg-navy text-paper hover:bg-navy-deep">
+                <Link to="/login" search={{ role: "volunteer" }}>{t("studentLogin")}</Link>
+              </Button>
+              <Button asChild variant="outline" className="h-12 rounded-none border-saffron/30">
+                <Link to="/register">{t("register")}</Link>
+              </Button>
+              <Button asChild variant="outline" className="h-12 rounded-none border-saffron/30">
+                <Link to="/login" search={{ role: "po" }}>{t("adminLogin")}</Link>
+              </Button>
+              <Button asChild variant="outline" className="h-12 rounded-none border-saffron/30">
+                <Link to="/verify" search={{ id: "" }}>{t("verify")}</Link>
+              </Button>
             </div>
             <div className="grid lg:grid-cols-[1.3fr_0.85fr_0.85fr]">
               <div className="p-5 md:p-7">
@@ -154,7 +152,7 @@ function Home() {
                 ) : (
                   <p className="mt-3 text-sm text-muted-foreground">{t("emptyNotice")}</p>
                 )}
-                <div className="mt-6 grid grid-cols-2 gap-px overflow-hidden rounded-2xl border border-border bg-border sm:grid-cols-4">
+                <div className="mt-6 grid grid-cols-2 gap-px overflow-hidden border border-saffron/40 bg-saffron/40 sm:grid-cols-4">
                   <MiniStat label="Volunteers" value={shownVolunteers} />
                   <MiniStat label="Service hours" value={hours} />
                   <MiniStat label="Alumni" value={alumniCount} />
@@ -175,7 +173,7 @@ function Home() {
             <section className="mt-6">
               <Card className="shadow-md">
                 <CardContent className="p-5">
-                  <h2 className="font-display text-xl text-navy">Volunteer photographs</h2>
+                  <h2 className="border-b border-saffron/40 pb-2 font-display text-xl text-navy">Volunteer photographs</h2>
                   <div className="mt-4 grid grid-cols-3 gap-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8">
                     {rollPhotos.map((v) => (
                       <figure key={v.id} className="text-center">
@@ -195,7 +193,7 @@ function Home() {
           <section className="mt-6 grid gap-4 md:grid-cols-2">
             <Card>
               <CardContent className="p-5">
-                <h2 className="font-display text-xl text-navy">Latest news & notices</h2>
+                <h2 className="border-b border-saffron/40 pb-2 font-display text-xl text-navy">Latest news & notices</h2>
                 <div className="mt-3 space-y-3">
                   {latestNotices.length === 0 ? (
                     <p className="py-8 text-center text-sm text-muted-foreground">{t("emptyNotice")}</p>
@@ -217,7 +215,7 @@ function Home() {
             </Card>
             <Card>
               <CardContent className="p-5">
-                <h2 className="font-display text-xl text-navy">Upcoming activities</h2>
+                <h2 className="border-b border-saffron/40 pb-2 font-display text-xl text-navy">Upcoming activities</h2>
                 <div className="mt-3 space-y-2">
                   {upcoming.length === 0 && completed.length === 0 ? (
                     <p className="py-8 text-center text-sm text-muted-foreground">No upcoming event.</p>

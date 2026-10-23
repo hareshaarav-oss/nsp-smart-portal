@@ -60,7 +60,7 @@ export function AppShell({
         <TricolourStrip />
         <PageNav showDashboard={showDashboard} current={current} />
       </div>
-      <main className="flex-1">{children}</main>
+      <main className="flex-1 py-6 md:py-8">{children}</main>
       <SiteFooter />
     </div>
   );

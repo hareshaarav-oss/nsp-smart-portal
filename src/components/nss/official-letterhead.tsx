@@ -17,33 +17,31 @@ export function OfficialLetterhead({
   const collegeLogo = useNssStore((s) => s.settings.collegeLogo) || COLLEGE_LOGO;
   const nssLogo = useNssStore((s) => s.settings.nssLogo) || NSS_LOGO;
   return (
-    <div className={cn("rounded-xl border border-border bg-white px-4 py-4 text-navy shadow-sm", className)}>
-      <div className="flex items-center gap-3 md:gap-5">
+    <div className={cn("border border-saffron/50 bg-surface px-4 py-5 text-navy", className)}>
+      <div className="flex items-center gap-4 md:gap-6">
         <img
           src={collegeLogo}
           alt="College logo"
-          className={cn("object-contain mix-blend-multiply", compact ? "h-14 w-14" : "h-16 w-16 md:h-20 md:w-20")}
+          className={cn("object-contain", compact ? "h-14 w-14" : "h-16 w-16 md:h-20 md:w-20")}
         />
         <div className="min-w-0 flex-1 text-center">
-          <p className={cn("font-display font-semibold leading-tight", compact ? "text-sm md:text-base" : "text-base md:text-xl")}>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.34em] text-saffron">NSS Smart Portal</p>
+          <p className={cn("mt-1 font-display font-semibold leading-tight", compact ? "text-sm md:text-base" : "text-base md:text-xl")}>
             {college}
           </p>
-          <p className="mt-0.5 text-[10px] uppercase tracking-[0.18em] text-forest md:text-xs">
-            Mansa · National Service Scheme
-          </p>
-          <p className="mt-1 text-xs font-semibold tracking-[0.16em] text-navy">NSS SMART PORTAL</p>
-          {title ? <p className="mt-2 font-display text-sm font-semibold md:text-base">{title}</p> : null}
-          <p className="mt-1 text-[11px] text-muted-foreground">
-            Date: {formatLongDate(todayIso())} · Academic Year {academicYear()}
+          <span className="mx-auto mt-2 block h-px w-16 bg-saffron" />
+          {title ? <p className="mt-2 font-display text-base md:text-lg">{title}</p> : null}
+          <p className="mt-1 text-[11px] uppercase tracking-[0.12em] text-muted-foreground">
+            {formatLongDate(todayIso())} · {academicYear()}
           </p>
         </div>
         <img
           src={nssLogo}
           alt="NSS logo"
-          className={cn("object-contain mix-blend-multiply", compact ? "h-14 w-14" : "h-16 w-16 md:h-20 md:w-20")}
+          className={cn("object-contain", compact ? "h-14 w-14" : "h-16 w-16 md:h-20 md:w-20")}
         />
       </div>
-      <TricolourStrip className="mt-3" />
+      <TricolourStrip className="mt-4" />
     </div>
   );
 }
@@ -63,7 +61,7 @@ export function ReportPreview({
 }) {
   const shown = rows.slice(0, maxRows);
   return (
-    <div className="overflow-hidden rounded-xl border border-border bg-white">
+    <div className="overflow-hidden border border-saffron/40 bg-surface">
       <OfficialLetterhead title={title} compact className="rounded-none border-0 shadow-none" />
       {intro?.length ? (
         <div className="space-y-2 border-t border-border px-4 py-3 text-sm leading-relaxed text-navy">

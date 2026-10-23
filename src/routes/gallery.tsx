@@ -23,8 +23,6 @@ function GalleryPage() {
     <AppShell>
       <div className="mx-auto max-w-6xl px-4 pb-16">
         <OfficialLetterhead title="Activity photographs" compact className="mb-6" />
-        <h1 className="font-display text-2xl font-semibold">Activity photographs</h1>
-        <p className="mt-1 text-sm text-muted-foreground">Event-wise folders. Photos saved from the PO desk also appear on Home.</p>
         <div className="mt-4 flex flex-wrap gap-2">
           <Button size="sm" variant={folder === "all" ? "default" : "outline"} onClick={() => setFolder("all")}>
             All
