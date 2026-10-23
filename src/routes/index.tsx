@@ -53,6 +53,11 @@ function Home() {
   const today = todayIso();
   const volunteerSource = useNssStore((s) => s.volunteers);
   const volunteers = useMemo(() => volunteerSource ?? [], [volunteerSource]);
+  const portal = useNssStore();
+  const rollPhotos = useMemo(
+    () => volunteers.filter((v) => v.status !== "alumni" && v.photoUrl),
+    [volunteers],
+  );
   const birthdayVolunteers = useMemo(
     () =>
       volunteers
@@ -108,14 +113,7 @@ function Home() {
       {splashing ? <SplashScreen onDone={dismiss} /> : null}
       <AppShell current="home" compactHeader>
         <section className="mx-auto w-full max-w-6xl flex-1 px-4 md:px-6">
-          <header className="mx-auto max-w-3xl text-center">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.34em] text-saffron">Welcome to NSP</p>
-            <h1 className="mt-3 font-display text-4xl text-navy md:text-6xl">NSS Smart Portal</h1>
-            <p className="mt-4 text-base text-navy/80">{settings.collegeName}</p>
-            <p className="mt-3 text-sm text-navy/60">Cloud connected</p>
-          </header>
-
-          <nav className="mt-8 flex flex-wrap justify-center gap-x-8 gap-y-3 border-y border-navy/15 py-4 text-sm text-navy">
+          <nav className="flex flex-wrap justify-center gap-x-8 gap-y-3 border-y border-navy/15 py-4 text-sm text-navy">
             <Link to="/login" search={{ role: "volunteer" }} className="underline-offset-4 hover:underline">{t("studentLogin")}</Link>
             <Link to="/register" className="underline-offset-4 hover:underline">{t("register")}</Link>
             <Link to="/login" search={{ role: "po" }} className="underline-offset-4 hover:underline">{t("adminLogin")}</Link>
@@ -154,6 +152,24 @@ function Home() {
             <MiniStat label="Alumni" value={alumniCount} />
             <MiniStat label="Portal visitors" value={visitors} />
           </div>
+
+          <OpenTab id="volunteers" title="Volunteers">
+            {rollPhotos.length ? (
+              <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8">
+                {rollPhotos.map((v) => (
+                  <figure key={v.id} className="press text-center">
+                    <img src={v.photoUrl} alt="" className="mx-auto h-24 w-20 object-cover ring-1 ring-saffron/40" />
+                    <figcaption className="mt-1 text-[11px] leading-tight text-navy">
+                      {v.fullName}
+                      <span className="mt-0.5 block font-semibold text-forest">{volunteerHours(portal, v.id)} hrs</span>
+                    </figcaption>
+                  </figure>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">No photographs yet.</p>
+            )}
+          </OpenTab>
 
           {completed.length ? (
             <OpenTab id="activities" title="Completed programmes">
