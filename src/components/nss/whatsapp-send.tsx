@@ -143,7 +143,7 @@ export function WhatsAppSendPanel({
             <div className="mt-3 flex flex-wrap gap-2">
               <Button type="button" onClick={sendAndNext}>
                 <Send />
-                Open WhatsApp — then next
+                WhatsApp
               </Button>
               <Button type="button" variant="outline" onClick={sendOne}>
                 Send only this
@@ -165,10 +165,6 @@ export function WhatsAppSendPanel({
                 Previous
               </Button>
             </div>
-            <p className="mt-2 text-xs text-muted-foreground">
-              WhatsApp will open with the message ready. Send it, return here, then continue. Group buttons
-              above post to girls / boys / leaders groups.
-            </p>
           </div>
         ) : (
           <p className="text-sm text-muted-foreground">No mobile numbers on file.</p>

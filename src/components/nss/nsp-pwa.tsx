@@ -85,7 +85,7 @@ export function InstallNspButton() {
   if (standalone) {
     return (
       <p className="rounded-md bg-forest/10 px-3 py-2 text-sm text-forest">
-        NSP is installed on this device. Look for the NSS emblem on your home screen.
+        NSP is installed.
       </p>
     );
   }
@@ -94,15 +94,10 @@ export function InstallNspButton() {
     return (
       <Button type="button" size="lg" className="w-full" onClick={() => void install()} disabled={busy}>
         <Download />
-        {busy ? "Installing…" : "Install NSP — NSS logo"}
+        {busy ? "Installing…" : "Install"}
       </Button>
     );
   }
 
-  return (
-    <p className="text-sm text-muted-foreground">
-      Use the steps below for your phone. On Android Chrome, the install prompt appears when this
-      page is opened from the live college link.
-    </p>
-  );
+  return null;
 }

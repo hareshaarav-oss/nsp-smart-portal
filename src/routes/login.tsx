@@ -311,9 +311,9 @@ function LoginPage() {
             ) : null}
             {help === "pass" ? (
               <div className="mt-4 space-y-2 rounded-md border border-border p-3">
-                <p className="text-sm font-medium">Forgot password — resets to registered mobile</p>
+                <p className="text-sm font-medium">Password</p>
                 <Input
-                  placeholder="FIRST NAME in CAPITAL"
+                  placeholder="Username"
                   value={helpName}
                   onChange={(e) => setHelpName(e.target.value.toUpperCase())}
                 />

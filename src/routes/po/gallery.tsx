@@ -112,17 +112,12 @@ function PoGallery() {
     <div className="space-y-6">
       <div>
         <h2 className="font-display text-xl font-semibold">Gallery</h2>
-        <p className="text-sm text-muted-foreground">
-          Pick an event — the folder name fills automatically. Multi-select or drag-and-drop photos and videos. Any size
-          is compressed to HD JPEG (1920px) before saving. Videos keep their quality and a poster is generated. Saved
-          files appear on the Home page.
-        </p>
       </div>
 
       <Card>
         <CardContent className="grid gap-3 pt-5 sm:grid-cols-2">
           <div className="space-y-1.5">
-            <Label>Event (folder fills automatically)</Label>
+            <Label>Event</Label>
             <select
               className="h-10 w-full rounded-md border border-border bg-card px-3 text-sm"
               value={eventId}
@@ -137,7 +132,7 @@ function PoGallery() {
             </select>
           </div>
           <div className="space-y-1.5">
-            <Label>Caption (optional)</Label>
+            <Label>Caption</Label>
             <Input value={caption} onChange={(e) => setCaption(e.target.value)} placeholder={eventName} />
           </div>
           <div
@@ -155,7 +150,7 @@ function PoGallery() {
           >
             <Label className="mb-2 flex items-center gap-2">
               <Upload className="size-4" />
-              Multi-select photos / videos — or drop files here
+              Photographs
             </Label>
             <input
               type="file"

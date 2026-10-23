@@ -24,15 +24,7 @@ function InstallPage() {
           </p>
         </div>
 
-        <Card>
-          <CardContent className="space-y-4 pt-5">
-            <p className="text-sm leading-relaxed text-muted-foreground">
-              Add this portal to your home screen. The icon is the NSS emblem and the name is{" "}
-              <strong className="text-foreground">NSP</strong> — NSS Smart Portal.
-            </p>
-            <InstallNspButton />
-          </CardContent>
-        </Card>
+        <InstallNspButton />
 
         <Card>
           <CardContent className="space-y-3 pt-5">

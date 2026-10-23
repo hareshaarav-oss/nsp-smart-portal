@@ -78,30 +78,28 @@ function SettingsPage() {
     }
   }
 
-  const sections: Array<[Section, string, string]> = [
-    ["college", "College & Officers", "Identity, people and contact"],
-    ["home", "Home Page", "Index page and slider controls"],
-    ["birthday", "Birthday", "Birthday radar and wishes"],
-    ["certificate", "Certificate", "Certificate output controls"],
-    ["whatsapp", "WhatsApp", "Groups and communication"],
-    ["security", "Security", "Admin and PO access"],
-    ["system", "System", "Academic year and appearance"],
+  const sections: Array<[Section, string]> = [
+    ["college", "College"],
+    ["home", "Home"],
+    ["birthday", "Birthday"],
+    ["certificate", "Certificate"],
+    ["whatsapp", "WhatsApp"],
+    ["security", "Security"],
+    ["system", "System"],
   ];
 
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="font-display text-2xl font-semibold">NSP Control Center</h2>
-        <p className="text-sm text-muted-foreground">Change portal content and behaviour without editing code.</p>
+        <h2 className="font-display text-2xl font-semibold">Settings</h2>
       </div>
 
       <div className="grid gap-5 lg:grid-cols-[230px_1fr]">
         <Card className="h-fit lg:sticky lg:top-4">
           <CardContent className="p-2">
-            {sections.map(([id, title, sub]) => (
-              <button key={id} type="button" onClick={() => setSection(id)} className={`mb-1 w-full rounded-xl p-3 text-left ${section === id ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}>
+            {sections.map(([id, title]) => (
+              <button key={id} type="button" onClick={() => setSection(id)} className={`mb-1 w-full rounded-xl px-3 py-3 text-left ${section === id ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}>
                 <p className="text-sm font-semibold">{title}</p>
-                <p className={`text-[11px] ${section === id ? "text-primary-foreground/75" : "text-muted-foreground"}`}>{sub}</p>
               </button>
             ))}
           </CardContent>
@@ -177,8 +175,7 @@ function BirthdaySection({ settings, update }: Props) {
     <Toggle label="Enable Birthday feature" value={settings.birthdayEnabled !== false} onChange={(v) => update({ birthdayEnabled: v })} />
     <Toggle label="Show Birthday radar on dashboards" value={settings.birthdayShowOnDashboard !== false} onChange={(v) => update({ birthdayShowOnDashboard: v })} />
     <Field label="Birthday button label"><Input value={settings.birthdayAutoWishLabel ?? "Birthday wishes"} onChange={(e) => update({ birthdayAutoWishLabel: e.target.value })} /></Field>
-    <Field label="WhatsApp birthday message"><Textarea className="gu min-h-64" value={settings.birthdayTemplate ?? BIRTHDAY_TEMPLATE} onChange={(e) => update({ birthdayTemplate: e.target.value })} /></Field>
-    <p className="text-xs text-muted-foreground">Use <code>{"{{NAME}}"}</code> to insert the volunteer name automatically. The existing Today / Week / Month / All birthday screens and gender-wise WhatsApp groups remain enabled.</p>
+    <Field label="WhatsApp birthday message · {{NAME}}"><Textarea className="gu min-h-64" value={settings.birthdayTemplate ?? BIRTHDAY_TEMPLATE} onChange={(e) => update({ birthdayTemplate: e.target.value })} /></Field>
   </CardContent></Card>;
 }
 
@@ -198,7 +195,6 @@ function CertificateSection({ settings, update }: Props) {
       }} />
     </Field>
     {settings.certificateTemplateUrl ? <div className="overflow-hidden rounded-xl border border-border bg-muted p-2"><img src={settings.certificateTemplateUrl} alt="Certificate template preview" className="w-full rounded-lg object-contain" /></div> : null}
-    <p className="text-xs text-muted-foreground">Upload your approved design from outside. It becomes the certificate background; student name, event, academic year, date, Certificate ID, PO and Principal remain dynamic. No logo redraw or certificate redesign is performed.</p>
   </CardContent></Card>;
 }
 
@@ -217,7 +213,6 @@ function SecuritySection({ settings, update }: Props) {
     <Field label="PO password"><Input type="password" value={settings.poPassword} onChange={(e) => update({ poPassword: e.target.value })} /></Field>
     <Field label="Admin username"><Input value={settings.adminUsername} onChange={(e) => update({ adminUsername: e.target.value })} /></Field>
     <Field label="Admin password"><Input type="password" value={settings.adminPassword} onChange={(e) => update({ adminPassword: e.target.value })} /></Field>
-    <p className="text-xs text-muted-foreground sm:col-span-2">For a production deployment, move credential verification to authenticated server-side/cloud functions rather than relying only on browser settings.</p>
   </CardContent></Card>;
 }
 
@@ -225,7 +220,6 @@ function SystemSection({ settings, update }: Props) {
   return <Card><CardHeader><CardTitle className="text-base">System & appearance</CardTitle></CardHeader><CardContent className="grid gap-4 sm:grid-cols-2">
     <Field label="Alumni count"><Input type="number" min="0" value={settings.alumniCount} onChange={(e) => update({ alumniCount: Number(e.target.value) || 0 })} /></Field>
     <Field label="Theme"><select className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm" value={settings.themeMode ?? "system"} onChange={(e) => update({ themeMode: e.target.value as "light" | "dark" | "system" })}><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></Field>
-    <Field label="Visitor counter"><Input type="number" min="0" value={settings.alumniCount >= 0 ? "" : ""} readOnly placeholder="Managed automatically" /></Field>
   </CardContent></Card>;
 }
 

@@ -512,7 +512,6 @@ function EventsPage() {
                 />
                 Enable GPS / Geofence attendance
               </label>
-              <p className="text-xs text-muted-foreground">When enabled, QR attendance must be marked within the configured radius of this event location.</p>
               {form.geofenceEnabled ? (
                 <div className="grid gap-2 sm:grid-cols-3">
                   <Input type="number" step="any" placeholder="Latitude" value={form.geofenceLatitude ?? ""} onChange={(e) => setForm({ ...form, geofenceLatitude: e.target.value ? Number(e.target.value) : undefined })} />

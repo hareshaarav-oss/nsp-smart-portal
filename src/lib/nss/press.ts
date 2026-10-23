@@ -60,7 +60,7 @@ The NSS unit organised “${event.name}” at ${event.location} on ${formatLongD
 • The activity strengthens Criterion III / VII evidence for NAAC.
 
 13. Attendance annexure
-${names || "(Mark attendance first — the list appears automatically.)"}
+${names || "—"}
 
 Prepared on ${formatLongDate(todayIso())}
 NSS Smart Portal`;
@@ -175,7 +175,7 @@ export async function openNaacReport(opts: {
       <p><strong>Attendance annexure (${present.length} present)</strong></p>
       <table>
         <thead><tr><th>Sr.</th><th>ID</th><th>Name</th><th>Class</th><th>Status</th></tr></thead>
-        <tbody>${list || `<tr><td colspan="5">Mark attendance first. Hours stay 0 until Present is recorded.</td></tr>`}</tbody>
+        <tbody>${list || `<tr><td colspan="5">—</td></tr>`}</tbody>
       </table>
     </article>
     <p class="no-print"><button class="print" onclick="window.print()">Print / Save PDF</button></p>

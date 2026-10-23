@@ -24,7 +24,7 @@ import {
   volunteerReportRows,
 } from "@/lib/nss/reports";
 import { academicYear, todayIso } from "@/lib/nss/format";
-import { totalServiceHours, useNssStore } from "@/lib/nss/store";
+import { useNssStore } from "@/lib/nss/store";
 
 export const Route = createFileRoute("/po/reports")({ component: ReportsPage });
 
@@ -69,27 +69,16 @@ function ReportsPage() {
         frame.focus();
         frame.print();
       }}>Today's report PDF</Button>
-      <div>
-        <h2 className="font-display text-xl font-semibold">Reports</h2>
-        <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-          Every downloaded report carries the college name, NSS SMART PORTAL, title and date. Print / PDF
-          embeds the College logo and NSS logo so the page is never blank. Excel uses the same letterhead rows.
-        </p>
-      </div>
 
       <Card className="border-forest/30">
         <CardHeader>
-          <CardTitle className="text-base">Event-wise press report</CardTitle>
+          <CardTitle className="text-base">Press</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-3">
-          <p className="text-sm text-muted-foreground">
-            Dedicated Press desk: choose the event, photos load from Gallery, write or paste Gujarati, attendance
-            prints at the foot, then View. English NAAC report is generated from the same file.
-          </p>
+        <CardContent>
           <Button asChild>
             <Link to="/po/press">
               <Eye />
-              Open Press report desk
+              Press report
             </Link>
           </Button>
         </CardContent>
@@ -97,13 +86,9 @@ function ReportsPage() {
 
       <Card className="border-navy/20">
         <CardHeader>
-          <CardTitle className="text-base">Attendance — yearly & monthly (event-wise columns)</CardTitle>
+          <CardTitle className="text-base">Attendance</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
-          <p className="text-sm text-muted-foreground">
-            One Excel: Sr. No., Volunteer ID, Name, Unit, then a column for every event (Event name + date)
-            with Present / Absent. Full yearly covers academic year {academicYear()}. Monthly uses the month you pick.
-          </p>
           <div className="flex flex-wrap items-end gap-2">
             <Button onClick={() => downloadAttendanceExcel(state, { mode: "yearly" })}>
               <Download />
@@ -154,7 +139,6 @@ function ReportsPage() {
           open={openPreview}
           onPreview={setOpenPreview}
           title="Volunteer Report"
-          body="Active roll, A–Z by name, with ID, mobile, unit, course and hours."
           onExcel={() => downloadVolunteerExcel(state)}
           onPrint={() => void printVolunteerReport(state)}
           preview={previews.volunteer}
@@ -164,7 +148,6 @@ function ReportsPage() {
           open={openPreview}
           onPreview={setOpenPreview}
           title="Event Report"
-          body="Every activity with date, place, hours and turnout."
           onExcel={() => downloadEventExcel(state)}
           onPrint={() =>
             void printOfficialReport({
@@ -180,7 +163,6 @@ function ReportsPage() {
           open={openPreview}
           onPreview={setOpenPreview}
           title={`Yearly Activity Report (${academicYear()})`}
-          body="Auto-compiled from this academic year. Also generated when you complete an activity."
           onExcel={() => downloadYearlyEventExcel(state)}
           onPrint={() =>
             void printOfficialReport({
@@ -196,7 +178,6 @@ function ReportsPage() {
           open={openPreview}
           onPreview={setOpenPreview}
           title="Service Hours Report"
-          body={`Cumulative hours. Unit total: ${totalServiceHours(state)} hours.`}
           onExcel={() => downloadHoursExcel(state)}
           onPrint={() =>
             void printOfficialReport({
@@ -212,7 +193,6 @@ function ReportsPage() {
           open={openPreview}
           onPreview={setOpenPreview}
           title="Activity Report"
-          body="Narrative list of NSS programmes for files and press notes."
           onExcel={() => downloadActivityExcel(state)}
           onPrint={() =>
             void printOfficialReport({
@@ -228,7 +208,6 @@ function ReportsPage() {
           open={openPreview}
           onPreview={setOpenPreview}
           title="Alumni Register"
-          body="Editable alumni file. Move volunteers from the Volunteers tab, then download Excel."
           onExcel={() => downloadAlumniExcel(state)}
           onPrint={() => void printAlumniReport(state)}
           preview={previews.alumni}
@@ -241,7 +220,6 @@ function ReportsPage() {
 function ReportCard({
   id,
   title,
-  body,
   onExcel,
   onPrint,
   preview,
@@ -250,7 +228,6 @@ function ReportCard({
 }: {
   id: string;
   title: string;
-  body: string;
   onExcel: () => void;
   onPrint: () => void;
   preview: { title?: string; headers: string[]; rows: string[][]; intro?: string[] };
@@ -264,7 +241,6 @@ function ReportCard({
         <CardTitle className="text-base">{title}</CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
-        <p className="text-sm text-muted-foreground">{body}</p>
         <div className="flex flex-wrap gap-2">
           <Button onClick={onExcel}>
             <Download />

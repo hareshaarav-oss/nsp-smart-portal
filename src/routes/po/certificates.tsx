@@ -160,11 +160,6 @@ function CertificatesPage() {
     <div className="space-y-6">
       <div>
         <h2 className="font-display text-xl font-semibold">Certificates</h2>
-        <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-          Volunteers marked present load automatically. Certificate numbers run as NSS/2026/001,
-          NSS/2026/002… and continue across events (if one event used 1–50, the next starts at 51).
-          View / Print uses the approved NSS certificate. Generate and Send puts it on the volunteer dashboard.
-        </p>
       </div>
 
       <Card>
@@ -221,7 +216,7 @@ function CertificatesPage() {
       {present.length === 0 ? (
         <Card>
           <CardContent className="pt-5 text-sm text-muted-foreground">
-            No present volunteers for this event. Mark attendance first, then return here.
+            No one marked present.
           </CardContent>
         </Card>
       ) : (

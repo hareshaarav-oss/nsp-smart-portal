@@ -608,19 +608,7 @@ function AttendancePage() {
         compact
       />
 
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h2 className="font-display text-xl font-semibold">
-            Attendance
-          </h2>
-
-          <p className="text-sm text-muted-foreground">
-            Manual + QR attendance, event-wise records,
-            RSVP comparison and Excel reporting.
-          </p>
-        </div>
-
-        <div className="flex flex-wrap items-end gap-2">
+      <div className="flex flex-wrap items-end gap-2">
           <Button
             onClick={() =>
               downloadAttendanceExcel(state, {
@@ -668,7 +656,6 @@ function AttendancePage() {
             <Printer />
             Print yearly
           </Button>
-        </div>
       </div>
 
       {/* EVENT SELECTOR */}
@@ -833,13 +820,8 @@ function AttendancePage() {
               <div className="space-y-3">
                 <div>
                   <h3 className="font-semibold">
-                    Dynamic Event QR
+                    Event QR
                   </h3>
-
-                  <p className="text-sm text-muted-foreground">
-                    આ QR selected event માટે fresh
-                    attendance session payload ધરાવે છે.
-                  </p>
                 </div>
 
                 <div className="rounded-xl border border-border bg-muted/40 p-3">
@@ -851,19 +833,11 @@ function AttendancePage() {
                     {qrToken}
                   </code>
                 </div>
-
-                <p className="text-xs text-muted-foreground">
-                  Volunteer QR scan થયા પછી volunteerને
-                  selected event માટે Present કરવામાં આવશે.
-                  Existing attendance record હોય તો duplicate
-                  entry નહીં બને.
-                </p>
               </div>
             </div>
           ) : (
             <div className="rounded-xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
-              Event પસંદ કરીને{" "}
-              <b>Generate Fresh Event QR</b> દબાવો.
+              No QR yet.
             </div>
           )}
         </CardContent>

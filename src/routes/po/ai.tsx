@@ -59,14 +59,14 @@ function SmartCommandPage() {
       setAnswer(`${rows.length} active volunteers have participated in at least one completed event and can be reviewed for certificates.`);
       return;
     }
-    setAnswer("Try: top volunteers, attendance below 75, today birthdays, upcoming events, service hours, or certificate eligible volunteers.");
+    setAnswer("No match.");
   }
 
   const nextBirthday = useMemo(() => [...volunteers].sort((a, b) => daysUntilBirthday(a.dob, today) - daysUntilBirthday(b.dob, today)).slice(0, 3), [volunteers, today]);
 
   return <div className="space-y-6">
     <Card className="overflow-hidden border-primary/20 bg-gradient-to-br from-primary/5 via-card to-forest/5">
-      <CardHeader><CardTitle className="flex items-center gap-2"><BrainCircuit className="size-6 text-primary" /> NSS Smart Command Center <Badge tone="forest">Offline-ready</Badge></CardTitle><p className="text-sm text-muted-foreground">Ask in simple English or Gujarati. This assistant analyses the portal data locally; no external AI key is required.</p></CardHeader>
+      <CardHeader><CardTitle className="flex items-center gap-2"><BrainCircuit className="size-6 text-primary" /> Smart Command <Badge tone="forest">Offline</Badge></CardTitle></CardHeader>
       <CardContent>
         <div className="flex gap-2"><Input value={query} onChange={(e) => setQuery(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") run(); }} placeholder="Ask: attendance below 75…" /><button type="button" onClick={() => run()} className="inline-flex h-10 shrink-0 items-center gap-2 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground"><Search className="size-4" />Ask</button></div>
         <div className="mt-3 flex flex-wrap gap-2">{suggestions.map((x) => <button key={x} type="button" onClick={() => { setQuery(x); run(x); }} className="rounded-full border border-border bg-card px-3 py-1.5 text-xs hover:bg-muted">{x}</button>)}</div>
@@ -75,9 +75,9 @@ function SmartCommandPage() {
     </Card>
 
     <div className="grid gap-4 md:grid-cols-3">
-      <SmartCard icon={Users} title="Volunteer intelligence" text={`${volunteers.length} active volunteers tracked.`} to="/po/volunteers" />
-      <SmartCard icon={CheckCircle2} title="Attendance intelligence" text="Find low attendance and missing marks quickly." to="/po/attendance" />
-      <SmartCard icon={FileText} title="Report intelligence" text="Generate and export official reports from current data." to="/po/reports" />
+      <SmartCard icon={Users} title="Volunteers" text={`${volunteers.length} on the roll`} to="/po/volunteers" />
+      <SmartCard icon={CheckCircle2} title="Attendance" text="Today’s roll" to="/po/attendance" />
+      <SmartCard icon={FileText} title="Reports" text="Excel and print" to="/po/reports" />
     </div>
 
     <Card><CardHeader><CardTitle className="flex items-center gap-2"><Cake className="size-5 text-saffron" /> Birthday radar</CardTitle></CardHeader><CardContent className="grid gap-2 sm:grid-cols-3">{nextBirthday.map((v) => <div key={v.id} className="rounded-xl border border-border p-3"><p className="font-medium">{v.fullName}</p><p className="text-xs text-muted-foreground">{daysUntilBirthday(v.dob, today) === 0 ? "Today 🎉" : `${daysUntilBirthday(v.dob, today)} days`}</p></div>)}</CardContent></Card>
@@ -85,5 +85,5 @@ function SmartCommandPage() {
 }
 
 function SmartCard({ icon: Icon, title, text, to }: { icon: typeof Users; title: string; text: string; to: "/po/volunteers" | "/po/attendance" | "/po/reports" }) {
-  return <Link to={to}><Card className="h-full transition hover:-translate-y-0.5 hover:shadow-md"><CardContent className="pt-5"><Icon className="size-6 text-primary" /><p className="mt-3 font-display font-semibold">{title}</p><p className="mt-1 text-sm text-muted-foreground">{text}</p><span className="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-primary">Open <span>→</span></span></CardContent></Card></Link>;
+  return <Link to={to}><Card className="h-full"><CardContent className="pt-5"><Icon className="size-6 text-primary" /><p className="mt-3 font-display font-semibold">{title}</p><p className="mt-1 text-sm text-muted-foreground">{text}</p></CardContent></Card></Link>;
 }

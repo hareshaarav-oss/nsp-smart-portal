@@ -478,9 +478,7 @@ function VolunteerDash() {
           </CardHeader>
           <CardContent className="space-y-2">
             {mine.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                Certificates issued by the Programme Officer will appear here.
-              </p>
+              <p className="text-sm text-muted-foreground">None yet.</p>
             ) : (
               mine.map(({ cert, event }) => (
                 <div

@@ -152,7 +152,7 @@ export function loginVolunteer(
   if (!list.length) {
     return {
       ok: false,
-      error: "Username not found. Type your FIRST NAME in CAPITAL letters (example: MAHI). Use Forgot username if you need help.",
+      error: "Username not found.",
     };
   }
   const matched = list.filter((v) => passwordMatches(v, password));
