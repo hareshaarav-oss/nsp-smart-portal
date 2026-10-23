@@ -146,7 +146,7 @@ function VolunteerDash() {
     <AppShell eyebrow="NSS STUDENT DASHBOARD" current="dashboard">
       <div className="mx-auto w-full max-w-6xl space-y-4 px-3 pb-4 sm:space-y-6 sm:px-4 md:px-6">
         <TomorrowBanner />
-        <div className="overflow-hidden rounded-3xl bg-navy p-5 text-paper shadow-md">
+        <div className="overflow-hidden border border-saffron/40 bg-navy p-5 text-paper">
           <div className="flex flex-col items-center gap-4 sm:flex-row">
             {me.photoUrl ? (
               <img src={me.photoUrl} alt="" className="h-28 w-24 rounded-2xl object-cover ring-4 ring-white/20" />
@@ -174,9 +174,9 @@ function VolunteerDash() {
           </div>
           <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
             <Button variant="saffron" className="h-12" onClick={() => void openIdCard(me, settings)}>{t("id")}</Button>
-            <Button asChild className="h-12 bg-forest text-primary-foreground hover:bg-forest/90"><Link to="/chat">{t("chat")}</Link></Button>
-            <Button className="h-12 bg-sky-600 text-white hover:bg-sky-700" onClick={() => setPanel(panel === "edit" ? "none" : "edit")}>Edit profile</Button>
-            <Button className="h-12" onClick={() => setPanel(panel === "password" ? "none" : "password")}>Change password</Button>
+            <Button variant="outline" className="h-12 border-white/30 bg-transparent text-paper hover:bg-white/10" asChild><Link to="/chat">{t("chat")}</Link></Button>
+            <Button variant="outline" className="h-12 border-white/30 bg-transparent text-paper hover:bg-white/10" onClick={() => setPanel(panel === "edit" ? "none" : "edit")}>Edit profile</Button>
+            <Button variant="outline" className="h-12 border-white/30 bg-transparent text-paper hover:bg-white/10" onClick={() => setPanel(panel === "password" ? "none" : "password")}>Change password</Button>
             <Button variant="danger" className="h-12" onClick={() => { setSession(null); window.location.href = "/"; }}>Logout</Button>
           </div>
         </div>

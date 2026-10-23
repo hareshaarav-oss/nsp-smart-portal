@@ -17,8 +17,9 @@ function PoLayout() {
   return (
     <AppShell current="dashboard" compactHeader>
       <div className="mx-auto w-full max-w-6xl px-3 py-5 sm:px-4 md:px-6">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-saffron">Programme Officer</p>
-        <h1 className="font-display text-2xl text-navy">{session.name}</h1>
+        <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-saffron">Programme Officer</p>
+        <h1 className="mt-1 font-display text-3xl text-navy">{session.name}</h1>
+        <span className="mt-3 block h-px w-24 bg-saffron" />
         <PoNav current={pathname === "/po/" ? "/po" : pathname} />
         <div className="mt-6">
           <Outlet />

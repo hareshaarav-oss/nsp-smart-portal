@@ -13,31 +13,33 @@ export function BrandHeader({
   const collegeLogo = settings.collegeLogo || COLLEGE_LOGO;
   const nssLogo = settings.nssLogo || NSS_LOGO;
   return (
-    <header className="no-print border-b border-border bg-surface">
-      <div className={cn("mx-auto max-w-6xl px-4 md:px-6", compact ? "py-3" : "py-3 md:py-4")}>
-        <div className="flex items-center gap-3 md:gap-5">
+    <header className="no-print bg-surface">
+      <div className="h-px bg-saffron" />
+      <div className={cn("mx-auto max-w-6xl px-4 md:px-6", compact ? "py-3" : "py-4 md:py-5")}>
+        <div className="flex items-center gap-4 md:gap-8">
           <img
             src={collegeLogo}
             alt="College emblem"
             className={cn(
-              "object-contain mix-blend-multiply",
-              compact ? "h-12 w-12 md:h-14 md:w-14" : "h-16 w-16 md:h-[5.5rem] md:w-[5.5rem]",
+              "object-contain",
+              compact ? "h-12 w-12 md:h-14 md:w-14" : "h-16 w-16 md:h-20 md:w-20",
             )}
           />
           <div className="min-w-0 flex-1 text-center">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-saffron">NSS Smart Portal</p>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.42em] text-saffron">NSS Smart Portal</p>
             <p
               className={cn(
-                "text-balance font-display font-semibold leading-tight text-navy",
-                compact ? "text-sm md:text-base" : "text-base md:text-xl",
+                "mt-1 text-balance font-display font-semibold leading-tight text-navy",
+                compact ? "text-base md:text-lg" : "text-lg md:text-2xl",
               )}
             >
               {settings.collegeShort || settings.collegeName}
             </p>
+            <span className="mx-auto mt-2 block h-px w-24 bg-saffron" />
             <p
               className={cn(
-                "mt-0.5 text-forest",
-                compact ? "text-[10px] md:text-xs" : "text-xs md:text-sm",
+                "mt-2 uppercase tracking-[0.22em] text-navy/70",
+                compact ? "text-[10px]" : "text-[11px] md:text-xs",
               )}
             >
               {eyebrow ?? "National Service Scheme"}
@@ -47,8 +49,8 @@ export function BrandHeader({
             src={nssLogo}
             alt="NSS emblem"
             className={cn(
-              "object-contain mix-blend-multiply",
-              compact ? "h-12 w-12 md:h-14 md:w-14" : "h-16 w-16 md:h-[5.5rem] md:w-[5.5rem]",
+              "object-contain",
+              compact ? "h-12 w-12 md:h-14 md:w-14" : "h-16 w-16 md:h-20 md:w-20",
             )}
           />
         </div>

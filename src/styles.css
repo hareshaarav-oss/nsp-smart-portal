@@ -1,31 +1,31 @@
 @import "tailwindcss";
 
 @theme {
-  --color-bg: #f4f1ea;
-  --color-surface: #fffcf7;
-  --color-paper: #f7f3ea;
-  --color-navy-deep: #0c1c33;
+  --color-bg: #f3efe4;
+  --color-surface: #fbf8f1;
+  --color-paper: #fbf8f1;
+  --color-navy-deep: #071428;
   --color-india-green: #138808;
-  --color-foreground: #1c1915;
-  --color-card: #fffcf7;
-  --color-card-foreground: #1c1915;
-  --color-muted: #ece4d4;
-  --color-muted-foreground: #6b6256;
-  --color-border: #d9cfbc;
-  --color-primary: #13294b;
-  --color-primary-foreground: #f7f3ea;
-  --color-secondary: #e8dfcf;
-  --color-secondary-foreground: #0b1f3a;
-  --color-saffron: #c45c26;
-  --color-saffron-foreground: #fffaf4;
-  --color-forest: #1b5e3b;
-  --color-forest-foreground: #f3faf5;
-  --color-danger: #9b2c2c;
+  --color-foreground: #1a140c;
+  --color-card: #fbf8f1;
+  --color-card-foreground: #1a140c;
+  --color-muted: #efe6d2;
+  --color-muted-foreground: #6e624c;
+  --color-border: #e3d3ae;
+  --color-primary: #0b1c36;
+  --color-primary-foreground: #fbf8f1;
+  --color-secondary: #efe6d2;
+  --color-secondary-foreground: #0b1c36;
+  --color-saffron: #9a7b3c;
+  --color-saffron-foreground: #fbf8f1;
+  --color-forest: #1d4a38;
+  --color-forest-foreground: #f4faf6;
+  --color-danger: #8d2b2b;
   --color-danger-foreground: #fff7f6;
-  --color-ring: #0b1f3a;
-  --color-cream: #f4efe4;
-  --color-navy: #13294b;
-  --color-ink: #1c1915;
+  --color-ring: #9a7b3c;
+  --color-cream: #f3efe4;
+  --color-navy: #0b1c36;
+  --color-ink: #1a140c;
 
   --font-sans: "Source Sans 3", "Noto Sans Gujarati", "Segoe UI", system-ui, sans-serif;
   --font-display: "Fraunces", "Noto Serif Gujarati", Georgia, serif;
@@ -42,19 +42,20 @@
 
 html.dark {
   color-scheme: dark;
-  --color-bg: #12110e;
-  --color-surface: #1c1916;
-  --color-paper: #1c1916;
-  --color-foreground: #f4efe6;
-  --color-card: #1c1916;
-  --color-card-foreground: #f4efe6;
-  --color-muted: #2a2622;
-  --color-muted-foreground: #c8bfb2;
-  --color-border: #3a342c;
-  --color-secondary: #2a2622;
-  --color-secondary-foreground: #f4efe6;
-  --color-cream: #1c1916;
-  --color-ink: #f4efe6;
+  --color-bg: #090e16;
+  --color-surface: #10182a;
+  --color-paper: #10182a;
+  --color-foreground: #f6f0e4;
+  --color-card: #121c30;
+  --color-card-foreground: #f6f0e4;
+  --color-muted: #1a2436;
+  --color-muted-foreground: #cbbfa6;
+  --color-border: #2c3a50;
+  --color-secondary: #1a2436;
+  --color-secondary-foreground: #f6f0e4;
+  --color-saffron: #d4bc7d;
+  --color-cream: #10182a;
+  --color-ink: #f6f0e4;
 }
 
 @layer base {

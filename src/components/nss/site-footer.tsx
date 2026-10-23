@@ -30,7 +30,7 @@ function DualStatus() {
 export function SiteFooter() {
   const settings = useNssStore((s) => s.settings);
   return (
-    <footer className="no-print mt-auto border-t border-border bg-navy px-4 py-6 text-center text-paper">
+    <footer className="no-print mt-auto border-t border-saffron/50 bg-navy px-4 py-8 text-center text-paper">
       <p className="font-display text-lg">{settings.collegeName}</p>
       <p className="mt-1 text-sm text-paper/80">NSS Smart Portal</p>
       <p className="mt-1 text-sm text-paper/70">{settings.sloganEn} · {settings.sloganGu}</p>

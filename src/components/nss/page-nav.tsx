@@ -30,7 +30,7 @@ export function PageNav({
   }
 
   return (
-    <nav className="bg-navy text-paper">
+    <nav className="border-y border-saffron/40 bg-navy text-paper">
       <div className="mx-auto flex max-w-6xl items-center gap-2 px-3 py-1.5 md:px-6">
         <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto text-sm [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {current !== "home" ? (
@@ -47,7 +47,7 @@ export function PageNav({
             to="/"
             className={cn(
               "shrink-0 rounded-full px-3 py-2 hover:bg-white/10",
-              current === "home" ? "bg-white/15" : "",
+              current === "home" ? "text-saffron" : "",
             )}
           >
             {t("home")}
@@ -63,7 +63,7 @@ export function PageNav({
               to={session ? dash : "/login"}
               className={cn(
                 "shrink-0 rounded-full px-3 py-2 hover:bg-white/10",
-                current === "dashboard" ? "bg-white/15" : "",
+                current === "dashboard" ? "text-saffron" : "",
               )}
             >
               {officer ? t("desk") : t("dashboard")}

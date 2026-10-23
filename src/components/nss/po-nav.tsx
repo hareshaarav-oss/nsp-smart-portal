@@ -93,13 +93,13 @@ export function PoNav({ current }: { current: string }) {
     Settings: "settings",
   };
   return (
-    <nav className="mt-4 space-y-2 rounded-2xl border border-border bg-card p-3">
+    <nav className="mt-5 overflow-hidden border border-saffron/50 bg-surface">
       {GROUPS.map((group) => (
-        <div key={group.en} className="flex flex-col gap-1.5 sm:flex-row sm:items-center">
-          <p className="w-20 shrink-0 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+        <div key={group.en} className="grid grid-cols-1 border-b border-saffron/30 last:border-b-0 sm:grid-cols-[7.5rem_1fr]">
+          <p className="flex items-center bg-navy px-3 py-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-saffron">
             {lang === "gu" ? group.gu : group.en}
           </p>
-          <div className="flex flex-wrap gap-1">
+          <div className="flex flex-wrap items-center gap-x-1 px-2 py-1">
             {group.items.map((item) => {
               const active = current === item.to;
               const Icon = item.icon;
@@ -108,8 +108,8 @@ export function PoNav({ current }: { current: string }) {
                   key={item.to}
                   to={item.to}
                   className={cn(
-                    "inline-flex h-9 items-center gap-1.5 rounded-full px-3 text-sm font-medium",
-                    active ? "bg-navy text-paper" : "bg-muted text-foreground hover:bg-muted/70",
+                    "inline-flex h-10 items-center gap-1.5 px-3 text-sm",
+                    active ? "font-semibold text-saffron underline decoration-saffron underline-offset-8" : "text-navy hover:text-saffron",
                   )}
                 >
                   <Icon className="size-3.5" />

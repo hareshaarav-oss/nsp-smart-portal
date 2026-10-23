@@ -133,7 +133,7 @@ function Home() {
             </Button>
           </section>
 
-          <section className="mt-5 overflow-hidden rounded-3xl border border-border bg-card shadow-sm">
+          <section className="mt-5 overflow-hidden border border-saffron/50 bg-card">
             <div className="flex flex-wrap items-end justify-between gap-3 border-b border-border px-5 py-4">
               <div>
                 <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-saffron">Welcome to NSP</p>
