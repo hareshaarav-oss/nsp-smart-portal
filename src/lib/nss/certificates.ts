@@ -6,6 +6,7 @@ import {
 } from "./format";
 
 import { openHtmlDocument, openHtmlDocumentWhenReady } from "./print";
+import { qrSvg } from "./qr";
 
 import type {
   AttendanceRecord,
@@ -175,6 +176,8 @@ body {
 }
 .cert-id { left: 33.8%; width: 18%; }
 .date { left: 66.2%; width: 16%; }
+.qr-mark { position: absolute; right: 3.2%; bottom: 7%; width: 72px; height: 72px; background: #fff; padding: 3px; }
+.qr-mark svg { width: 66px; height: 66px; display: block; }
 .no-print {
   text-align: center;
   margin: 12px 0;
@@ -275,13 +278,10 @@ async function certificateSheet(opts: {
   const eventDate = escapeHtml(
     formatCertificateDate(opts.event.date),
   );
-  const serial = escapeHtml(
-    certificateSerial(
-      opts.cert,
-      opts.event,
-      opts.certificateNumber ?? 1,
-    ),
-  );
+  const rawSerial = certificateSerial(opts.cert, opts.event, opts.certificateNumber ?? 1);
+  const serial = escapeHtml(rawSerial);
+  const origin = typeof window !== "undefined" ? window.location.origin : "https://nsp-smart-portal.vercel.app";
+  const qr = await qrSvg(`${origin}/verify?id=${encodeURIComponent(rawSerial)}`, 120);
 
   return `
     <div class="sheet">
@@ -298,6 +298,7 @@ async function certificateSheet(opts: {
         <p class="cert-id">${serial}</p>
         <p class="date">${eventDate}</p>
       </div>
+      <div class="qr-mark">${qr}</div>
     </div>
   `;
 }

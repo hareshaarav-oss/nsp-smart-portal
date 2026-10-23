@@ -1,4 +1,4 @@
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { BrandHeader } from "./brand-header";
 import { PageNav } from "./page-nav";
 import { SiteFooter } from "./site-footer";
@@ -19,6 +19,18 @@ export function AppShell({
   showDashboard?: boolean;
   compactHeader?: boolean;
 }) {
+  const [offline, setOffline] = useState(false);
+  useEffect(() => {
+    const sync = () => setOffline(!navigator.onLine);
+    sync();
+    window.addEventListener("online", sync);
+    window.addEventListener("offline", sync);
+    return () => {
+      window.removeEventListener("online", sync);
+      window.removeEventListener("offline", sync);
+    };
+  }, []);
+
   useEffect(() => {
     try {
       if (sessionStorage.getItem(STORAGE_VISITOR_MARK)) return;
@@ -41,7 +53,8 @@ export function AppShell({
   }, []);
 
   return (
-    <div className="flex min-h-dvh flex-col bg-bg text-foreground">
+    <div className="touch-ui flex min-h-dvh flex-col bg-bg text-foreground">
+      {offline ? <div className="bg-[#111b21] px-4 py-1.5 text-center text-xs font-semibold text-white">Offline</div> : null}
       <BrandHeader eyebrow={eyebrow} compact={compactHeader} />
       <TricolourStrip />
       <PageNav showDashboard={showDashboard} current={current} />

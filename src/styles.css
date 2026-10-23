@@ -92,6 +92,15 @@ html.dark {
   font-family: var(--font-gujarati);
 }
 
+@media (max-width: 720px) {
+  .touch-ui button,
+  .touch-ui a[class*="rounded"] {
+    min-height: 44px;
+  }
+  .touch-ui {
+    font-size: 16px;
+  }
+}
 .feed-scroll {
   max-height: 20rem;
   padding-right: 0.25rem;

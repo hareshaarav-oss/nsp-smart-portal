@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   Card,
   CardContent,
@@ -86,6 +87,7 @@ function AttendancePage() {
 
   const [scannerOpen, setScannerOpen] = useState(false);
   const [scannerError, setScannerError] = useState("");
+  const [rollQuery, setRollQuery] = useState("");
   const [manualPayload, setManualPayload] = useState("");
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -597,6 +599,10 @@ function AttendancePage() {
 
   return (
     <div className="space-y-6">
+      <div className="rounded-2xl border border-border bg-card p-4">
+        <h2 className="font-display text-xl">Today</h2>
+        <Input className="mt-3 h-12 text-base" placeholder="Search name or ID" value={rollQuery} onChange={(e) => setRollQuery(e.target.value)} />
+      </div>
       <OfficialLetterhead
         title="Attendance"
         compact
@@ -1041,7 +1047,10 @@ function AttendancePage() {
                 </thead>
 
                 <tbody>
-                  {volunteers.map((v) => {
+                  {volunteers.filter((v) => {
+                    const needle = rollQuery.trim().toLowerCase();
+                    return !needle || `${v.fullName} ${v.volunteerId}`.toLowerCase().includes(needle);
+                  }).map((v) => {
                     const present = markIndex.att.get(v.id) === true;
                     const rec = markIndex.att.has(v.id);
                     const rsvpStatus = markIndex.rsvp.get(v.id);

@@ -52,6 +52,23 @@ function ReportsPage() {
   return (
     <div className="space-y-6">
       <OfficialLetterhead title="Official reports" compact />
+      <Button className="h-12" onClick={() => {
+        const day = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+        const todayEvents = state.events.filter((event) => (event.date || "").slice(0, 10) === day);
+        const lines = todayEvents.flatMap((event) =>
+          state.attendance.filter((row) => row.eventId === event.id && row.present).map((row) => {
+            const person = state.volunteers.find((volunteer) => volunteer.id === row.volunteerId);
+            return `<tr><td>${person?.fullName || row.volunteerId}</td><td>${person?.unit || ""}</td><td>${event.name}</td><td>${event.hours || 0}</td></tr>`;
+          }),
+        );
+        const html = `<!doctype html><html><head><title>Today</title><style>body{font-family:Georgia,serif;padding:32px;color:#13294b}h1{margin:0}table{width:100%;border-collapse:collapse;margin-top:16px}td,th{border-bottom:1px solid #ddd;text-align:left;padding:8px}</style></head><body><p>NSS</p><h1>${state.settings.collegeName}</h1><p>Attendance ${day}</p><table><tr><th>Name</th><th>Unit</th><th>Event</th><th>Hours</th></tr>${lines.join("") || "<tr><td colspan='4'>No attendance today.</td></tr>"}</table></body></html>`;
+        const frame = window.open("", "_blank");
+        if (!frame) return;
+        frame.document.write(html);
+        frame.document.close();
+        frame.focus();
+        frame.print();
+      }}>Today's report PDF</Button>
       <div>
         <h2 className="font-display text-xl font-semibold">Reports</h2>
         <p className="mt-1 max-w-2xl text-sm text-muted-foreground">

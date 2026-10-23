@@ -1393,6 +1393,7 @@ export const useNssStore =
           const event = saved.events.find((item) => item.id === eventId);
           if (volunteer && event) {
             persistAttendance([{ mobile: volunteer.mobile, name: volunteer.fullName, eventName: event.name, present, date: event.date }]);
+            get().addLog("Attendance", `${volunteer.fullName} marked ${present ? "present" : "absent"} for ${event.name}${present ? `. ${event.hours || 0} hours added.` : "."}`);
           }
         },
 
@@ -2204,6 +2205,7 @@ export const useNssStore =
               ...added,
             ],
           });
+          if (added.length) get().addLog("Certificate", `Issued ${added.length} certificate(s).`);
           return added;
         },
 

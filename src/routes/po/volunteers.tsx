@@ -112,6 +112,17 @@ function VolunteersPage() {
         </Button>
         <span className="self-center text-xs text-muted-foreground">{selected.length} selected</span>
       </div>
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4">
+        {rows.slice(0, 24).map((volunteer) => (
+          <button key={volunteer.id} type="button" className="flex items-center gap-2 rounded-xl border border-border bg-card p-2 text-left" onClick={() => setRecordId(volunteer.id)}>
+            {volunteer.photoUrl ? <img src={volunteer.photoUrl} alt="" className="size-12 rounded-lg object-cover" /> : <span className="flex size-12 items-center justify-center rounded-lg bg-muted text-xs">{volunteer.fullName.slice(0, 1)}</span>}
+            <span className="min-w-0">
+              <span className="block truncate text-sm font-medium">{volunteer.fullName}</span>
+              <span className="block text-xs text-muted-foreground">{volunteer.unit} · {volunteerHours(state, volunteer.id)} h</span>
+            </span>
+          </button>
+        ))}
+      </div>
       <div className="grid gap-2 sm:grid-cols-3">
         <Input placeholder="Search name, ID, mobile" value={q} onChange={(e) => setQ(e.target.value)} />
         <select

@@ -609,6 +609,24 @@ export const Route = createFileRoute("/api/nss-cloud")({
                 createdAt: new Date().toISOString(),
                 audience: "all",
               });
+              const cloud = await loadCollegeCloud({ gallery: false, photos: false }).catch(() => null);
+              const people = ((cloud?.volunteers ?? []) as { id?: string; volunteerId?: string; status?: string }[])
+                .filter((row) => text(row.status) !== "alumni")
+                .slice(0, 40);
+              for (let index = 0; index < people.length; index += 8) {
+                await Promise.all(
+                  people.slice(index, index + 8).map((row) => {
+                    const who = text(row.volunteerId || row.id);
+                    if (!who) return Promise.resolve();
+                    return saveChatMessage({
+                      threadId: canonicalThread(`dm:${who}:po`),
+                      text: `${title}\n${note}`.slice(0, 500),
+                      senderId: "po",
+                      senderName: "Programme Officer",
+                    }).catch(() => undefined);
+                  }),
+                );
+              }
               return Response.json({ ok: true, id });
             }
             if (body.action === "chat-send") {

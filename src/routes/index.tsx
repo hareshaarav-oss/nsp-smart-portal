@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { daysUntilBirthday, formatLongDate, isBirthdayOn, todayIso } from "@/lib/nss/format";
 import { activeVolunteers, alumniVolunteers, bestVolunteer, liveServiceHours, useNssStore, volunteerHours } from "@/lib/nss/store";
+import { useUi } from "@/lib/nss/ui-prefs";
 
 export const Route = createFileRoute("/")({ component: Home });
 
@@ -80,6 +81,7 @@ function Home() {
     [volunteers, today],
   );
 
+  const { t } = useUi();
   const collegeReady = shownVolunteers >= 20;
   const collegeEvents = collegeReady ? events.filter((event) => !SEED_IDS.has(event.id)) : events;
   const collegeNotices = collegeReady ? notices.filter((notice) => !SEED_IDS.has(notice.id)) : notices;
@@ -118,21 +120,40 @@ function Home() {
         <section className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 md:px-6 md:py-8">
           <section className="flex flex-wrap justify-center gap-2">
             <Button asChild className="h-11 bg-forest text-primary-foreground hover:bg-forest/90">
-              <Link to="/register">Student registration</Link>
+              <Link to="/register">{t("register")}</Link>
             </Button>
             <Button asChild variant="outline" className="h-11">
               <Link to="/login" search={{ role: "volunteer" }}>
-                Student login
+                {t("studentLogin")}
               </Link>
             </Button>
             <Button asChild className="h-11 bg-navy text-paper hover:bg-navy-deep">
               <Link to="/login" search={{ role: "po" }}>
-                Admin login
+                {t("adminLogin")}
               </Link>
             </Button>
             <Button asChild variant="outline" className="h-11">
-              <Link to="/verify" search={{ id: "" }}>Certificate verification</Link>
+              <Link to="/verify" search={{ id: "" }}>{t("verify")}</Link>
             </Button>
+          </section>
+
+          <section className="mt-6 rounded-3xl bg-navy p-5 text-paper shadow-md md:p-7">
+            <div className="flex items-center gap-4">
+              <div className="flex size-16 shrink-0 items-center justify-center rounded-full bg-white text-sm font-bold text-navy">NSS</div>
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-saffron">NSS</p>
+                <h1 className="font-display text-2xl font-bold md:text-3xl">{settings.collegeName}</h1>
+              </div>
+            </div>
+            {latestNotices[0] ? (
+              <article className="mt-4 rounded-2xl bg-white p-4 text-navy">
+                <p className="text-xs font-semibold text-saffron">{formatLongDate(latestNotices[0].date)}</p>
+                <h2 className="mt-1 font-display text-xl">{latestNotices[0].title}</h2>
+                <p className="gu mt-2 text-sm leading-relaxed">{latestNotices[0].body}</p>
+              </article>
+            ) : (
+              <p className="mt-4 text-sm text-paper/70">{t("emptyNotice")}</p>
+            )}
           </section>
 
           <section className="mt-6 overflow-hidden rounded-3xl border border-border bg-gradient-to-br from-surface via-card to-muted shadow-md">
@@ -174,7 +195,7 @@ function Home() {
                 <h2 className="font-display text-xl text-navy">Latest news & notices</h2>
                 <div className="feed-scroll mt-3 space-y-3">
                   {latestNotices.length === 0 ? (
-                    <p className="py-8 text-center text-sm text-muted-foreground">No notices yet.</p>
+                    <p className="py-8 text-center text-sm text-muted-foreground">{t("emptyNotice")}</p>
                   ) : (
                     latestNotices.map((notice) => (
                       <article key={notice.id} className="rounded-md border border-border bg-bg p-3">

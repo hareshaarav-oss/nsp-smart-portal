@@ -16,6 +16,7 @@ import { openIdCard } from "@/lib/nss/id-card";
 import { blobToDataUrl, compressPassport, rememberPhoto } from "@/lib/nss/media";
 import { findSessionVolunteer, isOfficer, registerFingerprint, useSessionStore } from "@/lib/nss/session";
 import { attendanceOf, bestVolunteer, rsvpOf, useNssStore, volunteerHours } from "@/lib/nss/store";
+import { useUi } from "@/lib/nss/ui-prefs";
 
 export const Route = createFileRoute("/volunteer")({ component: VolunteerDash });
 
@@ -34,6 +35,16 @@ function VolunteerDash() {
   const portalState = useNssStore();
 
   const [panel, setPanel] = useState<"none" | "edit" | "password">("none");
+  const { t } = useUi();
+  const [readNotes, setReadNotes] = useState<string[]>(() => {
+    if (typeof window === "undefined") return [];
+    try {
+      const raw = JSON.parse(localStorage.getItem("nsp-read-notices") || "[]") as unknown;
+      return Array.isArray(raw) ? raw.filter((id) => typeof id === "string") : [];
+    } catch {
+      return [];
+    }
+  });
   const [cur, setCur] = useState("");
   const [next, setNext] = useState("");
   const [confirm, setConfirm] = useState("");
@@ -122,11 +133,10 @@ function VolunteerDash() {
         toast.error(data.error || "Could not update the password.");
         return;
       }
-      toast.success("Password updated.");
-      setCur("");
-      setNext("");
-      setConfirm("");
-      setPanel("none");
+      toast.success("Password updated. Sign in again.");
+      useNssStore.getState().addLog("Password", `${me.fullName} changed the password.`);
+      setSession(null);
+      window.location.href = "/login";
     } catch {
       toast.error("Could not reach the college server.");
     }
@@ -136,78 +146,75 @@ function VolunteerDash() {
     <AppShell eyebrow="NSS STUDENT DASHBOARD" current="dashboard">
       <div className="mx-auto w-full max-w-6xl space-y-4 px-3 pb-4 sm:space-y-6 sm:px-4 md:px-6">
         <TomorrowBanner />
-        <div className="overflow-hidden rounded-2xl bg-navy p-5 text-paper shadow-md md:p-7">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="grid w-full grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-5 [&>*]:w-full">
-              <Button variant="saffron" onClick={() => void openIdCard(me, settings)}>
-                <CreditCard />
-                Digital ID Card
-              </Button>
-              <Button
-                className="bg-sky-600 text-white hover:bg-sky-700"
-                onClick={() => setPanel(panel === "edit" ? "none" : "edit")}
-              >
-                <Pencil />
-                Edit Profile
-              </Button>
-              <Button asChild className="bg-forest text-primary-foreground hover:bg-forest/90">
-                <Link to="/chat">
-                  <MessageCircle />
-                  NSS Chat
-                </Link>
-              </Button>
-              <Button
-                className="bg-forest text-primary-foreground hover:bg-forest/90"
-                onClick={() => setPanel(panel === "password" ? "none" : "password")}
-              >
-                <Lock />
-                Change Password
-              </Button>
-              <Button
-                variant="danger"
-                onClick={() => {
-                  try {
-                    localStorage.setItem("nsp-view", "portal");
-                  } catch {
-                    /* ignore */
-                  }
-                  setSession(null);
-                  window.location.href = "/";
-                }}
-              >
-                <LogOut />
-                Logout
-              </Button>
-            </div>
-          </div>
-          <div className="mt-4 flex flex-col items-center gap-5 sm:flex-row sm:items-center">
+        <div className="overflow-hidden rounded-3xl bg-navy p-5 text-paper shadow-md">
+          <div className="flex flex-col items-center gap-4 sm:flex-row">
             {me.photoUrl ? (
-              <img src={me.photoUrl} alt="" className="h-28 w-24 rounded-xl object-cover ring-4 ring-white/20" />
+              <img src={me.photoUrl} alt="" className="h-28 w-24 rounded-2xl object-cover ring-4 ring-white/20" />
             ) : (
-              <div className="flex h-28 w-24 items-center justify-center rounded-xl bg-white/15 font-display text-2xl">
+              <div className="flex h-28 w-24 items-center justify-center rounded-2xl bg-white/15 font-display text-2xl">
                 {me.fullName.split(" ").map((p) => p[0]).slice(0, 2).join("")}
               </div>
             )}
-            <div className="text-center sm:text-left">
-              <div className="mb-2 flex flex-wrap justify-center gap-2 sm:justify-start">
-                <span className="rounded-full bg-white/15 px-3 py-1 text-xs">
-                  {me.course} · Sem {me.semester}
-                </span>
-                <span className="rounded-full bg-white/15 px-3 py-1 text-xs">Role: {me.nssRole}</span>
-                {isBest ? (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-saffron px-3 py-1 text-xs font-semibold text-saffron-foreground">
-                    <Star className="size-3" /> Best volunteer
-                  </span>
-                ) : null}
+            <div className="min-w-0 flex-1 text-center sm:text-left">
+              <h1 className="font-display text-2xl font-semibold">{idCardName(me.fullName)}</h1>
+              <p className="text-sm text-paper/70">{me.volunteerId} · {me.unit}</p>
+              <p className="text-xs text-paper/60">{settings.collegeName}</p>
+              <p className="mt-2 text-sm">{t("next")}: {upcoming[0] ? `${upcoming[0].name} · ${formatLongDate(upcoming[0].date)}` : "—"}</p>
+            </div>
+            <div className="relative size-24 shrink-0">
+              <svg viewBox="0 0 36 36" className="size-24 -rotate-90">
+                <path d="M18 2.1 a 15.9 15.9 0 0 1 0 31.8 a 15.9 15.9 0 0 1 0 -31.8" fill="none" stroke="rgba(255,255,255,.25)" strokeWidth="3" />
+                <path d="M18 2.1 a 15.9 15.9 0 0 1 0 31.8 a 15.9 15.9 0 0 1 0 -31.8" fill="none" stroke="#ff9933" strokeWidth="3" strokeDasharray={`${Math.min(100, Math.round((hours / 240) * 100))} 100`} />
+              </svg>
+              <div className="absolute inset-0 flex flex-col items-center justify-center">
+                <span className="font-display text-lg leading-none">{hours}</span>
+                <span className="text-[10px] text-paper/70">/ 240</span>
               </div>
-              <h1 className="font-display text-2xl font-semibold sm:text-3xl">{idCardName(me.fullName)}</h1>
-              <p className="text-sm text-paper/70">
-                {me.volunteerId} · {me.enrollment} · {me.unit}
-              </p>
-              <p className="mt-1 text-xs text-paper/60">{settings.collegeName}</p>
             </div>
           </div>
+          <div className="mt-4 grid grid-cols-3 gap-2">
+            <Button variant="saffron" className="h-12" onClick={() => void openIdCard(me, settings)}>{t("id")}</Button>
+            <Button asChild className="h-12 bg-forest text-primary-foreground hover:bg-forest/90"><Link to="/chat">{t("chat")}</Link></Button>
+            <Button variant="outline" className="h-12 border-white/30 bg-transparent text-paper hover:bg-white/10" onClick={() => setPanel(panel === "none" ? "edit" : "none")}>{t("more")}</Button>
+          </div>
         </div>
+        {panel !== "none" ? (
+          <div className="flex flex-wrap gap-2">
+            <Button className="h-12" onClick={() => setPanel(panel === "password" ? "edit" : "password")}>Change password</Button>
+            <Button variant="danger" className="h-12" onClick={() => { setSession(null); window.location.href = "/"; }}>Logout</Button>
+          </div>
+        ) : null}
+        <Card>
+          <CardHeader><CardTitle>{t("recent")}</CardTitle></CardHeader>
+          <CardContent className="space-y-2">
+            {events.filter((event) => attendanceOf(portalState, me.id, event.id)?.present).sort((a, b) => b.date.localeCompare(a.date)).slice(0, 5).map((event) => (
+              <div key={event.id} className="flex items-center justify-between text-sm">
+                <span>{event.name}</span>
+                <span className="text-muted-foreground">{event.hours} h</span>
+              </div>
+            ))}
+            {events.filter((event) => attendanceOf(portalState, me.id, event.id)?.present).length === 0 ? <p className="text-sm text-muted-foreground">—</p> : null}
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader><CardTitle>{t("noticesTitle")}</CardTitle></CardHeader>
+          <CardContent className="space-y-2">
+            {notices.slice(0, 5).map((notice) => {
+              const unread = !readNotes.includes(notice.id);
+              return (
+                <button key={notice.id} type="button" className="flex w-full items-start gap-2 rounded-xl border border-border px-3 py-3 text-left" onClick={() => {
+                  const nextIds = readNotes.includes(notice.id) ? readNotes : [...readNotes, notice.id];
+                  setReadNotes(nextIds);
+                  localStorage.setItem("nsp-read-notices", JSON.stringify(nextIds));
+                }}>
+                  {unread ? <span className="mt-1 size-2 shrink-0 rounded-full bg-red-600" /> : <span className="mt-1 size-2 shrink-0" />}
+                  <span><span className="block font-medium">{notice.title}</span><span className="text-xs text-muted-foreground">{notice.body.slice(0, 120)}</span></span>
+                </button>
+              );
+            })}
+            {notices.length === 0 ? <p className="text-sm text-muted-foreground">{t("emptyNotice")}</p> : null}
+          </CardContent>
+        </Card>
 
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <Stat label="Attendance" value={`${attPct}%`} />

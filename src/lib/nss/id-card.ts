@@ -130,6 +130,8 @@ export async function htmlForIdCard(volunteer: Volunteer, settings: PortalSettin
       <div class="bar">SMART IDENTITY CARD</div>
     </article>
     <div class="no-print">
+      <button class="print" onclick="document.documentElement.requestFullscreen && document.documentElement.requestFullscreen()">Full screen</button>
+      <button class="print" onclick="navigator.share ? navigator.share({ title: document.title, text: document.title }) : window.print()">Share</button>
       <button class="print" onclick="window.print()">Print full I-card</button>
       <button class="close" onclick="window.close()">Close</button>
     </div>
