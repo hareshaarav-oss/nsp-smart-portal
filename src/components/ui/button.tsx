@@ -4,22 +4,22 @@ import type { ButtonHTMLAttributes } from "react";
 import { cn } from "@/lib/utils";
 
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-none text-sm font-semibold tracking-wide transition-[background-color,color,border-color] duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 active:border-saffron active:bg-navy active:text-saffron",
+  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-none text-sm font-medium transition-colors duration-150 focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
   {
     variants: {
       variant: {
-        default: "bg-primary text-primary-foreground hover:opacity-92",
-        secondary: "bg-secondary text-secondary-foreground hover:bg-secondary/80",
-        outline: "border border-border bg-card text-foreground hover:bg-muted",
-        ghost: "text-foreground hover:bg-muted",
-        saffron: "bg-saffron text-saffron-foreground hover:opacity-92",
-        forest: "bg-forest text-forest-foreground hover:opacity-92",
-        danger: "bg-danger text-danger-foreground hover:opacity-92",
+        default: "h-10 bg-navy px-4 text-paper hover:bg-navy/90",
+        secondary: "is-link h-auto min-h-0 bg-transparent px-0 text-navy underline-offset-4 hover:underline",
+        outline: "is-link h-auto min-h-0 border-0 bg-transparent px-0 py-0 text-navy underline-offset-4 hover:underline",
+        ghost: "is-link h-auto min-h-0 border-0 bg-transparent px-0 py-0 text-navy/75 underline-offset-4 hover:underline",
+        saffron: "h-10 bg-navy px-4 text-paper hover:bg-navy/90",
+        forest: "h-10 bg-[#1d4a38] px-4 text-paper hover:bg-[#1d4a38]/90",
+        danger: "h-10 bg-transparent px-0 text-[#8d2b2b] underline-offset-4 hover:underline",
       },
       size: {
-        default: "h-10 px-4",
-        sm: "h-8 rounded-sm px-3 text-xs",
-        lg: "h-12 rounded-lg px-5 text-base",
+        default: "",
+        sm: "text-sm",
+        lg: "h-11 px-5",
         icon: "size-10",
       },
     },

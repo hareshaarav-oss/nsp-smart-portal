@@ -118,8 +118,8 @@ html.dark {
 }
 
 @media (max-width: 720px) {
-  .touch-ui button,
-  .touch-ui a[class*="rounded"] {
+  .touch-ui button:not(.is-link),
+  .touch-ui a[class*="rounded"]:not(.is-link) {
     min-height: 44px;
   }
   .touch-ui {

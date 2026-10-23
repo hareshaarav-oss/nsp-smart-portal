@@ -1,4 +1,4 @@
-import { createFileRoute, Link, Navigate } from "@tanstack/react-router";
+import { createFileRoute, Navigate } from "@tanstack/react-router";
 import { useRef, useState } from "react";
 import { BarChart, Bar, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { toast } from "sonner";
@@ -172,12 +172,10 @@ function VolunteerDash() {
               </div>
             </div>
           </div>
-          <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
-            <Button variant="saffron" className="h-12" onClick={() => void openIdCard(me, settings)}>{t("id")}</Button>
-            <Button variant="outline" className="h-12 border-white/30 bg-transparent text-paper hover:bg-white/10" asChild><Link to="/chat">{t("chat")}</Link></Button>
-            <Button variant="outline" className="h-12 border-white/30 bg-transparent text-paper hover:bg-white/10" onClick={() => setPanel(panel === "edit" ? "none" : "edit")}>Edit profile</Button>
-            <Button variant="outline" className="h-12 border-white/30 bg-transparent text-paper hover:bg-white/10" onClick={() => setPanel(panel === "password" ? "none" : "password")}>Change password</Button>
-            <Button variant="danger" className="h-12" onClick={() => { setSession(null); window.location.href = "/"; }}>Logout</Button>
+          <div className="mt-5 flex flex-wrap justify-center gap-x-6 gap-y-2 text-sm text-paper sm:justify-start">
+            <button type="button" className="underline-offset-4 hover:underline" onClick={() => void openIdCard(me, settings)}>{t("id")}</button>
+            <button type="button" className="underline-offset-4 hover:underline" onClick={() => setPanel(panel === "edit" ? "none" : "edit")}>Edit profile</button>
+            <button type="button" className="underline-offset-4 hover:underline" onClick={() => setPanel(panel === "password" ? "none" : "password")}>Change password</button>
           </div>
         </div>
         <Card>

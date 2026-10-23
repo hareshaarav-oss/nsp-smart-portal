@@ -5,7 +5,6 @@ import { AppShell } from "@/components/nss/shell";
 import { PhotoCarousel } from "@/components/nss/photo-carousel";
 import { SplashScreen } from "@/components/nss/splash";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { daysUntilBirthday, formatLongDate, isBirthdayOn, todayIso } from "@/lib/nss/format";
 import { activeVolunteers, alumniVolunteers, bestVolunteer, liveServiceHours, useNssStore, volunteerHours } from "@/lib/nss/store";
 import { useUi } from "@/lib/nss/ui-prefs";
@@ -121,27 +120,18 @@ function Home() {
             <p className="text-[11px] font-semibold uppercase tracking-[0.34em] text-saffron">Welcome to NSP</p>
             <h1 className="mt-3 font-display text-4xl text-navy md:text-6xl">NSS Smart Portal</h1>
             <p className="mt-4 text-base text-navy/80">{settings.collegeName}</p>
-            <p className="mt-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-forest">Cloud connected</p>
+            <p className="mt-3 text-sm text-navy/60">Cloud connected</p>
           </header>
 
-          <nav className="mt-8 grid grid-cols-2 border-y border-saffron/40 sm:grid-cols-4">
-            <Button asChild variant="ghost" className="h-12">
-              <Link to="/login" search={{ role: "volunteer" }}>{t("studentLogin")}</Link>
-            </Button>
-            <Button asChild variant="ghost" className="h-12">
-              <Link to="/register">{t("register")}</Link>
-            </Button>
-            <Button asChild variant="ghost" className="h-12">
-              <Link to="/login" search={{ role: "po" }}>{t("adminLogin")}</Link>
-            </Button>
-            <Button asChild variant="ghost" className="h-12">
-              <Link to="/verify" search={{ id: "" }}>{t("verify")}</Link>
-            </Button>
+          <nav className="mt-8 flex flex-wrap justify-center gap-x-8 gap-y-3 border-y border-navy/15 py-4 text-sm text-navy">
+            <Link to="/login" search={{ role: "volunteer" }} className="underline-offset-4 hover:underline">{t("studentLogin")}</Link>
+            <Link to="/register" className="underline-offset-4 hover:underline">{t("register")}</Link>
+            <Link to="/login" search={{ role: "po" }} className="underline-offset-4 hover:underline">{t("adminLogin")}</Link>
+            <Link to="/verify" search={{ id: "" }} className="underline-offset-4 hover:underline">{t("verify")}</Link>
           </nav>
 
-          <nav className="mt-4 flex flex-wrap justify-center gap-x-5 gap-y-2">
+          <nav className="mt-6 flex flex-wrap justify-center gap-x-6 gap-y-2">
             {[
-              ["#notice", "Notice"],
               ["#officers", "Officers"],
               ["#gallery", "Gallery"],
               ["#volunteers", "Volunteers"],

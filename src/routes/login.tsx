@@ -193,7 +193,7 @@ function LoginPage() {
         <Card>
           <CardContent className="pt-5">
             <form className="space-y-4" onSubmit={onSubmit}>
-              <div className="grid grid-cols-3 gap-2">
+              <div className="flex gap-6 border-b border-navy/15 pb-2 text-sm">
                 {([
                   ["volunteer", "Student"],
                   ["po", "Officer"],
@@ -202,7 +202,7 @@ function LoginPage() {
                   <button
                     key={value}
                     type="button"
-                    className={`h-11 rounded-xl text-sm font-semibold ${role === value ? "bg-navy text-paper" : "bg-muted text-foreground"}`}
+                    className={role === value ? "text-navy shadow-[inset_0_-2px_0_#9a7b3c]" : "text-navy/50"}
                     onClick={() => setRole(value)}
                   >
                     {label}

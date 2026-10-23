@@ -1,5 +1,5 @@
 import { Link, useRouter, useRouterState } from "@tanstack/react-router";
-import { ArrowLeft, Download } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import { dashboardPath, isOfficer, useSessionStore } from "@/lib/nss/session";
 import { useUi } from "@/lib/nss/ui-prefs";
 import { useChatUnread } from "@/components/nss/chat-alert";
@@ -86,24 +86,23 @@ export function PageNav({
         <div className="flex shrink-0 items-center gap-1">
           <Button
             size="sm"
-            variant="outline"
-            className="h-9 border-white/20 bg-transparent px-2 text-paper hover:bg-white/10"
+            variant="ghost"
+            className="min-h-11 px-2 text-paper hover:text-paper"
             asChild
           >
             <Link to="/install" aria-label={t("install")}>
-              <Download />
-              <span className="hidden md:inline">{t("install")}</span>
+              {t("install")}
             </Link>
           </Button>
-          <button type="button" className="h-9 rounded-full px-2.5 text-xs font-semibold hover:bg-white/10" onClick={() => setLang(lang === "gu" ? "en" : "gu")}>{lang === "gu" ? "EN" : "ગુ"}</button>
-          <button type="button" className="h-9 rounded-full px-2.5 text-xs font-semibold hover:bg-white/10" onClick={toggleDark}>{dark ? "Light" : "Dark"}</button>
+          <button type="button" className="px-2 text-xs" onClick={() => setLang(lang === "gu" ? "en" : "gu")}>{lang === "gu" ? "EN" : "ગુ"}</button>
+          <button type="button" className="px-2 text-xs" onClick={toggleDark}>{dark ? "Light" : "Dark"}</button>
           {session ? (
             <>
               <span className="hidden text-xs text-paper/70 sm:inline">{session.name}</span>
               <Button
                 size="sm"
-                variant="outline"
-                className="h-9 border-white/20 bg-transparent text-paper hover:bg-white/10"
+                variant="ghost"
+                className="min-h-11 px-2 text-paper hover:text-paper"
                 onClick={() => {
                   setSession(null);
                   window.location.href = "/";
@@ -115,8 +114,8 @@ export function PageNav({
           ) : (
             <Button
               size="sm"
-              variant="outline"
-              className="h-9 border-white/20 bg-transparent text-paper hover:bg-white/10"
+              variant="ghost"
+              className="min-h-11 px-2 text-paper hover:text-paper"
               asChild
             >
               <Link to="/login">{t("signin")}</Link>

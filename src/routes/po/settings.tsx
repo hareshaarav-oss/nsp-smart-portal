@@ -98,7 +98,7 @@ function SettingsPage() {
         <Card className="h-fit lg:sticky lg:top-4">
           <CardContent className="p-2">
             {sections.map(([id, title]) => (
-              <button key={id} type="button" onClick={() => setSection(id)} className={`mb-1 w-full rounded-xl px-3 py-3 text-left ${section === id ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}>
+              <button key={id} type="button" onClick={() => setSection(id)} className={`mb-1 w-full px-3 py-2 text-left text-sm ${section === id ? "text-navy shadow-[inset_2px_0_0_#9a7b3c]" : "text-navy/60"}`}>
                 <p className="text-sm font-semibold">{title}</p>
               </button>
             ))}
@@ -106,7 +106,6 @@ function SettingsPage() {
         </Card>
 
         <div className="space-y-5">
-          <div className="sticky top-2 z-10 flex justify-end rounded-xl border border-border bg-card/95 p-2 backdrop-blur"><Button onClick={saveSettings}>Save settings</Button></div>
           {section === "college" && <CollegeSection settings={draft} update={updateDraft} busy={busy} onPhoto={onPhoto} onLogo={onLogo} />}
           {section === "home" && <HomeSection settings={draft} update={updateDraft} />}
           {section === "birthday" && <BirthdaySection settings={draft} update={updateDraft} />}

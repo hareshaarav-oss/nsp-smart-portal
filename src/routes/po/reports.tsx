@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
-import { Download, Eye, Printer } from "lucide-react";
+import { Eye } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { OfficialLetterhead, ReportPreview } from "@/components/nss/official-letterhead";
@@ -52,7 +52,7 @@ function ReportsPage() {
   return (
     <div className="space-y-6">
       <OfficialLetterhead title="Official reports" compact />
-      <Button className="h-12" onClick={() => {
+      <Button variant="outline" onClick={() => {
         const day = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
         const todayEvents = state.events.filter((event) => (event.date || "").slice(0, 10) === day);
         const lines = todayEvents.flatMap((event) =>
@@ -75,7 +75,7 @@ function ReportsPage() {
           <CardTitle className="text-base">Press</CardTitle>
         </CardHeader>
         <CardContent>
-          <Button asChild>
+          <Button variant="outline" asChild>
             <Link to="/po/press">
               <Eye />
               Press report
@@ -89,47 +89,26 @@ function ReportsPage() {
           <CardTitle className="text-base">Attendance</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
-          <div className="flex flex-wrap items-end gap-2">
-            <Button onClick={() => downloadAttendanceExcel(state, { mode: "yearly" })}>
-              <Download />
-              Full yearly Excel
-            </Button>
-            <Button variant="outline" onClick={() => void printAttendanceReport(state, { mode: "yearly" })}>
-              <Printer />
-              Print yearly
-            </Button>
-            <label className="space-y-1 text-xs text-muted-foreground">
+          <div className="flex flex-wrap items-baseline gap-x-5 gap-y-2">
+            <Button onClick={() => downloadAttendanceExcel(state, { mode: "yearly" })}>Yearly Excel</Button>
+            <Button variant="outline" onClick={() => void printAttendanceReport(state, { mode: "yearly" })}>Print yearly</Button>
+            <label className="text-xs text-muted-foreground">
               Month
               <input
                 type="month"
-                className="flex h-10 rounded-md border border-border bg-card px-3 text-sm text-foreground"
+                className="ml-2 h-9 border border-border bg-card px-2 text-sm text-foreground"
                 value={month}
                 onChange={(e) => setMonth(e.target.value)}
               />
             </label>
-            <Button onClick={() => downloadAttendanceExcel(state, { mode: "monthly", month })}>
-              <Download />
-              Monthly Excel
-            </Button>
-            <Button
-              variant="outline"
-              onClick={() => void printAttendanceReport(state, { mode: "monthly", month })}
-            >
-              <Printer />
-              Print monthly
-            </Button>
-            <Button variant="outline" onClick={() => setOpenPreview("attendance")}>
-              <Eye />
-              Preview yearly
-            </Button>
+            <Button variant="outline" onClick={() => downloadAttendanceExcel(state, { mode: "monthly", month })}>Monthly Excel</Button>
+            <Button variant="outline" onClick={() => void printAttendanceReport(state, { mode: "monthly", month })}>Print monthly</Button>
           </div>
-          {openPreview === "attendance" ? (
-            <ReportPreview
-              title={`Attendance Report — Full yearly (${academicYear()})`}
-              headers={yearlyAtt.headers}
-              rows={yearlyAtt.rows}
-            />
-          ) : null}
+          <ReportPreview
+            title={`Attendance Report — Full yearly (${academicYear()})`}
+            headers={yearlyAtt.headers}
+            rows={yearlyAtt.rows}
+          />
         </CardContent>
       </Card>
 
@@ -241,19 +220,9 @@ function ReportCard({
         <CardTitle className="text-base">{title}</CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
-        <div className="flex flex-wrap gap-2">
-          <Button onClick={onExcel}>
-            <Download />
-            Excel
-          </Button>
-          <Button variant="outline" onClick={onPrint}>
-            <Printer />
-            Print / PDF with logos
-          </Button>
-          <Button variant="outline" onClick={() => onPreview(shown ? null : id)}>
-            <Eye />
-            {shown ? "Hide preview" : "Preview"}
-          </Button>
+        <div className="flex flex-wrap items-baseline gap-x-5 gap-y-2">
+          <Button onClick={onExcel}>Excel</Button>
+          <Button variant="outline" onClick={onPrint}>Print</Button>
         </div>
         {shown ? (
           <ReportPreview

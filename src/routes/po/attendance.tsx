@@ -4,13 +4,11 @@ import { toast } from "sonner";
 import {
   Camera,
   CheckCircle2,
-  Download,
   QrCode,
   RefreshCw,
   Square,
   Users,
   XCircle,
-  Printer,
   Trash2,
 } from "lucide-react";
 
@@ -26,8 +24,6 @@ import { OfficialLetterhead } from "@/components/nss/official-letterhead";
 
 import {
   eventColumnLabel,
-  downloadAttendanceExcel,
-  printAttendanceReport,
 } from "@/lib/nss/reports";
 
 import {
@@ -40,7 +36,6 @@ import {
 import {
   academicYear,
   formatLongDate,
-  todayIso,
 } from "@/lib/nss/format";
 
 import { qrSvg } from "@/lib/nss/qr";
@@ -79,7 +74,6 @@ function AttendancePage() {
   );
 
   const [eventId, setEventId] = useState(events[0]?.id ?? "");
-  const [month, setMonth] = useState(todayIso().slice(0, 7));
 
   const [qrSvgMarkup, setQrSvgMarkup] = useState("");
   const [qrToken, setQrToken] = useState("");
@@ -607,56 +601,6 @@ function AttendancePage() {
         title="Attendance"
         compact
       />
-
-      <div className="flex flex-wrap items-end gap-2">
-          <Button
-            onClick={() =>
-              downloadAttendanceExcel(state, {
-                mode: "yearly",
-              })
-            }
-          >
-            <Download />
-            Full yearly Excel
-          </Button>
-
-          <label className="space-y-1 text-xs text-muted-foreground">
-            Month
-            <input
-              type="month"
-              className="flex h-10 rounded-md border border-border bg-card px-3 text-sm text-foreground"
-              value={month}
-              onChange={(e) =>
-                setMonth(e.target.value)
-              }
-            />
-          </label>
-
-          <Button
-            variant="outline"
-            onClick={() =>
-              downloadAttendanceExcel(state, {
-                mode: "monthly",
-                month,
-              })
-            }
-          >
-            <Download />
-            Monthly Excel
-          </Button>
-
-          <Button
-            variant="outline"
-            onClick={() =>
-              void printAttendanceReport(state, {
-                mode: "yearly",
-              })
-            }
-          >
-            <Printer />
-            Print yearly
-          </Button>
-      </div>
 
       {/* EVENT SELECTOR */}
       <Card>

@@ -1,7 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Award, Printer, Send } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -190,24 +189,21 @@ function CertificatesPage() {
             </p>
           ) : null}
 
-          <div className="flex flex-wrap gap-2">
-            <Button type="button" variant="forest" onClick={() => void printSelected().then(() => send())}>
-              <Award />
-              Issue now
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+            <Button type="button" onClick={() => void printSelected().then(() => send())}>
+              Issue
             </Button>
-            <Button type="button" variant="forest" onClick={send}>
-              <Send />
-              Send to volunteer dashboards
+            <Button type="button" variant="outline" onClick={send}>
+              Send
             </Button>
             <Button type="button" variant="outline" onClick={() => void printSelected()}>
-              <Printer />
-              View / Print
+              Print
             </Button>
             <Button type="button" variant="ghost" onClick={() => selectAll(true)}>
-              Select all
+              All
             </Button>
             <Button type="button" variant="ghost" onClick={() => selectAll(false)}>
-              Clear
+              None
             </Button>
           </div>
         </CardContent>
