@@ -137,17 +137,22 @@ html.dark .bg-white { background: var(--color-card); }
 html.dark .text-paper { color: #f7f3ea; }
 
 .touch-ui :is(a, button, [role="tab"], [role="button"], .press):active {
-  background-color: #0b1c36 !important;
-  color: #e6d3a3 !important;
+  background-color: #f4e7c4 !important;
+  color: #0b1c36 !important;
   border-color: #9a7b3c !important;
 }
 .touch-ui tr:active td {
-  background-color: #0b1c36;
-  color: #e6d3a3;
+  background-color: #f4e7c4;
+  color: #0b1c36;
 }
 .touch-ui .is-on {
-  background-color: #9a7b3c;
+  background-color: transparent;
   color: #0b1c36;
+  box-shadow: inset 0 -2px 0 #9a7b3c;
+}
+.touch-ui nav.bg-navy .is-on {
+  color: #e6d3a3;
+  box-shadow: inset 0 -2px 0 #e6d3a3;
 }
 
 @keyframes splash-rise {

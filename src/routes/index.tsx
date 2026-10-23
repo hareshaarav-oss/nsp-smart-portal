@@ -117,30 +117,29 @@ function Home() {
       {splashing ? <SplashScreen onDone={dismiss} /> : null}
       <AppShell current="home" compactHeader>
         <section className="mx-auto w-full max-w-6xl flex-1 px-4 md:px-6">
-          <header className="border border-saffron/50 bg-card px-5 py-7 text-center">
+          <header className="mx-auto max-w-3xl text-center">
             <p className="text-[11px] font-semibold uppercase tracking-[0.34em] text-saffron">Welcome to NSP</p>
-            <h1 className="mt-2 font-display text-3xl text-navy md:text-4xl">NSS Smart Portal</h1>
-            <span className="mx-auto mt-3 block h-px w-20 bg-saffron" />
-            <p className="mt-3 text-sm text-navy/80">{settings.collegeName}</p>
-            <p className="mt-1 text-xs uppercase tracking-[0.16em] text-forest">Cloud connected</p>
+            <h1 className="mt-3 font-display text-4xl text-navy md:text-6xl">NSS Smart Portal</h1>
+            <p className="mt-4 text-base text-navy/80">{settings.collegeName}</p>
+            <p className="mt-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-forest">Cloud connected</p>
           </header>
 
-          <div className="mt-4 grid grid-cols-2 border border-saffron/50 sm:grid-cols-4">
-            <Button asChild className="h-12 rounded-none bg-navy text-paper hover:bg-navy-deep">
+          <nav className="mt-8 grid grid-cols-2 border-y border-saffron/40 sm:grid-cols-4">
+            <Button asChild variant="ghost" className="h-12">
               <Link to="/login" search={{ role: "volunteer" }}>{t("studentLogin")}</Link>
             </Button>
-            <Button asChild variant="outline" className="h-12 rounded-none border-saffron/30">
+            <Button asChild variant="ghost" className="h-12">
               <Link to="/register">{t("register")}</Link>
             </Button>
-            <Button asChild variant="outline" className="h-12 rounded-none border-saffron/30">
+            <Button asChild variant="ghost" className="h-12">
               <Link to="/login" search={{ role: "po" }}>{t("adminLogin")}</Link>
             </Button>
-            <Button asChild variant="outline" className="h-12 rounded-none border-saffron/30">
+            <Button asChild variant="ghost" className="h-12">
               <Link to="/verify" search={{ id: "" }}>{t("verify")}</Link>
             </Button>
-          </div>
+          </nav>
 
-          <div className="mt-4 flex flex-wrap border border-saffron/50 bg-navy">
+          <nav className="mt-4 flex flex-wrap justify-center gap-x-5 gap-y-2">
             {[
               ["#notice", "Notice"],
               ["#officers", "Officers"],
@@ -151,11 +150,11 @@ function Home() {
               ["#birthdays", "Birthdays"],
               ["#best", "Best"],
             ].map(([href, label]) => (
-              <a key={href} href={href} className="px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-paper hover:bg-saffron hover:text-navy">
+              <a key={href} href={href} className="text-[11px] font-semibold uppercase tracking-[0.16em] text-navy hover:text-saffron">
                 {label}
               </a>
             ))}
-          </div>
+          </nav>
 
           <OpenTab id="notice" title="Notice">
             {latestNotices[0] ? (
@@ -167,7 +166,7 @@ function Home() {
             ) : (
               <p className="text-sm text-muted-foreground">{t("emptyNotice")}</p>
             )}
-            <div className="mt-6 grid grid-cols-2 gap-px overflow-hidden border border-saffron/40 bg-saffron/40 sm:grid-cols-4">
+            <div className="mt-8 grid grid-cols-2 gap-6 sm:grid-cols-4">
               <MiniStat label="Volunteers" value={shownVolunteers} />
               <MiniStat label="Service hours" value={hours} />
               <MiniStat label="Alumni" value={alumniCount} />
@@ -208,9 +207,9 @@ function Home() {
             {latestNotices.length === 0 ? (
               <p className="text-sm text-muted-foreground">{t("emptyNotice")}</p>
             ) : (
-              <div className="space-y-3">
+              <div className="divide-y divide-saffron/20">
                 {latestNotices.map((notice) => (
-                  <article key={notice.id} className="press border border-saffron/30 bg-bg p-3">
+                  <article key={notice.id} className="press py-4">
                     <div className="flex items-start justify-between gap-3">
                       <h3 className="font-medium text-navy">{notice.title}</h3>
                       <Badge tone={notice.audience === "all" ? "muted" : "navy"}>
@@ -228,9 +227,9 @@ function Home() {
             {upcoming.length === 0 && completed.length === 0 ? (
               <p className="text-sm text-muted-foreground">No upcoming event.</p>
             ) : null}
-            <div className="space-y-2">
+            <div className="divide-y divide-saffron/20">
               {upcoming.map((event) => (
-                <div key={event.id} className="press flex items-start justify-between gap-3 border border-saffron/30 bg-bg px-3 py-2">
+                <div key={event.id} className="press flex items-start justify-between gap-3 py-3">
                   <div>
                     <p className="font-medium text-navy">{event.name}</p>
                     {event.description ? <p className="mt-1 text-sm leading-relaxed text-muted-foreground">{event.description}</p> : null}
@@ -242,7 +241,7 @@ function Home() {
                 </div>
               ))}
               {completed.map((event) => (
-                <div key={event.id} className="press flex items-start justify-between gap-3 border border-saffron/30 bg-bg px-3 py-2">
+                <div key={event.id} className="press flex items-start justify-between gap-3 py-3">
                   <div>
                     <p className="font-medium text-navy">{event.name}</p>
                     {event.description ? <p className="mt-1 text-sm leading-relaxed text-muted-foreground">{event.description}</p> : null}
@@ -300,11 +299,10 @@ function Home() {
 
 function OpenTab({ id, title, children }: { id: string; title: string; children: ReactNode }) {
   return (
-    <section id={id} className="mt-6 scroll-mt-28">
-      <h2 className="inline-block border border-b-0 border-saffron/60 bg-navy px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-saffron">
-        {title}
-      </h2>
-      <div className="border border-saffron/60 bg-card p-4 md:p-5">{children}</div>
+    <section id={id} className="mt-12 scroll-mt-28">
+      <h2 className="font-display text-2xl text-navy md:text-3xl">{title}</h2>
+      <span className="mt-3 block h-px w-12 bg-saffron" />
+      <div className="mt-5">{children}</div>
     </section>
   );
 }

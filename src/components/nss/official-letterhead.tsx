@@ -16,6 +16,16 @@ export function OfficialLetterhead({
   const college = useNssStore((s) => s.settings.collegeShort) || "S.D. Arts & Shah B.R. Commerce College";
   const collegeLogo = useNssStore((s) => s.settings.collegeLogo) || COLLEGE_LOGO;
   const nssLogo = useNssStore((s) => s.settings.nssLogo) || NSS_LOGO;
+  if (compact) {
+    return (
+      <header className={cn(className)}>
+        <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-saffron">NSS</p>
+        <h1 className="mt-1 font-display text-3xl text-navy md:text-4xl">{title || college}</h1>
+        <span className="mt-3 block h-px w-14 bg-saffron" />
+        <p className="mt-2 text-xs text-muted-foreground">{formatLongDate(todayIso())} · {academicYear()}</p>
+      </header>
+    );
+  }
   return (
     <div className={cn("border border-saffron/50 bg-surface px-4 py-5 text-navy", className)}>
       <div className="flex items-center gap-4 md:gap-6">
@@ -62,7 +72,7 @@ export function ReportPreview({
   const shown = rows.slice(0, maxRows);
   return (
     <div className="overflow-hidden border border-saffron/40 bg-surface">
-      <OfficialLetterhead title={title} compact className="rounded-none border-0 shadow-none" />
+      <OfficialLetterhead title={title} className="rounded-none border-0 shadow-none" />
       {intro?.length ? (
         <div className="space-y-2 border-t border-border px-4 py-3 text-sm leading-relaxed text-navy">
           {intro.map((p, i) => (
