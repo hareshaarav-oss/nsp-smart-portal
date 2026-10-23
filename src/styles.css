@@ -136,6 +136,20 @@ html.dark .text-navy { color: var(--color-foreground); }
 html.dark .bg-white { background: var(--color-card); }
 html.dark .text-paper { color: #f7f3ea; }
 
+.touch-ui :is(a, button, [role="tab"], [role="button"], .press):active {
+  background-color: #0b1c36 !important;
+  color: #e6d3a3 !important;
+  border-color: #9a7b3c !important;
+}
+.touch-ui tr:active td {
+  background-color: #0b1c36;
+  color: #e6d3a3;
+}
+.touch-ui .is-on {
+  background-color: #9a7b3c;
+  color: #0b1c36;
+}
+
 @keyframes splash-rise {
   from { opacity: 0; transform: translateY(10px); }
   to { opacity: 1; transform: translateY(0); }

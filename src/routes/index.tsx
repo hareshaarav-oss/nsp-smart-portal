@@ -176,7 +176,7 @@ function Home() {
                   <h2 className="border-b border-saffron/40 pb-2 font-display text-xl text-navy">Volunteer photographs</h2>
                   <div className="mt-4 grid grid-cols-3 gap-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8">
                     {rollPhotos.map((v) => (
-                      <figure key={v.id} className="text-center">
+                      <figure key={v.id} className="press text-center">
                         <img src={v.photoUrl} alt="" className="mx-auto h-24 w-20 rounded-md object-cover ring-1 ring-border" />
                         <figcaption className="mt-1 text-[11px] leading-tight text-navy">
                           {v.fullName}
@@ -199,7 +199,7 @@ function Home() {
                     <p className="py-8 text-center text-sm text-muted-foreground">{t("emptyNotice")}</p>
                   ) : (
                     latestNotices.map((notice) => (
-                      <article key={notice.id} className="rounded-md border border-border bg-bg p-3">
+                      <article key={notice.id} className="press border border-saffron/30 bg-bg p-3">
                         <div className="flex items-start justify-between gap-3">
                           <h3 className="font-medium text-navy">{notice.title}</h3>
                           <Badge tone={notice.audience === "all" ? "muted" : "navy"}>
@@ -221,7 +221,7 @@ function Home() {
                     <p className="py-8 text-center text-sm text-muted-foreground">No upcoming event.</p>
                   ) : null}
                   {upcoming.map((event) => (
-                    <div key={event.id} className="flex items-start justify-between gap-3 rounded-md border border-border bg-bg px-3 py-2">
+                    <div key={event.id} className="press flex items-start justify-between gap-3 border border-saffron/30 bg-bg px-3 py-2">
                       <div>
                         <p className="font-medium text-navy">{event.name}</p>
                         {event.description ? <p className="mt-1 text-sm leading-relaxed text-muted-foreground">{event.description}</p> : null}
@@ -233,7 +233,7 @@ function Home() {
                     </div>
                   ))}
                   {completed.map((event) => (
-                    <div key={event.id} className="flex items-start justify-between gap-3 rounded-md border border-border bg-bg px-3 py-2">
+                    <div key={event.id} className="press flex items-start justify-between gap-3 border border-saffron/30 bg-bg px-3 py-2">
                       <div>
                         <p className="font-medium text-navy">{event.name}</p>
                         {event.description ? <p className="mt-1 text-sm leading-relaxed text-muted-foreground">{event.description}</p> : null}

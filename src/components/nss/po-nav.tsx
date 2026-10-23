@@ -113,7 +113,7 @@ export function PoNav({ current }: { current: string }) {
               onClick={() => setOpen(item.en)}
               className={cn(
                 "-mb-px h-11 shrink-0 border px-4 text-[11px] font-semibold uppercase tracking-[0.16em]",
-                on ? "border-saffron/70 border-b-surface bg-surface text-navy" : "border-transparent text-muted-foreground hover:text-navy",
+                on ? "is-on -mb-px border border-saffron/70 border-b-surface" : "border border-transparent text-navy hover:text-saffron",
               )}
             >
               {lang === "gu" ? item.gu : item.en}

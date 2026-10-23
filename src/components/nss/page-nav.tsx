@@ -1,4 +1,4 @@
-import { Link, useRouter } from "@tanstack/react-router";
+import { Link, useRouter, useRouterState } from "@tanstack/react-router";
 import { ArrowLeft, Download } from "lucide-react";
 import { dashboardPath, isOfficer, useSessionStore } from "@/lib/nss/session";
 import { useUi } from "@/lib/nss/ui-prefs";
@@ -19,7 +19,10 @@ export function PageNav({
   const dash = dashboardPath(session);
   const officer = isOfficer(session);
   const { lang, dark, setLang, toggleDark, t } = useUi();
+  const path = useRouterState({ select: (s) => s.location.pathname });
   const unread = useChatUnread();
+  const on = (href: string) => (href === "/" ? path === "/" : path === href || path.startsWith(`${href}/`));
+  const item = "shrink-0 rounded-none px-3 py-2 hover:bg-white/10 active:bg-saffron active:text-navy";
 
   function goBack() {
     if (window.history.length > 1) {
@@ -37,7 +40,7 @@ export function PageNav({
             <button
               type="button"
               onClick={goBack}
-              className="inline-flex h-10 shrink-0 items-center gap-1 rounded-full px-3 hover:bg-white/10"
+              className="inline-flex h-10 shrink-0 items-center gap-1 px-3 hover:bg-white/10 active:bg-saffron active:text-navy"
             >
               <ArrowLeft className="size-4" />
               {t("back")}
@@ -45,42 +48,36 @@ export function PageNav({
           ) : null}
           <Link
             to="/"
-            className={cn(
-              "shrink-0 rounded-full px-3 py-2 hover:bg-white/10",
-              current === "home" ? "text-saffron" : "",
-            )}
+            className={cn(item, on("/") && "is-on")}
           >
             {t("home")}
           </Link>
-          <Link to="/gallery" className="shrink-0 rounded-full px-3 py-2 hover:bg-white/10">
+          <Link to="/gallery" className={cn(item, on("/gallery") && "is-on")}>
             {t("gallery")}
           </Link>
-          <Link to="/contact" className="shrink-0 rounded-full px-3 py-2 hover:bg-white/10">
+          <Link to="/contact" className={cn(item, on("/contact") && "is-on")}>
             {t("contact")}
           </Link>
           {showDashboard && session ? (
             <Link
               to={session ? dash : "/login"}
-              className={cn(
-                "shrink-0 rounded-full px-3 py-2 hover:bg-white/10",
-                current === "dashboard" ? "text-saffron" : "",
-              )}
+              className={cn(item, on(dash) && "is-on")}
             >
               {officer ? t("desk") : t("dashboard")}
             </Link>
           ) : null}
           {session ? (
-            <Link to="/chat" className="relative shrink-0 rounded-full px-3 py-2 hover:bg-white/10">
+            <Link to="/chat" className={cn(item, "relative", on("/chat") && "is-on")}>
               {t("chat")}
               {unread > 0 ? <span className="ml-1 rounded-full bg-[#25d366] px-1.5 text-[10px] font-semibold text-[#111b21]">{unread > 9 ? "9+" : unread}</span> : null}
             </Link>
           ) : null}
           {officer ? (
             <>
-              <Link to="/po/attendance" className="shrink-0 rounded-full px-3 py-2 hover:bg-white/10">
+              <Link to="/po/attendance" className={cn(item, on("/po/attendance") && "is-on")}>
                 {t("attendance")}
               </Link>
-              <Link to="/po/reports" className="shrink-0 rounded-full px-3 py-2 hover:bg-white/10">
+              <Link to="/po/reports" className={cn(item, on("/po/reports") && "is-on")}>
                 {t("reports")}
               </Link>
             </>
