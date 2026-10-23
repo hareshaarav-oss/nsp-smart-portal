@@ -186,11 +186,12 @@ function LoginPage() {
   return (
     <AppShell eyebrow="NSS PORTAL LOGIN">
       <div className="mx-auto max-w-lg space-y-4 px-4 pb-16">
+        <div className="pt-6 text-center">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-saffron">NSS Smart Portal</p>
+          <h1 className="mt-1 font-display text-3xl text-navy">Sign in</h1>
+        </div>
         <Card>
-          <CardHeader>
-            <CardTitle>Sign in</CardTitle>
-          </CardHeader>
-          <CardContent>
+          <CardContent className="pt-5">
             <form className="space-y-4" onSubmit={onSubmit}>
               <div className="grid grid-cols-3 gap-2">
                 {([
@@ -243,8 +244,7 @@ function LoginPage() {
                 <div className="flex flex-wrap items-center gap-2">
                   <span
                     aria-hidden
-                    className="select-none rounded-md bg-navy px-3 py-2 font-mono text-lg tracking-[0.35em] text-paper"
-                    style={{ fontStyle: "italic", letterSpacing: "0.28em" }}
+                    className="select-none rounded-xl bg-navy px-4 py-2 font-mono text-lg tracking-[0.35em] text-paper"
                   >
                     {captcha || "·····"}
                   </span>

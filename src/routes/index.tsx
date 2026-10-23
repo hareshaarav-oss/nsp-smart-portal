@@ -118,63 +118,59 @@ function Home() {
       {splashing ? <SplashScreen onDone={dismiss} /> : null}
       <AppShell current="home" compactHeader>
         <section className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 md:px-6 md:py-8">
-          <section className="flex flex-wrap justify-center gap-2">
-            <Button asChild className="h-11 bg-forest text-primary-foreground hover:bg-forest/90">
+          <section className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            <Button asChild className="h-12 bg-navy text-paper hover:bg-navy-deep">
+              <Link to="/login" search={{ role: "volunteer" }}>{t("studentLogin")}</Link>
+            </Button>
+            <Button asChild variant="outline" className="h-12">
               <Link to="/register">{t("register")}</Link>
             </Button>
-            <Button asChild variant="outline" className="h-11">
-              <Link to="/login" search={{ role: "volunteer" }}>
-                {t("studentLogin")}
-              </Link>
+            <Button asChild variant="outline" className="h-12">
+              <Link to="/login" search={{ role: "po" }}>{t("adminLogin")}</Link>
             </Button>
-            <Button asChild className="h-11 bg-navy text-paper hover:bg-navy-deep">
-              <Link to="/login" search={{ role: "po" }}>
-                {t("adminLogin")}
-              </Link>
-            </Button>
-            <Button asChild variant="outline" className="h-11">
+            <Button asChild variant="outline" className="h-12">
               <Link to="/verify" search={{ id: "" }}>{t("verify")}</Link>
             </Button>
           </section>
 
-          <section className="mt-6 rounded-3xl bg-navy p-5 text-paper shadow-md md:p-7">
-            <div className="flex items-center gap-4">
-              <div className="flex size-16 shrink-0 items-center justify-center rounded-full bg-white text-sm font-bold text-navy">NSS</div>
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-saffron">NSS</p>
-                <h1 className="font-display text-2xl font-bold md:text-3xl">{settings.collegeName}</h1>
+          <section className="mt-5 overflow-hidden rounded-3xl border border-border bg-card shadow-sm">
+            <div className="grid md:grid-cols-[1.4fr_0.8fr]">
+              <div className="p-5 md:p-7">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-saffron">Notice</p>
+                {latestNotices[0] ? (
+                  <>
+                    <h1 className="mt-2 font-display text-3xl text-navy">{latestNotices[0].title}</h1>
+                    <p className="mt-1 text-xs text-muted-foreground">{formatLongDate(latestNotices[0].date)}</p>
+                    <p className="gu mt-3 max-w-2xl text-sm leading-relaxed text-foreground/80">{latestNotices[0].body}</p>
+                  </>
+                ) : (
+                  <>
+                    <h1 className="mt-2 font-display text-3xl text-navy">{settings.collegeShort || settings.collegeName}</h1>
+                    <p className="mt-3 text-sm text-muted-foreground">{t("emptyNotice")}</p>
+                  </>
+                )}
+                <div className="mt-6 grid grid-cols-2 gap-px overflow-hidden rounded-2xl border border-border bg-border sm:grid-cols-4">
+                  <MiniStat label="Volunteers" value={shownVolunteers} />
+                  <MiniStat label="Hours" value={hours} />
+                  <MiniStat label="Alumni" value={alumniCount} />
+                  <MiniStat label="Visitors" value={visitors} />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3 border-t border-border bg-muted/40 p-5 md:grid-cols-1 md:border-t-0 md:border-l">
+                <HomeOfficer role="Programme Officer" name={settings.poName} photo={settings.poPhoto} />
+                <HomeOfficer role="Principal" name={settings.principalName} photo={settings.principalPhoto} />
               </div>
             </div>
-            {latestNotices[0] ? (
-              <article className="mt-4 rounded-2xl bg-white p-4 text-navy">
-                <p className="text-xs font-semibold text-saffron">{formatLongDate(latestNotices[0].date)}</p>
-                <h2 className="mt-1 font-display text-xl">{latestNotices[0].title}</h2>
-                <p className="gu mt-2 text-sm leading-relaxed">{latestNotices[0].body}</p>
-              </article>
-            ) : (
-              <p className="mt-4 text-sm text-paper/70">{t("emptyNotice")}</p>
-            )}
-          </section>
-
-          <section className="mt-6 overflow-hidden rounded-3xl border border-border bg-gradient-to-br from-surface via-card to-muted shadow-md">
-            <div className="grid gap-5 p-4 md:grid-cols-[190px_1fr_190px] md:p-6 md:items-center">
-              <HomeOfficer role="Programme Officer" name={settings.poName} quote={settings.poQuote} photo={settings.poPhoto} />
-              <div className="order-first md:order-none">
-                <div className="mb-3 flex items-center justify-between gap-3"><div><p className="text-xs font-semibold uppercase tracking-[0.18em] text-saffron">Welcome to NSP</p><h1 className="font-display text-2xl font-bold text-navy md:text-3xl">NSS Smart Portal</h1></div><span className="rounded-full bg-forest/10 px-3 py-1.5 text-xs font-semibold text-forest">☁ Cloud Connected</span></div>
-                <PhotoCarousel items={collegeGallery} />
-                <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4"><MiniStat label="Volunteers" value={shownVolunteers} /><MiniStat label="Portal visitors" value={visitors} /><MiniStat label="Alumni" value={alumniCount} /><MiniStat label="Service hours" value={hours} /></div>
-              </div>
-              <HomeOfficer role="Principal" name={settings.principalName} quote={settings.principalQuote} photo={settings.principalPhoto} />
-            </div>
+            {collegeGallery.length ? <div className="border-t border-border p-4"><PhotoCarousel items={collegeGallery} /></div> : null}
           </section>
 
           {rollPhotos.length ? (
             <section className="mt-6">
               <Card className="shadow-md">
                 <CardContent className="p-5">
-                  <h2 className="font-display text-xl text-navy">Volunteer photographs</h2>
-                  <div className="mt-4 grid grid-cols-3 gap-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8">
-                    {rollPhotos.map((v) => (
+                  <h2 className="font-display text-lg text-navy">Volunteers</h2>
+                  <div className="mt-4 grid grid-cols-4 gap-3 sm:grid-cols-6 md:grid-cols-8">
+                    {rollPhotos.slice(0, 16).map((v) => (
                       <figure key={v.id} className="text-center">
                         <img src={v.photoUrl} alt="" className="mx-auto h-24 w-20 rounded-md object-cover ring-1 ring-border" />
                         <figcaption className="mt-1 line-clamp-2 text-[11px] leading-tight text-navy">
@@ -190,9 +186,9 @@ function Home() {
           ) : null}
 
           <section className="mt-6 grid gap-4 md:grid-cols-2">
-            <Card className="border-t-4 border-t-danger shadow-md">
+            <Card>
               <CardContent className="p-5">
-                <h2 className="font-display text-xl text-navy">Latest news & notices</h2>
+                <h2 className="font-display text-lg text-navy">Notices</h2>
                 <div className="feed-scroll mt-3 space-y-3">
                   {latestNotices.length === 0 ? (
                     <p className="py-8 text-center text-sm text-muted-foreground">{t("emptyNotice")}</p>
@@ -212,9 +208,9 @@ function Home() {
                 </div>
               </CardContent>
             </Card>
-            <Card className="border-t-4 border-t-forest shadow-md">
+            <Card>
               <CardContent className="p-5">
-                <h2 className="font-display text-xl text-navy">Upcoming activities</h2>
+                <h2 className="font-display text-lg text-navy">Activities</h2>
                 <div className="feed-scroll mt-3 space-y-2">
                   {upcoming.length === 0 && completed.length === 0 ? (
                     <p className="py-8 text-center text-sm text-muted-foreground">No upcoming event.</p>
@@ -285,9 +281,15 @@ function Home() {
 }
 
 function MiniStat({ label, value }: { label: string; value: number }) {
-  return <div className="rounded-xl border border-border bg-card p-3 text-center"><p className="font-display text-xl font-bold text-navy">{value}</p><p className="text-[11px] text-muted-foreground">{label}</p></div>;
+  return <div className="bg-card px-3 py-3 text-center"><p className="font-display text-2xl text-navy">{value}</p><p className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</p></div>;
 }
 
-function HomeOfficer({ role, name, quote, photo }: { role: string; name: string; quote: string; photo?: string }) {
-  return <div className="rounded-2xl border border-border bg-card p-4 text-center shadow-sm"><p className="text-xs font-bold uppercase tracking-[0.14em] text-forest">{role}</p>{photo ? <img src={photo} alt={name} className="mx-auto mt-3 h-28 w-24 rounded-2xl object-cover" /> : <div className="mx-auto mt-3 flex h-28 w-24 items-center justify-center rounded-2xl bg-navy text-3xl text-paper">👤</div>}<p className="mt-3 text-sm font-semibold text-navy">{name}</p><p className="gu mt-2 line-clamp-4 text-xs leading-relaxed text-muted-foreground">“{quote}”</p></div>;
+function HomeOfficer({ role, name, photo }: { role: string; name: string; photo?: string }) {
+  return (
+    <div className="text-center">
+      {photo ? <img src={photo} alt="" className="mx-auto h-24 w-20 rounded-2xl object-cover" /> : <div className="mx-auto h-24 w-20 rounded-2xl bg-navy/10" />}
+      <p className="mt-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-forest">{role}</p>
+      <p className="text-sm font-medium text-navy">{name}</p>
+    </div>
+  );
 }
