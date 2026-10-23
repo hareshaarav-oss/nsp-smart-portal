@@ -76,7 +76,8 @@ body {
   aspect-ratio: 1492 / 1054;
   margin: 0 auto;
   overflow: hidden;
-  background: #fff;
+  background: transparent;
+  container-type: inline-size;
   page-break-after: always;
 }
 .sheet:last-child { page-break-after: auto; }
@@ -89,95 +90,80 @@ body {
   object-fit: fill;
   z-index: 0;
 }
-.text-layer {
+.text-layer { position: absolute; inset: 0; z-index: 2; }
+.name, .event-name, .year, .cert-id, .date {
   position: absolute;
-  inset: 0;
-  z-index: 3;
-  pointer-events: none;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  background: transparent;
+  line-height: 1;
+  overflow: hidden;
 }
 .name {
-  position: absolute;
-  left: 20%;
-  top: 46.3%;
+  left: 20.1%;
+  top: 48.05%;
   width: 60%;
-  height: 4.0%;
-  margin: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  text-align: center;
-  font-family: "Dancing Script", cursive;
-  text-transform: uppercase;
-  font-size: 20pt;
-  line-height: 1;
+  height: 2.7%;
+  font-family: "Cormorant Garamond", Georgia, serif;
+  font-size: 2.01cqw;
   font-weight: 700;
-  color: #173b87;
-  white-space: nowrap;
-  overflow: hidden;
-  background: #f6f1e6;
+  letter-spacing: 0.08em;
+  color: #1a2256;
+  text-transform: uppercase;
 }
 .event-name {
-  position: absolute;
-  left: 30%;
-  top: 55.2%;
-  width: 40%;
-  height: 3.4%;
-  margin: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  text-align: center;
+  left: 19%;
+  top: 55.95%;
+  width: 62%;
+  height: 3%;
   font-family: "Cormorant Garamond", Georgia, serif;
-  font-size: 16pt;
-  line-height: 1.1;
-  font-style: normal;
-  font-weight: 800;
-  color: #b11619;
-  white-space: normal;
-  overflow: hidden;
-  background: #f6f1e6;
+  font-size: 2.01cqw;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: #b50809;
 }
 .year {
-  position: absolute;
-  left: 51.5%;
-  top: 65.2%;
-  width: 19%;
-  height: 3.4%;
-  margin: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  text-align: center;
+  left: 51.74%;
+  top: 65.84%;
+  width: 22%;
+  height: 3.04%;
+  justify-content: flex-start;
+  text-align: left;
   font-family: "Cormorant Garamond", Georgia, serif;
-  font-size: 16pt;
-  line-height: 1;
-  font-weight: 700;
-  color: #173a87;
-  white-space: nowrap;
-  background: #f6f1e6;
+  font-size: 1.81cqw;
+  font-style: italic;
+  font-weight: 600;
+  color: #1a2256;
 }
 .cert-id, .date {
-  position: absolute;
-  top: 77.4%;
-  height: 3.1%;
-  margin: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  text-align: center;
+  top: 78.64%;
+  height: 2.4%;
+  justify-content: flex-start;
+  text-align: left;
   font-family: "Noto Sans", Arial, sans-serif;
-  font-size: 11pt;
-  line-height: 1;
-  font-weight: 600;
-  color: #173a87;
-  white-space: nowrap;
-  overflow: hidden;
-  background: #f6f1e6;
+  font-size: 1.14cqw;
+  font-weight: 700;
+  color: #1a2256;
 }
-.cert-id { left: 33.8%; width: 18%; }
-.date { left: 66.2%; width: 16%; }
-.qr-mark { position: absolute; right: 3.2%; bottom: 7%; width: 72px; height: 72px; background: #fff; padding: 3px; }
-.qr-mark svg { width: 66px; height: 66px; display: block; }
+.cert-id { left: 34.65%; width: 18%; }
+.date { left: 66.76%; width: 16%; }
+.qr-mark {
+  position: absolute;
+  left: 47.85%;
+  top: 84.06%;
+  width: 4.29%;
+  height: 6.07%;
+  background: transparent;
+  z-index: 3;
+}
+.qr-mark svg { width: 100%; height: 100%; display: block; background: #fff; }
+@media screen {
+  body { background: #e7e0d2; padding: 12px; }
+  .sheet { box-shadow: 0 10px 35px rgba(0,0,0,.16); }
+}
 .no-print {
   text-align: center;
   margin: 12px 0;
@@ -207,6 +193,10 @@ body {
     margin: 0;
     page-break-after: always;
   }
+  .name { font-size: 17pt; }
+  .event-name { font-size: 17pt; }
+  .year { font-size: 15pt; }
+  .cert-id, .date { font-size: 9.5pt; }
   .certificate-bg {
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
@@ -215,7 +205,6 @@ body {
 }
 @media (max-width: 900px) {
   .sheet { min-width: 0; }
-  .name { font-size: 20pt; }
 }
 `;
 async function imageToDataUrl(url: string): Promise<string> {
@@ -259,13 +248,9 @@ async function certificateSheet(opts: {
   settings: PortalSettings;
   certificateNumber?: number;
 }) {
-  let templateDataUrl: string;
-  try {
-    templateDataUrl = await imageToDataUrl("/images/certificate-template.png");
-  } catch {
-    templateDataUrl = await imageToDataUrl("/images/certificate-template.jpg");
-  }
-
+  const templateDataUrl = await imageToDataUrl("/images/certificate-template.png").catch(() =>
+    imageToDataUrl("/images/certificate-template.jpg"),
+  );
   const name = escapeHtml(
     certDisplayName(opts.volunteer.fullName).toUpperCase(),
   );
@@ -285,16 +270,11 @@ async function certificateSheet(opts: {
 
   return `
     <div class="sheet">
-      <img
-        class="certificate-bg"
-        src="${escapeHtml(templateDataUrl)}"
-        alt=""
-        aria-hidden="true"
-      />
+      <img class="certificate-bg" src="${escapeHtml(templateDataUrl)}" alt="" />
       <div class="text-layer">
         <p class="name">${name}</p>
         <p class="event-name">${eventName}</p>
-        <p class="year">${year}</p>
+        <p class="year">${year}.</p>
         <p class="cert-id">${serial}</p>
         <p class="date">${eventDate}</p>
       </div>
@@ -338,8 +318,8 @@ function wrapCertificateDocument(title: string, sheets: string) {
         }
       }
       window.addEventListener("load", function () {
-        document.querySelectorAll(".name").forEach(function (el) { fitText(el, 20, 12); });
-        document.querySelectorAll(".event-name").forEach(function (el) { fitText(el, 16, 9); });
+        document.querySelectorAll(".name").forEach(function (el) { fitText(el, 17, 11); });
+        document.querySelectorAll(".event-name").forEach(function (el) { fitText(el, 17, 10); });
       });
     </script>
     <p class="no-print">
