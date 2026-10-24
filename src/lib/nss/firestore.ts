@@ -276,16 +276,17 @@ async function listPublicNotices() {
   });
 }
 
-async function loadCollegeCloudFresh(opts: { gallery?: boolean; photos?: boolean; studentsOnly?: boolean } = {}): Promise<CloudPortal | null> {
+async function loadCollegeCloudFresh(opts: { gallery?: boolean; photos?: boolean; studentsOnly?: boolean; attendance?: boolean } = {}): Promise<CloudPortal | null> {
   await readPurgedIds().catch(() => undefined);
   const studentsOnly = opts.studentsOnly === true;
+  const withAttendance = opts.attendance === true && !studentsOnly;
   const [students, eventDocs, noticeDocs, attendanceDocs, galleryDocs, stats, visitorsDoc] =
     await Promise.all([
       listCollection("students", { photos: opts.photos !== false }),
       studentsOnly ? Promise.resolve([]) : listCollection("events"),
       studentsOnly ? Promise.resolve([]) : listPublicNotices(),
-      studentsOnly ? Promise.resolve([]) : listCollection("attendance", { maxDocs: 2500 }),
-      studentsOnly || opts.gallery === false ? Promise.resolve([]) : listCollection("gallery", { maxDocs: 60 }),
+      withAttendance ? listCollection("attendance", { maxDocs: 800 }) : Promise.resolve([]),
+      studentsOnly || opts.gallery === false ? Promise.resolve([]) : listCollection("gallery", { maxDocs: 24 }),
       studentsOnly ? Promise.resolve(null) : getDocument("portalSettings/publicStats"),
       studentsOnly ? Promise.resolve(null) : getDocument("portalSettings/visitors"),
     ]);
@@ -483,7 +484,7 @@ async function loadCollegeCloudFresh(opts: { gallery?: boolean; photos?: boolean
   };
 }
 
-export async function loadCollegeCloud(opts: { gallery?: boolean; photos?: boolean } = {}): Promise<CloudPortal | null> {
+export async function loadCollegeCloud(opts: { gallery?: boolean; photos?: boolean; attendance?: boolean } = {}): Promise<CloudPortal | null> {
   if (collegeQuotaBlocked()) {
     if (cloudCache) return cloudCache.data;
     throw new Error("The college register is busy. Try again in a little while.");
@@ -502,7 +503,7 @@ export async function loadCollegeCloud(opts: { gallery?: boolean; photos?: boole
     }
   }
   cloudInflightGallery = wantGallery;
-  cloudInflight = loadCollegeCloudFresh({ gallery: wantGallery, photos: false })
+  cloudInflight = loadCollegeCloudFresh({ gallery: wantGallery, photos: false, attendance: opts.attendance === true })
     .then((data) => {
       if (data && data.volunteers.length > 0) {
         cloudCache = {
@@ -694,30 +695,32 @@ export async function purgeCloudIds(ids: string[]) {
   void markBoardStale();
 }
 
-async function readBoard(): Promise<{ data: CloudPortal; galleryCount: number | null } | null> {
-  if (collegeQuotaBlocked()) return publicCache ? { data: publicCache.data, galleryCount: publicCache.galleryReady ? publicCache.data.gallery.length : null } : null;
+async function readBoard(): Promise<{ data: CloudPortal; galleryCount: number | null; fresh: boolean } | null> {
+  if (collegeQuotaBlocked()) {
+    return publicCache ? { data: publicCache.data, galleryCount: publicCache.galleryReady ? publicCache.data.gallery.length : null, fresh: true } : null;
+  }
   let doc: Record<string, unknown> | null = null;
   try {
     doc = await getDocument("portalSettings/board");
   } catch {
-    return publicCache ? { data: publicCache.data, galleryCount: publicCache.galleryReady ? publicCache.data.gallery.length : null } : null;
+    return publicCache ? { data: publicCache.data, galleryCount: publicCache.galleryReady ? publicCache.data.gallery.length : null, fresh: true } : null;
   }
-  if (!doc || doc.stale === true) return null;
-  const updatedAt = Date.parse(text(doc.updatedAt));
-  if (!Number.isFinite(updatedAt) || Date.now() - updatedAt > BOARD_TTL_MS) return null;
+  if (!doc) return null;
   try {
     const parsed = JSON.parse(text(doc.payload)) as CloudPortal;
-    if (!parsed || !Array.isArray(parsed.volunteers) || parsed.volunteers.length < 20) return null;
+    if (!parsed || !Array.isArray(parsed.volunteers) || parsed.volunteers.length < 1) return null;
+    const updatedAt = Date.parse(text(doc.updatedAt));
+    const fresh = doc.stale !== true && Number.isFinite(updatedAt) && Date.now() - updatedAt <= BOARD_TTL_MS;
     const rawCount = doc.galleryCount;
     const galleryCount = typeof rawCount === "number" && Number.isFinite(rawCount) ? rawCount : null;
-    return { data: parsed, galleryCount };
+    return { data: parsed, galleryCount, fresh };
   } catch {
     return null;
   }
 }
 
 async function writeBoard(data: CloudPortal) {
-  if (data.volunteers.length < 20 || collegeQuotaBlocked()) return;
+  if (data.volunteers.length < 1 || collegeQuotaBlocked()) return;
   const shaped = publicBoardShape(data);
   const payload = JSON.stringify(shaped);
   if (payload.length > 900000) return;
@@ -748,45 +751,56 @@ async function writeBoard(data: CloudPortal) {
   });
 }
 
+let boardRebuildAt = 0;
+
+function rememberBoard(data: CloudPortal, galleryReady: boolean) {
+  publicCache = { at: Date.now(), data, galleryReady };
+  return data;
+}
+
 export async function loadPublicBoard(opts: { gallery?: boolean } = {}): Promise<CloudPortal | null> {
   const now = Date.now();
   const wantGallery = opts.gallery === true;
-  await readPurgedIds().catch(() => undefined);
   if (publicCache && now - publicCache.at < PUBLIC_MEMORY_MS) {
     const ready = !wantGallery || publicCache.galleryReady || publicCache.data.gallery.length > 0;
     if (ready) return omitPurged(publicCache.data);
   }
-  if (!collegeQuotaBlocked()) {
-    const board = await readBoard();
-    if (board) {
-      const clean = omitPurged(board.data);
-      const knownEmpty = board.galleryCount === 0;
-      const usable = clean.gallery.length > 0 || knownEmpty;
-      if (!wantGallery || usable) {
-        publicCache = { at: Date.now(), data: clean, galleryReady: usable };
-        return clean;
-      }
+  const board = await readBoard();
+  if (board && (board.fresh || collegeQuotaBlocked() || now < boardRebuildAt)) {
+    const clean = omitPurged(board.data);
+    const usable = !wantGallery || clean.gallery.length > 0 || board.galleryCount === 0;
+    if (!wantGallery || usable) return rememberBoard(clean, usable);
+  }
+  if (collegeQuotaBlocked()) return board ? rememberBoard(omitPurged(board.data), board.data.gallery.length > 0) : publicCache?.data ? omitPurged(publicCache.data) : null;
+  boardRebuildAt = Date.now() + 10 * 60 * 1000;
+  try {
+    const fresh = await loadCollegeCloudFresh({ gallery: wantGallery, photos: false, attendance: false });
+    if (fresh && fresh.volunteers.length >= 1) {
+      const packed = omitPurged({
+        ...fresh,
+        attendance: fresh.attendance.length ? fresh.attendance : board?.data.attendance ?? [],
+        serviceHours: Math.max(fresh.serviceHours, board?.data.serviceHours ?? 0),
+        gallery: fresh.gallery.length ? fresh.gallery : board?.data.gallery ?? [],
+        visitors: Math.max(fresh.visitors, board?.data.visitors ?? 0),
+      });
+      const clean = publicBoardShape(packed);
+      void writeBoard(clean).catch(() => undefined);
+      return rememberBoard(clean, clean.gallery.length > 0 || !wantGallery);
     }
+  } catch {
+    /* keep the last cloud snapshot */
   }
-  if (collegeQuotaBlocked()) return publicCache?.data ? omitPurged(publicCache.data) : null;
-  const fresh = await loadCollegeCloud({ gallery: true, photos: false });
-  if (fresh && fresh.volunteers.length >= 20) {
-    const packed = omitPurged(fresh);
-    const clean = publicBoardShape(packed);
-    publicCache = { at: Date.now(), data: clean, galleryReady: true };
-    void writeBoard(clean).catch(() => undefined);
-    return clean;
-  }
-  return fresh && fresh.volunteers.length > 0 ? omitPurged(fresh) : publicCache?.data ? omitPurged(publicCache.data) : null;
+  if (board) return rememberBoard(omitPurged(board.data), board.data.gallery.length > 0);
+  return publicCache?.data ? omitPurged(publicCache.data) : null;
 }
 
 export async function loadOfficerRoll(): Promise<CloudPortal | null> {
   if (officerCache && Date.now() - officerCache.at < CLOUD_FRESH_MS) return officerCache.data;
   const board = await loadPublicBoard({ gallery: false });
-  if (board && board.volunteers.length >= 20 && !collegeQuotaBlocked()) {
+  if (board && board.volunteers.length >= 1 && !collegeQuotaBlocked()) {
     try {
       const students = await listCollection("students", { photos: false, maxDocs: 400 });
-      if (students.length >= 20) {
+      if (students.length >= 1) {
         const byVid = new Map(students.map((s) => [text(s.volunteerId).toLowerCase(), s]));
         const byName = new Map(students.map((s) => [text(s.fullName).toLowerCase(), s]));
         const volunteers = board.volunteers.map((v) => {
@@ -815,11 +829,11 @@ export async function loadOfficerRoll(): Promise<CloudPortal | null> {
       if (!collegeQuotaBlocked() && !(error instanceof Error && /busy|quota|429/i.test(error.message))) throw error;
     }
   }
-  if (board && board.volunteers.length >= 20) return board;
+  if (board && board.volunteers.length >= 1) return board;
   if (collegeQuotaBlocked()) return board;
   try {
-    const full = await loadCollegeCloud({ gallery: false, photos: false });
-    if (full && full.volunteers.length >= 20) {
+    const full = await loadCollegeCloud({ gallery: false, photos: false, attendance: true });
+    if (full && full.volunteers.length >= 1) {
       officerCache = { at: Date.now(), data: full };
       void writeBoard(full).catch(() => undefined);
       return full;
@@ -1504,7 +1518,7 @@ export async function clearAttendanceCloud(eventName = "", opts?: { all?: boolea
   }
   let hours = 0;
   try {
-    const data = await loadCollegeCloud({ gallery: false, photos: false });
+    const data = await loadCollegeCloud({ gallery: false, photos: false, attendance: true });
     hours = data ? computeServiceHours(data.events, data.attendance) : 0;
     await fetch(`${FIRESTORE_BASE}/portalSettings/publicStats?updateMask.fieldPaths=serviceHours`, {
       method: "PATCH",
@@ -1853,7 +1867,7 @@ async function publishChatTail(row: ChatRow) {
 }
 
 export async function listRecentChatMessages(limit = 60): Promise<ChatRow[]> {
-  if (chatCache && Date.now() - chatCache.at < 400 && chatCache.rows.length) return visibleChats(chatCache.rows).slice(-limit);
+  if (chatCache && Date.now() - chatCache.at < 12_000 && chatCache.rows.length) return visibleChats(chatCache.rows).slice(-limit);
   if (!collegeQuotaBlocked()) {
     try {
       const doc = await getDocument("portalSettings/chatlog");

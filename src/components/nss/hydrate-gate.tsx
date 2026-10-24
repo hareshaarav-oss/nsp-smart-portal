@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { rememberVolunteer, useNssStore } from "@/lib/nss/store";
+import { useNssStore } from "@/lib/nss/store";
 import { useSessionStore } from "@/lib/nss/session";
 import { COLLEGE_LOGO, NSS_LOGO, STORAGE_DATA } from "@/lib/nss/constants";
 import { startDualSync } from "@/lib/nss/dual-store";
@@ -243,7 +243,7 @@ function applyBody(cloud: CloudBody) {
     degraded: Boolean(cloud.degraded),
     brand: cloud.brand,
   });
-  return Array.isArray(cloud.volunteers) && cloud.volunteers.length >= 20;
+  return Array.isArray(cloud.volunteers) && cloud.volunteers.length >= 1;
 }
 
 export function HydrateGate({ children }: { children: ReactNode }) {
@@ -288,89 +288,6 @@ export function HydrateGate({ children }: { children: ReactNode }) {
       }
     }
 
-    async function pullVisitors() {
-      if (cancelled || document.hidden) return;
-      const res = await fetch("/api/nss-cloud", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ action: "visitors" }),
-      });
-      const data = (await res.json()) as { ok?: boolean; visitors?: number };
-      if (!data.ok || typeof data.visitors !== "number" || data.visitors < 1) return;
-      const current = useNssStore.getState().visitors;
-      if (data.visitors !== current) useNssStore.setState({ visitors: Math.max(current, data.visitors) });
-    }
-
-    async function pullPulse() {
-      if (cancelled || document.hidden) return;
-      const res = await fetch("/api/nss-cloud", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ action: "live" }),
-      });
-      const data = (await res.json()) as {
-        ok?: boolean;
-        live?: {
-          visitors?: number;
-          volunteerCount?: number;
-          hours?: number;
-          latest?: { id?: string; volunteerId?: string; fullName?: string; unit?: string; createdAt?: string };
-          best?: { id?: string; volunteerId?: string; fullName?: string; unit?: string; hours?: number };
-        };
-      };
-      if (!data.ok || !data.live) return;
-      const state = useNssStore.getState();
-      const patch: { visitors?: number; liveVolunteerCount?: number; liveHours?: number; liveBest?: NonNullable<typeof state.liveBest> } = {};
-      if (typeof data.live.visitors === "number" && data.live.visitors > state.visitors) patch.visitors = data.live.visitors;
-      if (typeof data.live.hours === "number" && data.live.hours > (state.liveHours ?? 0)) {
-        patch.liveHours = data.live.hours;
-      }
-      if (typeof data.live.volunteerCount === "number" && data.live.volunteerCount > (state.liveVolunteerCount ?? 0)) {
-        patch.liveVolunteerCount = data.live.volunteerCount;
-      }
-      const best = data.live.best;
-      if (best?.fullName && typeof best.hours === "number") {
-        const currentHours = state.liveBest?.hours ?? -1;
-        if (best.hours !== currentHours || best.fullName !== state.liveBest?.fullName) {
-          patch.liveBest = {
-            id: best.id || best.volunteerId || best.fullName,
-            volunteerId: best.volunteerId || "",
-            fullName: best.fullName,
-            unit: best.unit === "Unit 2" ? "Unit 2" : "Unit 1",
-            hours: best.hours,
-          };
-        }
-      }
-      if (Object.keys(patch).length) useNssStore.setState(patch);
-      const latest = data.live.latest;
-      const known = latest?.volunteerId
-        ? (state.volunteers ?? []).some((row) => row.volunteerId === latest.volunteerId || row.id === latest.volunteerId)
-        : true;
-      if (latest?.fullName && latest.volunteerId && !known) {
-        rememberVolunteer({
-          id: latest.volunteerId,
-          volunteerId: latest.volunteerId,
-          enrollment: "",
-          fullName: latest.fullName,
-          mobile: "",
-          email: "",
-          course: "B.Com.",
-          semester: "1",
-          unit: latest.unit === "Unit 2" ? "Unit 2" : "Unit 1",
-          nssRole: "Volunteer",
-          fatherName: "",
-          dob: "",
-          gender: "Other",
-          bloodGroup: "",
-          address: "",
-          parentMobile: "",
-          photoUrl: "",
-          status: "active",
-          createdAt: latest.createdAt || "",
-        });
-      }
-    }
-
     void (async () => {
       rescueOfficerPhotos();
       dropStalePortalCache();
@@ -410,42 +327,23 @@ export function HydrateGate({ children }: { children: ReactNode }) {
       try {
         await pullLive();
       } catch {
-        setStatus("Could not reach the college roll. Showing saved data.");
+        setStatus("The college cloud is busy. The roll will open when Firestore is free.");
       }
-      window.setTimeout(() => {
-        if (!cancelled && !photosLoaded) void ensurePhotos();
-        if (!cancelled) {
-          void fetch("/api/nss-cloud?gallery=1")
-            .then((res) => res.json() as Promise<CloudBody>)
-            .then((cloud) => {
-              if (!cancelled && Array.isArray(cloud.gallery) && cloud.gallery.length) applyBody(cloud);
-            })
-            .catch(() => undefined);
-        }
-      }, 1200);
-      void pullVisitors().catch(() => undefined);
-      void pullPulse().catch(() => undefined);
+      const session = useSessionStore.getState().session;
+      const officer = session?.role === "po" || session?.role === "admin";
+      if (officer) {
+        window.setTimeout(() => {
+          if (!cancelled) void ensurePhotos();
+        }, 1500);
+      }
     })();
 
-    const timer = window.setInterval(() => {
+    const retry = window.setTimeout(() => {
       void pullLive().catch(() => undefined);
-      void pullVisitors().catch(() => undefined);
-      void pullPulse().catch(() => undefined);
-      void ensurePhotos();
-    }, 20000);
-    const wake = () => {
-      void pullLive().catch(() => undefined);
-      void pullVisitors().catch(() => undefined);
-      void pullPulse().catch(() => undefined);
-      void ensurePhotos();
-    };
-    document.addEventListener("visibilitychange", wake);
-    window.addEventListener("focus", wake);
+    }, 90_000);
     return () => {
       cancelled = true;
-      window.clearInterval(timer);
-      document.removeEventListener("visibilitychange", wake);
-      window.removeEventListener("focus", wake);
+      window.clearTimeout(retry);
     };
   }, []);
 

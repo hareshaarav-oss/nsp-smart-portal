@@ -336,13 +336,15 @@ export const Route = createFileRoute("/api/nss-cloud")({
         const includeGallery = new URL(request.url).searchParams.get("gallery") === "1";
         try {
           const data = await loadPublicBoard({ gallery: includeGallery });
-          if (!data || data.volunteers.length < 20) {
-            return Response.json(degradedBody(), { headers: cacheHeaders(120) });
+          if (!data || data.volunteers.length < 1) {
+            return Response.json(degradedBody(), {
+              headers: { "cache-control": "public, max-age=20, s-maxage=20" },
+            });
           }
           const brand = collegeQuotaBlocked() ? { poPhoto: "", principalPhoto: "" } : await readBrandPhotos();
           return Response.json(
             { ...publicPayload(data as unknown as Row, includeGallery), brand, degraded: false },
-            { headers: cacheHeaders(includeGallery ? 120 : 60) },
+            { headers: { "cache-control": "public, max-age=60, s-maxage=600, stale-while-revalidate=86400" } },
           );
         } catch (error) {
           if (busyError(error) || collegeQuotaBlocked()) {
@@ -810,7 +812,7 @@ export const Route = createFileRoute("/api/nss-cloud")({
             } catch (error) {
               if (!busyError(error)) throw error;
             }
-            if (!data || data.volunteers.length < 20) {
+            if (!data || data.volunteers.length < 1) {
               return Response.json({
                 ok: true,
                 degraded: true,

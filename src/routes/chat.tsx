@@ -446,7 +446,7 @@ function ChatPage() {
       }
     }
     void pull();
-    const timer = window.setInterval(() => void pull(), 800);
+    const timer = window.setInterval(() => void pull(), 8000);
     const wake = () => void pull();
     document.addEventListener("visibilitychange", wake);
     window.addEventListener("focus", wake);
@@ -516,7 +516,7 @@ function ChatPage() {
         .catch(() => undefined);
     };
     push();
-    const timer = window.setInterval(push, callOn ? 2500 : 12000);
+    const timer = window.setInterval(push, callOn ? 8000 : 20000);
     return () => {
       stop = true;
       window.clearInterval(timer);

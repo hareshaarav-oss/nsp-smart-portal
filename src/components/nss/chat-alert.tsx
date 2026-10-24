@@ -31,7 +31,7 @@ export function useChatUnread() {
       }
     }
     void pull();
-    const timer = window.setInterval(() => void pull(), 30000);
+    const timer = window.setInterval(() => void pull(), 60000);
     const ask = () => {
       if ("Notification" in window && Notification.permission === "default") void Notification.requestPermission();
     };

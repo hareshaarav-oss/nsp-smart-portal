@@ -4,13 +4,12 @@ import {
   OLD_SLOGAN_GU,
   SLOGAN_GU,
   STORAGE_DATA,
-  STORAGE_SESSION,
 } from "./constants";
 import { createSeedState, isDemoRecord } from "./seed";
 import { isOfficer, useSessionStore } from "./session";
 import { academicYear, byFullName, padId, parseDob, titleFirstName } from "./format";
 import { deleteMedia } from "./media";
-import { cloudPost, mirrorPortal, readPortalMirror } from "./dual-store";
+import { cloudPost } from "./dual-store";
 import { assignSequentialIds, certificateYear, nextCertificateSeq } from "./certificates";
 import { nssHourRule } from "./hours";
 
@@ -415,147 +414,16 @@ function digits(value: string) {
     .replace(/\D/g, "");
 }
 
-function unwrapPersisted(
-  raw: string,
-): string {
-  const parsed = JSON.parse(raw) as unknown;
-
-  if (
-    isRecord(parsed) &&
-    "state" in parsed
-  ) {
-    return raw;
-  }
-
-  return JSON.stringify({
-    state: parsed,
-    version: 0,
-  });
-}
-
-function readLegacyPortalJson(): string | null {
-  if (typeof window === "undefined") {
-    return null;
-  }
-
-  try {
-    const primary =
-      localStorage.getItem(
-        STORAGE_DATA,
-      );
-
-    if (primary) {
-      return unwrapPersisted(primary);
-    }
-
-    for (
-      let i = 0;
-      i < localStorage.length;
-      i += 1
-    ) {
-      const key = localStorage.key(i);
-
-      if (
-        !key ||
-        key === STORAGE_SESSION
-      ) {
-        continue;
-      }
-
-      const value =
-        localStorage.getItem(key);
-
-      if (
-        !value ||
-        !value.includes("volunteers")
-      ) {
-        continue;
-      }
-
-      try {
-        const wrapped =
-          unwrapPersisted(value);
-
-        const parsed =
-          JSON.parse(wrapped) as {
-            state?: {
-              volunteers?: unknown;
-            };
-          };
-
-        if (
-          Array.isArray(
-            parsed.state?.volunteers,
-          )
-        ) {
-          localStorage.setItem(
-            STORAGE_DATA,
-            wrapped,
-          );
-
-          return wrapped;
-        }
-      } catch {
-        /* skip bad key */
-      }
-    }
-  } catch {
-    /* private mode */
-  }
-
-  return null;
-}
-
 const portalStorage =
   createJSONStorage(() => ({
-    getItem: async (name: string) => {
-      if (typeof window === "undefined") {
-        return null;
-      }
+    getItem: async () => null,
 
-      try {
-        const raw =
-          localStorage.getItem(name);
-
-        if (raw) {
-          return unwrapPersisted(raw);
-        }
-      } catch {
-        /* private mode or a full quota */
-      }
-
-      const mirrored = await readPortalMirror();
-      if (mirrored) return unwrapPersisted(mirrored);
-      return readLegacyPortalJson();
+    setItem: () => {
+      /* College records live only in Firestore. This device does not keep a second copy. */
     },
 
-    setItem: (
-      name: string,
-      value: string,
-    ) => {
-      if (typeof window === "undefined") {
-        return;
-      }
-
-      try {
-        localStorage.setItem(name, value);
-      } catch {
-        /* IndexedDB below still keeps the roll */
-      }
-      void mirrorPortal(value);
-    },
-
-    removeItem: (name: string) => {
-      if (typeof window === "undefined") {
-        return;
-      }
-
-      try {
-        localStorage.removeItem(name);
-      } catch {
-        /* ignore */
-      }
-      void mirrorPortal("");
+    removeItem: () => {
+      /* nothing stored on this device */
     },
   }));
 
@@ -784,7 +652,7 @@ export const useNssStore =
             Array.isArray(
               cloud.volunteers,
             ) &&
-            cloud.volunteers.length >= 20
+            cloud.volunteers.length >= 1
           ) {
             const localById =
               new Map(

@@ -78,7 +78,7 @@ function Home() {
   );
 
   const { t } = useUi();
-  const collegeReady = shownVolunteers >= 20;
+  const collegeReady = shownVolunteers > 0;
   const collegeEvents = collegeReady ? events.filter((event) => !SEED_IDS.has(event.id)) : events;
   const collegeNotices = collegeReady ? notices.filter((notice) => !SEED_IDS.has(notice.id)) : notices;
   const upcoming = useMemo(

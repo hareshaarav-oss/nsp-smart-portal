@@ -9,7 +9,7 @@ export async function officerCloud(action: "set-role" | "set-status", extra: Rec
   if (!result.ok) {
     throw new Error(
       result.queued
-        ? "Saved on this device. The college roll will update when the internet is back."
+        ? "The college cloud is busy. Try this save again in a moment."
         : result.error || "Could not save to the college roll.",
     );
   }
