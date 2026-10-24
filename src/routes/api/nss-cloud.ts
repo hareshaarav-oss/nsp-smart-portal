@@ -1,4 +1,4 @@
-import { loadCollegeCloud, loadStudentRoll, readOneStudent, loadPublicBoard, loadOfficerRoll, collegeQuotaBlocked, saveStudentToCloud, incrementVisitors, readVisitorCount, knownVisitorCount, patchStudent, safePhoto, knownRole, readChatPass, listRecentChatMessages, saveChatMessage, listChatPeople, clearAttendanceCloud, readBrandPhotos, saveBrandPhotos, listPhotoRoster, readPhotoBatch, saveAttendanceMarks, readLive, publishBestVolunteer, publishServiceHours, purgeCloudIds, deleteChatMessages, chatIdsInThread, readChatMedia, readOneChat, patchNotice, upsertNotice, sideDocId, listChatStatuses, readSide, readStudentCerts, saveStudentCerts, type ChatExtra } from "@/lib/nss/firestore";
+import { loadCollegeCloud, loadStudentRoll, readOneStudent, loadPublicBoard, loadOfficerRoll, collegeQuotaBlocked, saveStudentToCloud, incrementVisitors, readVisitorCount, knownVisitorCount, patchStudent, safePhoto, knownRole, readChatPass, listRecentChatMessages, saveChatMessage, listChatPeople, clearAttendanceCloud, readBrandPhotos, saveBrandPhotos, listPhotoRoster, readPhotoBatch, saveAttendanceMarks, readLive, publishBestVolunteer, publishServiceHours, purgeCloudIds, deleteChatMessages, chatIdsInThread, readChatMedia, readOneChat, patchNotice, upsertNotice, sideDocId, listChatStatuses, readSide, readStudentCerts, saveStudentCerts, markChatRead, chatReads, type ChatExtra } from "@/lib/nss/firestore";
 import { passwordOk, sealText, signChatPass } from "@/lib/nss/seal.server";
 import { createFileRoute } from "@tanstack/react-router";
 
@@ -306,12 +306,12 @@ function validThread(threadId: string) {
 
 function canSeeThread(user: { id: string; role: string; unit: string }, threadId: string) {
   const officer = user.role === "po" || user.role === "admin";
-  if (threadId === "channel" || threadId === "college") return true;
-  if (threadId === "leaders") return officer || user.role === "leader";
-  if (threadId === "unit-1" || threadId === "unit-2") return officer || !user.unit || user.unit === (threadId === "unit-1" ? "Unit 1" : "Unit 2");
+  if (officer && (threadId === "channel" || threadId === "college" || threadId === "leaders" || threadId === "unit-1" || threadId === "unit-2")) return true;
+  if (!officer && threadId === "channel") return true;
   if (!threadId.startsWith("dm:")) return false;
   const ids = threadId.slice(3).split(":");
-  return officer || ids.includes(user.id);
+  if (officer) return ids.includes("po") || ids.includes("admin") || ids.includes(user.id);
+  return ids.includes(user.id) && ids.includes("po");
 }
 
 function officerRole(user: { role?: string } | null | undefined) {
@@ -381,6 +381,7 @@ export const Route = createFileRoute("/api/nss-cloud")({
             text?: string;
             title?: string;
             messageId?: string;
+            messageIds?: string[];
             replyName?: string;
             replyText?: string;
             media?: string;
@@ -608,6 +609,10 @@ export const Route = createFileRoute("/api/nss-cloud")({
               return Response.json({ ok: true, id: row.id, extra });
             }
             if (body.action === "chat-presence" || body.action === "chat-block" || body.action === "chat-status") {
+              if (body.action === "chat-presence") {
+                const seenThread = canonicalThread(text(body.threadId));
+                if (seenThread) void markChatRead(user.id, seenThread, new Date().toISOString()).catch(() => undefined);
+              }
               if (body.action === "chat-block") {
                 const other = text(body.blockId).replace(/[^A-Za-z0-9-]/g, "").slice(0, 24);
                 if (!other || other === user.id) return Response.json({ ok: false, error: "That person cannot be blocked." }, { status: 400 });
@@ -675,17 +680,25 @@ export const Route = createFileRoute("/api/nss-cloud")({
             if (body.action === "chat-delete" || body.action === "chat-clear") {
               const recent = await listRecentChatMessages(300);
               if (body.action === "chat-delete") {
-                const messageId = text(body.messageId);
-                const row = recent.find((item) => item.id === messageId);
-                if (!row || !canSeeThread(user, canonicalThread(row.threadId))) {
-                  return Response.json({ ok: false, error: "That message is not in your chat." }, { status: 404 });
-                }
+                const ids = (Array.isArray(body.messageIds) ? body.messageIds : [body.messageId]).map((id) => text(id)).filter((id) => /^chat[a-z0-9]{4,40}$/i.test(id)).slice(0, 40);
                 const officer = user.role === "po" || user.role === "admin";
-                if (!officer && row.senderId !== user.id) {
-                  return Response.json({ ok: false, error: "You can delete only your own message." }, { status: 403 });
+                const removed: string[] = [];
+                for (const messageId of ids) {
+                  let row = recent.find((item) => item.id === messageId) || null;
+                  if (!row && !collegeQuotaBlocked()) {
+                    try {
+                      row = await readOneChat(messageId);
+                    } catch {
+                      row = null;
+                    }
+                  }
+                  if (!row || !canSeeThread(user, canonicalThread(row.threadId))) continue;
+                  if (!officer && row.senderId !== user.id) continue;
+                  removed.push(messageId);
                 }
-                await deleteChatMessages([messageId]);
-                return Response.json({ ok: true, removed: [messageId] });
+                if (!removed.length) return Response.json({ ok: false, error: "You can delete only your own message for everyone." }, { status: 403 });
+                await deleteChatMessages(removed);
+                return Response.json({ ok: true, removed });
               }
               const threadId = canonicalThread(text(body.threadId));
               if (!validThread(threadId) || !canSeeThread(user, threadId)) {
@@ -786,7 +799,7 @@ export const Route = createFileRoute("/api/nss-cloud")({
               });
               return Response.json({ ok: true, message: saved });
             }
-            const messages = (await listRecentChatMessages().catch(() => [])).filter((row) => canSeeThread(user, canonicalThread(row.threadId)));
+            const messages = (await listRecentChatMessages().catch(() => [])).filter((row) => canSeeThread(user, canonicalThread(row.threadId)) && Date.now() - new Date(row.createdAt).getTime() < 24 * 60 * 60 * 1000);
             const officer = user.role === "po" || user.role === "admin";
             const people = officer ? await listChatPeople({ includeMobile: false }).catch(() => []) : [];
             return Response.json({
@@ -794,6 +807,7 @@ export const Route = createFileRoute("/api/nss-cloud")({
               me: { id: user.id, name: user.name, role: user.role, unit: user.unit },
               people,
               messages,
+              reads: chatReads(),
             });
           }
           if (body.action === "roll-sync") {

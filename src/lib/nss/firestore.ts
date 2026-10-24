@@ -1720,6 +1720,56 @@ export async function listChatPeople(opts?: { includeMobile?: boolean }): Promis
 }
 
 let chatCache: { at: number; rows: ChatRow[] } | null = null;
+let readCache: { id: string; thread: string; at: string }[] = [];
+const goneCache = new Set<string>();
+const CHAT_LIFE_MS = 24 * 60 * 60 * 1000;
+
+function chatStillLive(createdAt: string) {
+  const at = new Date(createdAt).getTime();
+  return Number.isFinite(at) && Date.now() - at < CHAT_LIFE_MS;
+}
+
+function visibleChats(rows: ChatRow[]) {
+  return rows.filter((row) => row.id && !goneCache.has(row.id) && chatStillLive(row.createdAt));
+}
+
+async function markChatField(field: "reads" | "gone", value: string) {
+  const project = process.env.NSS_FIRESTORE_PROJECT_ID?.trim() || "studio-8504026975-1fdbc";
+  await fetch(`${FIRESTORE_BASE}:commit`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      writes: [
+        {
+          transform: {
+            document: `projects/${project}/databases/(default)/documents/portalSettings/chatlog`,
+            fieldTransforms: [{ fieldPath: field, appendMissingElements: { values: [{ stringValue: value }] } }],
+          },
+        },
+      ],
+    }),
+  });
+}
+
+export async function markChatRead(userId: string, threadId: string, at: string) {
+  const id = text(userId).slice(0, 40);
+  const thread = text(threadId).slice(0, 80);
+  if (!id || !thread) return;
+  readCache = [...readCache.filter((row) => !(row.id === id && row.thread === thread)), { id, thread, at }].slice(-100);
+  await markChatField("reads", JSON.stringify({ id, thread, at }));
+}
+
+export function chatReads() {
+  const cutoff = Date.now() - CHAT_LIFE_MS;
+  return readCache.filter((row) => new Date(row.at).getTime() >= cutoff);
+}
+
+export async function markChatGone(ids: string[]) {
+  const unique = [...new Set(ids.map((id) => text(id)).filter((id) => id.startsWith("chat")))].slice(0, 40);
+  for (const id of unique) goneCache.add(id);
+  if (chatCache) chatCache = { at: Date.now(), rows: visibleChats(chatCache.rows) };
+  await Promise.all(unique.map((id) => markChatField("gone", id).catch(() => undefined)));
+}
 
 function rememberChat(row: ChatRow) {
   const rows = [...(chatCache?.rows ?? []).filter((item) => item.id !== row.id), row]
@@ -1785,10 +1835,23 @@ async function publishChatTail(row: ChatRow) {
 }
 
 export async function listRecentChatMessages(limit = 60): Promise<ChatRow[]> {
-  if (chatCache && Date.now() - chatCache.at < 8000 && chatCache.rows.length) return chatCache.rows.slice(-limit);
+  if (chatCache && Date.now() - chatCache.at < 8000 && chatCache.rows.length) return visibleChats(chatCache.rows).slice(-limit);
   if (!collegeQuotaBlocked()) {
     try {
       const doc = await getDocument("portalSettings/chatlog");
+      const gone = Array.isArray(doc?.gone) ? doc.gone : [];
+      for (const id of gone) if (typeof id === "string" && id.startsWith("chat")) goneCache.add(id);
+      const reads = Array.isArray(doc?.reads) ? doc.reads : [];
+      for (const item of reads) {
+        if (typeof item !== "string" || !item.startsWith("{")) continue;
+        try {
+          const row = JSON.parse(item) as { id?: string; thread?: string; at?: string };
+          if (!row.id || !row.thread || !row.at) continue;
+          readCache = [...readCache.filter((kept) => !(kept.id === row.id && kept.thread === row.thread)), { id: row.id, thread: row.thread, at: row.at }].slice(-100);
+        } catch {
+          /* skip a bad receipt */
+        }
+      }
       const fromTail = tailRows(doc?.recent);
       if (fromTail.length) {
         const seen = new Set(fromTail.map((row) => row.id));
@@ -1796,13 +1859,13 @@ export async function listRecentChatMessages(limit = 60): Promise<ChatRow[]> {
           .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
           .slice(-80);
         chatCache = { at: Date.now(), rows: merged };
-        return merged.slice(-limit);
+        return visibleChats(merged).slice(-limit);
       }
     } catch {
-      return chatCache?.rows.slice(-limit) ?? [];
+      return chatCache?.rows ? visibleChats(chatCache.rows).slice(-limit) : [];
     }
   }
-  if (collegeQuotaBlocked()) return chatCache?.rows.slice(-limit) ?? [];
+  if (collegeQuotaBlocked()) return visibleChats(chatCache?.rows ?? []).slice(-limit);
   const mapRows = (docs: Record<string, unknown>[]) =>
     docs
       .filter((row) => text(row.kind) === "chat" && text(row.threadId) && (text(row.text) || text(row.mediaType) || text(row.media) || text(row.extra)))
@@ -1857,11 +1920,11 @@ export async function listRecentChatMessages(limit = 60): Promise<ChatRow[]> {
         fields: ["kind", "threadId", "text", "senderId", "senderName", "createdAt", "replyName", "replyText", "mediaType", "extra"].map((fieldPath) => ({ fieldPath })),
       },
     })) ?? [];
-    const rows = mapRows(docs);
+    const rows = visibleChats(mapRows(docs));
     if (rows.length) chatCache = { at: Date.now(), rows };
-    return rows.length ? rows : chatCache?.rows.slice(-limit) ?? [];
+    return rows.length ? rows : visibleChats(chatCache?.rows ?? []).slice(-limit);
   } catch {
-    return chatCache?.rows.slice(-limit) ?? [];
+    return visibleChats(chatCache?.rows ?? []).slice(-limit);
   }
 }
 
@@ -2058,7 +2121,7 @@ export async function listChatStatuses() {
 export async function deleteChatMessages(ids: string[]) {
   const unique = [...new Set(ids.map((id) => text(id)).filter(Boolean))].slice(0, 80);
   await Promise.all(unique.map((id) => deleteNoticeDoc(id)));
-  chatCache = null;
+  await markChatGone(unique);
 }
 
 export async function chatIdsInThread(threadId: string) {

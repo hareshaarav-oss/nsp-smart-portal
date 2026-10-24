@@ -243,6 +243,8 @@ function ChatPage() {
   const [pollOn, setPollOn] = useState(false);
   const [pollOptions, setPollOptions] = useState("Yes, No");
   const [peer, setPeer] = useState<{ lastSeen?: string; typingThread?: string; typingAt?: string; readThread?: string; readAt?: string; call?: string; callThread?: string; callAt?: string; sdp?: string } | null>(null);
+  const [reads, setReads] = useState<{ id: string; thread: string; at: string }[]>([]);
+  const [selected, setSelected] = useState<string[]>([]);
   const [statuses, setStatuses] = useState<{ id: string; text: string; senderId: string; senderName: string; createdAt: string }[]>([]);
   const [callOn, setCallOn] = useState<"" | "audio" | "video">("");
   const [viewOnce, setViewOnce] = useState(false);
@@ -250,6 +252,7 @@ function ChatPage() {
   const [away, setAway] = useState(false);
   const { t: say } = useUi();
   const scroller = useRef<HTMLDivElement>(null);
+  const hold = useRef(0);
   const stick = useRef(true);
   const mediaBag = useRef(new Map<string, { media: string; mediaType: "image" | "video" | "audio" | "file" }>());
   const recorder = useRef<MediaRecorder | null>(null);
@@ -282,7 +285,10 @@ function ChatPage() {
   }, []);
 
   useEffect(() => {
-    const light = messages.slice(-40).map((row) => ({ ...row, media: row.media && row.media.length < 80000 ? row.media : "" }));
+    const light = messages
+      .filter((row) => Date.now() - new Date(row.createdAt).getTime() < 24 * 60 * 60 * 1000)
+      .slice(-40)
+      .map((row) => ({ ...row, media: row.media && row.media.length < 80000 ? row.media : "" }));
     try {
       localStorage.setItem("nsp-chat-box", JSON.stringify(light));
     } catch {
@@ -353,6 +359,17 @@ function ChatPage() {
   }, [peer]);
 
   useEffect(() => {
+    if (!session || session.role === "po" || session.role === "admin") return;
+    const id = me?.id || session.volunteerId || "";
+    if (!id) return;
+    const thread = canonicalThread(`dm:${id}:po`);
+    if (active !== thread) {
+      setActive(thread);
+      setMobileList(false);
+    }
+  }, [session, me?.id, active]);
+
+  useEffect(() => {
     if (!session || session.chatToken) return;
     let stop = false;
     void fetch("/api/nss-cloud", {
@@ -389,7 +406,7 @@ function ChatPage() {
           headers: { "content-type": "application/json" },
           body: JSON.stringify({ action: "chat-sync", chatToken: token }),
         });
-        const data = (await res.json()) as { ok?: boolean; me?: Me; people?: Person[]; messages?: ChatMessage[] };
+        const data = (await res.json()) as { ok?: boolean; me?: Me; people?: Person[]; messages?: ChatMessage[]; reads?: { id: string; thread: string; at: string }[] };
         if (res.status === 401) {
           const current = useSessionStore.getState().session;
           if (current?.chatToken) useSessionStore.getState().setSession({ ...current, chatToken: "" });
@@ -403,6 +420,7 @@ function ChatPage() {
           const kept = mediaBag.current.get(row.id);
           return kept && !row.media ? { ...row, media: kept.media, mediaType: kept.mediaType } : row;
         });
+        if (data.reads) setReads(data.reads);
         setMessages((current) => {
           const map = new Map(current.map((row) => [row.id, row]));
           for (const row of incoming) {
@@ -518,12 +536,7 @@ function ChatPage() {
     });
   }, [messages, active, mobileList]);
 
-  const allowedGroups = GROUPS.filter((group) => {
-    if (group.id === "channel" || group.id === "college") return true;
-    if (session?.role === "po" || session?.role === "admin") return true;
-    if (group.id === "leaders") return session?.role === "leader";
-    return false;
-  });
+  const allowedGroups = session?.role === "po" || session?.role === "admin" ? GROUPS : [];
 
   function personName(id: string) {
     if (id === "po") return "Programme Officer";
@@ -636,9 +649,9 @@ function ChatPage() {
     const text = draft.trim();
     const attachment = pending;
     if (!text && !attachment && !pollOn) return;
-    const desk = session?.role === "po" || session?.role === "admin";
-    const mine = me?.id || session?.volunteerId || (desk ? (session?.role === "admin" ? "admin" : "po") : "");
-    const thread = canonicalThread(threadId);
+    const student = session?.role !== "po" && session?.role !== "admin";
+    const mine = me?.id || session?.volunteerId || (student ? "" : session?.role === "admin" ? "admin" : "po");
+    const thread = student ? (mine ? canonicalThread(`dm:${mine}:po`) : "") : canonicalThread(threadId);
     if (!thread || !mine) {
       toast.error("Open a chat, then send.");
       return;
@@ -914,17 +927,29 @@ function ChatPage() {
   }
 
   async function erase(messageId: string) {
-    if (!messageId) return;
+    await eraseMany([messageId]);
+  }
+
+  async function eraseMany(ids: string[]) {
+    const unique = [...new Set(ids.filter((id) => id && !id.startsWith("local-")))];
+    const mineIds = unique.filter((id) => {
+      const row = messages.find((message) => message.id === id);
+      return Boolean(row && ((session?.role === "po" || session?.role === "admin") || row.senderId === me?.id || row.senderId === (session?.volunteerId || "")));
+    });
+    if (!mineIds.length) {
+      toast.error("You can delete only your own message for everyone.");
+      return;
+    }
     const previous = messages;
-    setMessages((current) => current.filter((row) => row.id !== messageId));
+    setMessages((current) => current.filter((row) => !mineIds.includes(row.id)));
+    setSelected([]);
     setPicked("");
     setAsk("");
-    if (messageId.startsWith("local-") || !navigator.onLine) return;
     try {
       const res = await fetch("/api/nss-cloud", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ action: "chat-delete", chatToken: token, messageId }),
+        body: JSON.stringify({ action: "chat-delete", chatToken: token, messageId: mineIds[0], messageIds: mineIds }),
       });
       const data = (await res.json()) as { ok?: boolean; error?: string };
       if (!res.ok || !data.ok) throw new Error(data.error || "Message was not deleted.");
@@ -932,6 +957,14 @@ function ChatPage() {
       setMessages(previous);
       toast.error(error instanceof Error ? error.message : "Message was not deleted.");
     }
+  }
+
+  function hideSelected(ids: string[]) {
+    const hidden = [...new Set([...prefs.hidden, ...ids])].slice(-500);
+    savePrefs({ ...prefs, hidden });
+    setSelected([]);
+    setPicked("");
+    setAsk("");
   }
 
   async function saveToGallery(message: ChatMessage) {
@@ -983,7 +1016,6 @@ function ChatPage() {
 
   function talk(list: ChatMessage[], threadId: string, showNames: boolean) {
     const chosen = list.find((message) => message.id === picked);
-    const canDelete = Boolean(chosen && (officer || chosen.senderId === me?.id || chosen.senderId === meId));
     return (
       <>
         <div
@@ -1002,8 +1034,11 @@ function ChatPage() {
             const showDay = !previous || previous.createdAt.slice(0, 10) !== message.createdAt.slice(0, 10);
             const extra = message.extra || {};
             const link = firstLink(message.text);
-            const read = Boolean(peer?.readThread === canonicalThread(threadId) && (peer?.readAt || "") >= message.createdAt);
-            const delivered = Boolean(peer?.lastSeen && peer.lastSeen >= message.createdAt);
+            const read = Boolean(
+              reads.some((row) => row.id !== meId && row.id !== me?.id && row.thread === canonicalThread(threadId) && row.at >= message.createdAt) ||
+                (peer?.readThread === canonicalThread(threadId) && (peer?.readAt || "") >= message.createdAt),
+            );
+            const on = selected.includes(message.id);
             const sticker = extra.kind === "sticker";
             return (
               <div key={message.id}>
@@ -1012,8 +1047,22 @@ function ChatPage() {
                   <div
                     role="button"
                     tabIndex={0}
-                    className={`max-w-[82%] rounded-lg px-2 py-1 text-left shadow-sm ${mine ? "rounded-tr-none bg-[#d9fdd3] text-[#111b21]" : "rounded-tl-none bg-white text-[#111b21]"} ${picked === message.id ? "ring-2 ring-[#25d366]" : ""}`}
+                    className={`max-w-[82%] rounded-lg px-2 py-1 text-left shadow-sm ${mine ? "rounded-tr-none bg-[#d9fdd3] text-[#111b21]" : "rounded-tl-none bg-white text-[#111b21]"} ${on || picked === message.id ? "ring-2 ring-[#25d366]" : ""}`}
+                    onPointerDown={() => {
+                      window.clearTimeout(hold.current);
+                      hold.current = window.setTimeout(() => {
+                        setSelected((current) => (current.includes(message.id) ? current : [...current, message.id]));
+                        setPicked("");
+                      }, 420);
+                    }}
+                    onPointerUp={() => window.clearTimeout(hold.current)}
+                    onPointerCancel={() => window.clearTimeout(hold.current)}
                     onClick={() => {
+                      window.clearTimeout(hold.current);
+                      if (selected.length) {
+                        setSelected((current) => (current.includes(message.id) ? current.filter((id) => id !== message.id) : [...current, message.id]));
+                        return;
+                      }
                       setAsk("");
                       setPicked((current) => (current === message.id ? "" : message.id));
                     }}
@@ -1055,7 +1104,7 @@ function ChatPage() {
                       {prefs.stars.includes(message.id) ? <Star className="size-3 fill-current" /> : null}
                       {extra.editedAt ? <span>Edited</span> : null}
                       {clock(message.createdAt)}
-                      {mine ? message.id.startsWith("local-") ? <Check className="size-3.5" /> : delivered || read ? <CheckCheck className={`size-3.5 ${read ? "text-[#53bdeb]" : ""}`} /> : <Check className="size-3.5" /> : null}
+                      {mine ? read ? <CheckCheck className="size-3.5 text-[#53bdeb]" /> : <Check className="size-3.5 text-[#8696a0]" /> : null}
                     </p>
                   </div>
                 </div>
@@ -1090,6 +1139,9 @@ function ChatPage() {
                 <Download className="size-3.5" /> Save
               </button>
             ) : null}
+            <button type="button" className="inline-flex items-center gap-1 rounded-full px-2 py-1.5 text-xs text-navy" onClick={() => { setSelected([chosen.id]); setPicked(""); }}>
+              Select
+            </button>
             <button type="button" className="inline-flex items-center gap-1 rounded-full px-2 py-1.5 text-xs text-red-700" onClick={() => setAsk("delete")}>
               <Trash2 className="size-3.5" /> Delete
             </button>
@@ -1098,11 +1150,19 @@ function ChatPage() {
         {ask === "delete" && chosen ? (
           <div className="absolute inset-x-0 bottom-0 z-30 rounded-t-2xl bg-white px-4 pb-6 pt-3 text-[#111b21] shadow-2xl">
             <p className="text-center text-sm text-[#667781]">Delete message?</p>
-            {canDelete ? (
-              <button type="button" className="mt-2 block w-full py-3 text-center text-red-600" onClick={() => void erase(chosen.id)}>Delete for everyone</button>
-            ) : null}
+            <button type="button" className="mt-2 block w-full py-3 text-center text-red-600" onClick={() => void erase(chosen.id)}>Delete for everyone</button>
             <button type="button" className="block w-full border-t py-3 text-center text-red-600" onClick={() => { togglePref("hidden", chosen.id); setPicked(""); setAsk(""); }}>Delete for me</button>
             <button type="button" className="block w-full border-t py-3 text-center" onClick={() => setAsk("")}>Cancel</button>
+          </div>
+        ) : null}
+        {selected.length ? (
+          <div className="flex items-center justify-between gap-2 border-t border-border bg-white px-3 py-2 text-sm text-[#111b21]">
+            <span className="font-medium">{selected.length} selected</span>
+            <span className="flex flex-wrap justify-end gap-2">
+              <button type="button" className="rounded-full px-3 py-1 text-xs text-red-700" onClick={() => hideSelected(selected)}>Delete for me</button>
+              <button type="button" className="rounded-full bg-red-700 px-3 py-1 text-xs font-semibold text-white" onClick={() => void eraseMany(selected)}>Delete for everyone</button>
+              <button type="button" className="rounded-full px-3 py-1 text-xs" onClick={() => setSelected([])}>Cancel</button>
+            </span>
           </div>
         ) : null}
         {ask === "clear" ? (
@@ -1235,7 +1295,7 @@ function ChatPage() {
   }
 
 
-  const threadMessages = messages.filter((message) => canonicalThread(message.threadId) === canonicalThread(active));
+  const threadMessages = messages.filter((message) => canonicalThread(message.threadId) === canonicalThread(active) && Date.now() - new Date(message.createdAt).getTime() < 24 * 60 * 60 * 1000);
   const directory = (() => {
     const map = new Map<string, Person>();
     for (const volunteer of roll) {
@@ -1346,8 +1406,8 @@ function ChatPage() {
                 </span>
               </button>
             ) : null}
-            {directory.length === 0 ? <p className="px-4 py-3 text-sm text-muted-foreground">No volunteer on the roll yet.</p> : null}
-            {directory.map((person) => {
+            {officer && directory.length === 0 ? <p className="px-4 py-3 text-sm text-muted-foreground">No volunteer on the roll yet.</p> : null}
+            {officer ? directory.map((person) => {
                   const thread = canonicalThread(`dm:${meId}:${person.id}`);
                   const archived = prefs.archives.includes(thread);
                   if (archivesOn ? !archived : archived) return null;
@@ -1364,9 +1424,8 @@ function ChatPage() {
                       {count > 0 ? <span className="min-w-5 rounded-full bg-forest px-1.5 text-center text-[10px] font-semibold text-white">{count}</span> : null}
                     </button>
                   );
-                })
-            }
-            {officer ? <p className="px-4 pt-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">NSS Community</p> : <p className="px-4 pt-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">Channel</p>}
+            }) : null}
+            {officer ? <p className="px-4 pt-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">NSS Community</p> : null}
             {allowedGroups.map((group) => threadButton(group.id))}
           </div>
         </aside>
