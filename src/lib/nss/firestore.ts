@@ -1789,7 +1789,7 @@ function tailRows(value: unknown): ChatRow[] {
       rows.push({
         id: text(row.id),
         threadId: text(row.threadId),
-        text: text(row.text).slice(0, 1000),
+        text: openText(text(row.text)).slice(0, 1000),
         senderId: text(row.senderId),
         senderName: text(row.senderName).slice(0, 80),
         createdAt: text(row.createdAt),
@@ -1809,7 +1809,7 @@ async function publishChatTail(row: ChatRow) {
   const slim = JSON.stringify({
     id: row.id,
     threadId: row.threadId,
-    text: row.text.slice(0, 280),
+    text: sealText(row.text.slice(0, 280)),
     senderId: row.senderId,
     senderName: row.senderName,
     createdAt: row.createdAt,
@@ -1836,7 +1836,7 @@ async function publishChatTail(row: ChatRow) {
 }
 
 export async function listRecentChatMessages(limit = 60): Promise<ChatRow[]> {
-  if (chatCache && Date.now() - chatCache.at < 1500 && chatCache.rows.length) return visibleChats(chatCache.rows).slice(-limit);
+  if (chatCache && Date.now() - chatCache.at < 400 && chatCache.rows.length) return visibleChats(chatCache.rows).slice(-limit);
   if (!collegeQuotaBlocked()) {
     try {
       const doc = await getDocument("portalSettings/chatlog");
@@ -2009,28 +2009,24 @@ export async function saveChatMessage(input: { threadId: string; text: string; s
     extra,
   };
   rememberChat(saved);
-  const archive = createDocument("notices", id, {
-    kind: "chat",
-    title: "NSS_CHAT_INTERNAL",
-    threadId: input.threadId,
-    text: sealText(input.text.slice(0, 1000)),
-    senderId: input.senderId,
-    senderName: input.senderName.slice(0, 80),
-    replyName: replyName ? sealText(replyName) : "",
-    replyText: replyText ? sealText(replyText) : "",
-    media: media ? sealText(media) : "",
-    mediaType: incoming ? mediaType : "",
-    parts,
-    extra: packExtra(extra),
-    createdAt,
-  }).catch(() => undefined);
-  try {
-    await publishChatTail(saved);
-  } catch (error) {
-    await archive;
-    throw error;
+  if (incoming) {
+    void createDocument("notices", id, {
+      kind: "chat",
+      title: "NSS_CHAT_INTERNAL",
+      threadId: input.threadId,
+      text: sealText(input.text.slice(0, 1000)),
+      senderId: input.senderId,
+      senderName: input.senderName.slice(0, 80),
+      replyName: replyName ? sealText(replyName) : "",
+      replyText: replyText ? sealText(replyText) : "",
+      media: media ? sealText(media) : "",
+      mediaType: mediaType,
+      parts,
+      extra: packExtra(extra),
+      createdAt,
+    }).catch(() => undefined);
   }
-  void archive;
+  await publishChatTail(saved);
   return saved;
 }
 

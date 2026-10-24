@@ -277,24 +277,11 @@ function ChatPage() {
       /* ignore a bad wish */
     }
     try {
-      const saved = JSON.parse(localStorage.getItem("nsp-chat-box") || "[]") as ChatMessage[];
-      if (Array.isArray(saved) && saved.length) setMessages((current) => (current.length ? current : saved));
+      localStorage.removeItem("nsp-chat-box");
     } catch {
-      /* keep an empty chat */
+      /* nothing stored */
     }
   }, []);
-
-  useEffect(() => {
-    const light = messages
-      .filter((row) => Date.now() - new Date(row.createdAt).getTime() < 24 * 60 * 60 * 1000)
-      .slice(-40)
-      .map((row) => ({ ...row, media: row.media && row.media.length < 80000 ? row.media : "" }));
-    try {
-      localStorage.setItem("nsp-chat-box", JSON.stringify(light));
-    } catch {
-      /* the phone is full */
-    }
-  }, [messages]);
 
   useEffect(() => {
     if (!token) return;
@@ -441,7 +428,7 @@ function ChatPage() {
       }
     }
     void pull();
-    const timer = window.setInterval(() => void pull(), 2000);
+    const timer = window.setInterval(() => void pull(), 800);
     const wake = () => void pull();
     document.addEventListener("visibilitychange", wake);
     window.addEventListener("focus", wake);
@@ -539,15 +526,21 @@ function ChatPage() {
   const allowedGroups = session?.role === "po" || session?.role === "admin" ? GROUPS : [];
 
   function personName(id: string) {
-    if (id === "po") return "Programme Officer";
+    if (!id || id === "po") return "Programme Officer";
     if (id === "admin") return "Admin";
-    return people.find((person) => person.id === id)?.name || id;
+    const listed = people.find((person) => person.id === id)?.name;
+    if (listed && listed !== id) return listed;
+    const student = roll.find((row) => row.volunteerId === id || row.id === id);
+    if (student?.fullName) return student.fullName;
+    const spoken = [...messages].reverse().find((row) => row.senderId === id && row.senderName && row.senderName !== id);
+    return spoken?.senderName || listed || "Student";
   }
 
   function threadTitle(id: string) {
     const group = GROUPS.find((item) => item.id === id);
     if (group) return group.title;
-    const other = id.slice(3).split(":").find((part) => part !== me?.id) || "";
+    const parts = id.startsWith("dm:") ? id.slice(3).split(":") : [];
+    const other = parts.find((part) => part && part !== me?.id && part !== meId && part !== "po" && part !== "admin") || parts.find((part) => part && part !== "po" && part !== "admin") || "";
     return personName(other);
   }
 
