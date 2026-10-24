@@ -370,6 +370,8 @@ function ChatPage() {
         role: session.role,
         name: session.name,
         volunteerId: session.volunteerId || "",
+        docId: session.docId || "",
+        unit: "",
       }),
     })
       .then((res) => res.json())
@@ -395,6 +397,11 @@ function ChatPage() {
           body: JSON.stringify({ action: "chat-sync", chatToken: token }),
         });
         const data = (await res.json()) as { ok?: boolean; me?: Me; people?: Person[]; messages?: ChatMessage[] };
+        if (res.status === 401) {
+          const current = useSessionStore.getState().session;
+          if (current?.chatToken) useSessionStore.getState().setSession({ ...current, chatToken: "" });
+          return;
+        }
         if (stop || !res.ok || !data.ok || !data.me) return;
         const desk = data.me.role === "po" || data.me.role === "admin";
         setMe(data.me);
@@ -677,6 +684,10 @@ function ChatPage() {
         body: JSON.stringify(payload),
       });
       const data = (await res.json()) as { ok?: boolean; error?: string; message?: ChatMessage };
+      if (res.status === 401) {
+        const current = useSessionStore.getState().session;
+        if (current?.chatToken) useSessionStore.getState().setSession({ ...current, chatToken: "" });
+      }
       if (!res.ok || !data.ok || !data.message) throw new Error(data.error || "Message was not sent.");
       if (attachment?.media && data.message.mediaType) mediaBag.current.set(data.message.id, { media: data.message.media || attachment.media, mediaType: attachment.mediaType });
       setMessages((current) => [...current.filter((row) => row.id !== localId && row.id !== data.message?.id), { ...data.message!, media: data.message!.media || attachment?.media || "", mediaType: data.message!.mediaType || attachment?.mediaType || "" }]);

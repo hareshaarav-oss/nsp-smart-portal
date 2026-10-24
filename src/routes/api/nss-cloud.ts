@@ -1,5 +1,5 @@
-import { loadCollegeCloud, loadStudentRoll, readOneStudent, loadPublicBoard, loadOfficerRoll, collegeQuotaBlocked, saveStudentToCloud, incrementVisitors, readVisitorCount, knownVisitorCount, patchStudent, safePhoto, knownRole, issueChatPass, readChatPass, listRecentChatMessages, saveChatMessage, listChatPeople, clearAttendanceCloud, readBrandPhotos, saveBrandPhotos, listPhotoRoster, readPhotoBatch, saveAttendanceMarks, readLive, publishBestVolunteer, publishServiceHours, purgeCloudIds, deleteChatMessages, chatIdsInThread, readChatMedia, readOneChat, patchNotice, upsertNotice, sideDocId, listChatStatuses, readSide, readStudentCerts, saveStudentCerts, type ChatExtra } from "@/lib/nss/firestore";
-import { passwordOk, sealText } from "@/lib/nss/seal.server";
+import { loadCollegeCloud, loadStudentRoll, readOneStudent, loadPublicBoard, loadOfficerRoll, collegeQuotaBlocked, saveStudentToCloud, incrementVisitors, readVisitorCount, knownVisitorCount, patchStudent, safePhoto, knownRole, readChatPass, listRecentChatMessages, saveChatMessage, listChatPeople, clearAttendanceCloud, readBrandPhotos, saveBrandPhotos, listPhotoRoster, readPhotoBatch, saveAttendanceMarks, readLive, publishBestVolunteer, publishServiceHours, purgeCloudIds, deleteChatMessages, chatIdsInThread, readChatMedia, readOneChat, patchNotice, upsertNotice, sideDocId, listChatStatuses, readSide, readStudentCerts, saveStudentCerts, type ChatExtra } from "@/lib/nss/firestore";
+import { passwordOk, sealText, signChatPass } from "@/lib/nss/seal.server";
 import { createFileRoute } from "@tanstack/react-router";
 
 type Row = Record<string, unknown>;
@@ -259,11 +259,9 @@ async function studentLoginResponse(found: Row) {
   const volunteer = selfVolunteer(found);
   let chatToken = "";
   try {
-    chatToken = newChatToken();
-    await issueChatPass({
-      token: chatToken,
-      senderId: volunteer.id,
-      senderName: text(found.fullName),
+    chatToken = signChatPass({
+      id: volunteer.id,
+      name: text(found.fullName) || "NSS",
       role,
       unit: text(found.unit),
       docId: text(found.id),
@@ -291,12 +289,6 @@ async function studentLoginResponse(found: Row) {
     volunteer,
     certificates,
   };
-}
-
-function newChatToken() {
-  const bytes = new Uint8Array(24);
-  crypto.getRandomValues(bytes);
-  return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
 }
 
 function canonicalThread(threadId: string) {
@@ -457,21 +449,15 @@ export const Route = createFileRoute("/api/nss-cloud")({
             if (role !== "volunteer" && role !== "leader") {
               return Response.json({ ok: false, error: "Open the desk from your saved login." }, { status: 400 });
             }
-            const volunteers = await studentRows();
-            const want = text(body.volunteerId).toLowerCase();
-            const found = volunteers.find(
-              (row) => text(row.volunteerId).toLowerCase() === want || text(row.id).toLowerCase() === want,
-            );
-            if (!found) return Response.json({ ok: false, error: "Sign in again." }, { status: 401 });
-            const actualRole = text(found.nssRole) === "Leader" || knownRole(found.nssRole) !== "Volunteer" ? "leader" : "volunteer";
-            const chatToken = newChatToken();
-            await issueChatPass({
-              token: chatToken,
-              senderId: publicId(found as unknown as Row),
-              senderName: text(found.fullName) || "NSS",
-              role: actualRole,
-              unit: text(found.unit),
-              docId: text(found.id),
+            const id = text(body.volunteerId);
+            const name = text(body.name).slice(0, 80) || "NSS";
+            if (!id || id.length > 40) return Response.json({ ok: false, error: "Sign in again." }, { status: 401 });
+            const chatToken = signChatPass({
+              id,
+              name,
+              role,
+              unit: text(body.unit).slice(0, 20),
+              docId: text(body.docId).slice(0, 40),
             });
             return Response.json({ ok: true, chatToken });
           }
@@ -796,9 +782,9 @@ export const Route = createFileRoute("/api/nss-cloud")({
               });
               return Response.json({ ok: true, message: saved });
             }
-            const messages = (await listRecentChatMessages()).filter((row) => canSeeThread(user, canonicalThread(row.threadId)));
+            const messages = (await listRecentChatMessages().catch(() => [])).filter((row) => canSeeThread(user, canonicalThread(row.threadId)));
             const officer = user.role === "po" || user.role === "admin";
-            const people = officer ? await listChatPeople({ includeMobile: false }) : [];
+            const people = officer ? await listChatPeople({ includeMobile: false }).catch(() => []) : [];
             return Response.json({
               ok: true,
               me: { id: user.id, name: user.name, role: user.role, unit: user.unit },
@@ -1017,8 +1003,7 @@ export const Route = createFileRoute("/api/nss-cloud")({
             }
             let chatToken = "";
             try {
-              chatToken = newChatToken();
-              await issueChatPass({ token: chatToken, senderId: session.role, senderName: session.name, role: session.role, unit: "", docId: "" });
+              chatToken = signChatPass({ id: session.role, name: session.name, role: session.role, unit: "", docId: "" });
             } catch {
               chatToken = "";
             }

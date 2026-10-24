@@ -1,4 +1,4 @@
-import { createCipheriv, createDecipheriv, createHash, randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
+import { createCipheriv, createDecipheriv, createHash, createHmac, randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
 
 const SEAL_PREFIX = "nsp1.";
 const PASS_PREFIX = "nspw1.";
@@ -85,4 +85,43 @@ export function attendanceDocId(mobile: string, eventName: string) {
   const slug = eventName.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 48);
   if (phone.length < 10 || !slug) return "";
   return createHash("sha256").update(`${phone}:${slug}`).digest("hex").slice(0, 32);
+}
+
+export type SignedChatPass = { id: string; name: string; role: string; unit: string; docId: string };
+
+export function signChatPass(pass: SignedChatPass) {
+  const payload = Buffer.from(
+    JSON.stringify({
+      id: pass.id.slice(0, 40),
+      name: pass.name.slice(0, 80),
+      role: pass.role.slice(0, 20),
+      unit: pass.unit.slice(0, 20),
+      docId: pass.docId.slice(0, 40),
+      exp: Date.now() + 14 * 24 * 60 * 60 * 1000,
+    }),
+  ).toString("base64url");
+  const sig = createHmac("sha256", key()).update(payload).digest("base64url");
+  return `nsp.${payload}.${sig}`;
+}
+
+export function openChatPass(token: string): SignedChatPass | null {
+  const parts = token.split(".");
+  if (parts.length !== 3 || parts[0] !== "nsp") return null;
+  const expected = createHmac("sha256", key()).update(parts[1]).digest("base64url");
+  const left = Buffer.from(parts[2]);
+  const right = Buffer.from(expected);
+  if (left.length !== right.length || !timingSafeEqual(left, right)) return null;
+  try {
+    const data = JSON.parse(Buffer.from(parts[1], "base64url").toString("utf8")) as SignedChatPass & { exp?: number };
+    if (!data?.id || !data.exp || data.exp < Date.now()) return null;
+    return {
+      id: String(data.id),
+      name: String(data.name || "NSS"),
+      role: String(data.role || "volunteer"),
+      unit: String(data.unit || ""),
+      docId: String(data.docId || ""),
+    };
+  } catch {
+    return null;
+  }
 }

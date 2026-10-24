@@ -1,6 +1,6 @@
 import { cleanPersonName, latinDigits, padId, parseDob, titleFirstName } from "./format";
 import { nssHourRule } from "./hours";
-import { attendanceDocId as sealedAttendanceId, openText, passwordRecord, sealText, tokenDocId } from "./seal.server";
+import { attendanceDocId as sealedAttendanceId, openChatPass, openText, passwordRecord, sealText, tokenDocId } from "./seal.server";
 import type {
   AttendanceRecord,
   GalleryItem,
@@ -1646,16 +1646,22 @@ export async function issueChatPass(pass: { token: string; senderId: string; sen
 }
 
 export async function readChatPass(token: string) {
+  const signed = openChatPass(token);
+  if (signed) return signed;
   if (!/^[a-f0-9]{32,64}$/.test(token)) return null;
-  const row = (await getDocument(`notices/${tokenDocId(token)}`)) || (await getDocument(`notices/${token}`));
-  if (!row || text(row.kind) !== "chat-auth" || !text(row.senderId)) return null;
-  return {
-    id: openText(text(row.senderId)),
-    name: openText(text(row.senderName)) || "NSS",
-    role: text(row.role) || "volunteer",
-    unit: openText(text(row.unit)),
-    docId: openText(text(row.docId)),
-  };
+  try {
+    const row = (await getDocument(`notices/${tokenDocId(token)}`)) || (await getDocument(`notices/${token}`));
+    if (!row || text(row.kind) !== "chat-auth" || !text(row.senderId)) return null;
+    return {
+      id: openText(text(row.senderId)),
+      name: openText(text(row.senderName)) || "NSS",
+      role: text(row.role) || "volunteer",
+      unit: openText(text(row.unit)),
+      docId: openText(text(row.docId)),
+    };
+  } catch {
+    return null;
+  }
 }
 
 let peopleCache: { at: number; key: string; rows: ChatPerson[] } | null = null;
@@ -1805,15 +1811,22 @@ export async function patchNotice(id: string, values: Record<string, unknown>) {
   const safe = text(id);
   if (!/^[A-Za-z0-9]{4,48}$/.test(safe)) throw new Error("That chat item was not found.");
   const fields: Record<string, unknown> = {};
-  const params = new URLSearchParams();
-  for (const [key, value] of Object.entries(values)) {
-    fields[key] = encodeValue(value);
-    params.append("updateMask.fieldPaths", key);
-  }
-  const res = await fetch(`${FIRESTORE_BASE}/notices/${encodeURIComponent(safe)}?${params}`, {
-    method: "PATCH",
+  for (const [key, value] of Object.entries(values)) fields[key] = encodeValue(value);
+  const res = await fetch(`${FIRESTORE_BASE}:commit`, {
+    method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ fields }),
+    body: JSON.stringify({
+      writes: [
+        {
+          update: {
+            name: `projects/${process.env.NSS_FIRESTORE_PROJECT_ID?.trim() || "studio-8504026975-1fdbc"}/databases/(default)/documents/notices/${safe}`,
+            fields,
+          },
+          updateMask: { fieldPaths: Object.keys(fields) },
+          currentDocument: { exists: true },
+        },
+      ],
+    }),
   });
   if (!res.ok) throw new Error("Could not update the chat.");
   chatCache = null;
@@ -1821,7 +1834,11 @@ export async function patchNotice(id: string, values: Record<string, unknown>) {
 
 export async function readSide(id: string) {
   if (!/^[A-Za-z0-9]{4,48}$/.test(id)) return null;
-  return getDocument(`notices/${id}`);
+  try {
+    return await getDocument(`notices/${id}`);
+  } catch {
+    return null;
+  }
 }
 
 export async function upsertNotice(id: string, values: Record<string, unknown>) {
