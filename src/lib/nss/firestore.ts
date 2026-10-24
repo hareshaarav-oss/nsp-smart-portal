@@ -21,9 +21,11 @@ let cloudCache: { at: number; data: CloudPortal; withGallery: boolean } | null =
 let cloudInflight: Promise<CloudPortal | null> | null = null;
 let cloudInflightGallery = false;
 let quotaBlockedUntil = 0;
+let studentCache: { at: number; volunteers: Volunteer[] } | null = null;
+let studentInflight: Promise<Volunteer[] | null> | null = null;
 
 function noteQuota() {
-  quotaBlockedUntil = Date.now() + 10 * 60 * 1000;
+  quotaBlockedUntil = Date.now() + 45 * 1000;
 }
 
 export function collegeQuotaBlocked() {
@@ -92,6 +94,7 @@ const STUDENT_FIELDS = [
   "photoUrl",
   "password",
   "mpin",
+  "webauthnId",
   "createdAt",
   "updatedAt",
 ];
@@ -273,17 +276,18 @@ async function listPublicNotices() {
   });
 }
 
-async function loadCollegeCloudFresh(opts: { gallery?: boolean; photos?: boolean } = {}): Promise<CloudPortal | null> {
+async function loadCollegeCloudFresh(opts: { gallery?: boolean; photos?: boolean; studentsOnly?: boolean } = {}): Promise<CloudPortal | null> {
   await readPurgedIds().catch(() => undefined);
+  const studentsOnly = opts.studentsOnly === true;
   const [students, eventDocs, noticeDocs, attendanceDocs, galleryDocs, stats, visitorsDoc] =
     await Promise.all([
       listCollection("students", { photos: opts.photos !== false }),
-      listCollection("events"),
-      listPublicNotices(),
-      listCollection("attendance", { maxDocs: 2500 }),
-      opts.gallery === false ? Promise.resolve([]) : listCollection("gallery", { maxDocs: 60 }),
-      getDocument("portalSettings/publicStats"),
-      getDocument("portalSettings/visitors"),
+      studentsOnly ? Promise.resolve([]) : listCollection("events"),
+      studentsOnly ? Promise.resolve([]) : listPublicNotices(),
+      studentsOnly ? Promise.resolve([]) : listCollection("attendance", { maxDocs: 2500 }),
+      studentsOnly || opts.gallery === false ? Promise.resolve([]) : listCollection("gallery", { maxDocs: 60 }),
+      studentsOnly ? Promise.resolve(null) : getDocument("portalSettings/publicStats"),
+      studentsOnly ? Promise.resolve(null) : getDocument("portalSettings/visitors"),
     ]);
 
   if (!students.length && !eventDocs.length && !noticeDocs.length) return null;
@@ -517,6 +521,25 @@ export async function loadCollegeCloud(opts: { gallery?: boolean; photos?: boole
       cloudInflight = null;
     });
   return cloudInflight;
+}
+
+export async function loadStudentRoll(): Promise<Volunteer[] | null> {
+  const now = Date.now();
+  if (studentCache && now - studentCache.at < CLOUD_FRESH_MS && studentCache.volunteers.length) return studentCache.volunteers;
+  if (cloudCache && now - cloudCache.at < CLOUD_FRESH_MS && cloudCache.data.volunteers.length) return cloudCache.data.volunteers;
+  if (collegeQuotaBlocked()) return studentCache?.volunteers ?? cloudCache?.data.volunteers ?? null;
+  if (studentInflight) return studentInflight;
+  studentInflight = loadCollegeCloudFresh({ gallery: false, photos: false, studentsOnly: true })
+    .then((data) => {
+      const volunteers = data?.volunteers ?? [];
+      if (volunteers.length) studentCache = { at: Date.now(), volunteers };
+      return volunteers.length ? volunteers : studentCache?.volunteers ?? cloudCache?.data.volunteers ?? null;
+    })
+    .catch(() => studentCache?.volunteers ?? cloudCache?.data.volunteers ?? null)
+    .finally(() => {
+      studentInflight = null;
+    });
+  return studentInflight;
 }
 
 const BOARD_TTL_MS = 12 * 60 * 60 * 1000;
@@ -1033,16 +1056,66 @@ export async function saveStudentCerts(docId: string, rows: IssuedCertificate[])
     certificateId: text(item.certificateId),
     printReady: true,
   }));
-  await patchStudent(docId, { certPack: sealText(JSON.stringify(packed)) });
+  await patchStudent(docId, { certPack: sealText(JSON.stringify(packed)) }, { quiet: true });
+}
+
+const BOARD_FIELDS = new Set([
+  "fullName",
+  "firstName",
+  "middleName",
+  "surname",
+  "status",
+  "nssRole",
+  "unit",
+  "volunteerId",
+  "course",
+  "semester",
+  "gender",
+  "dob",
+  "photoUrl",
+]);
+
+function mergeStudentCache(id: string, values: Record<string, unknown>) {
+  const apply = (row: Volunteer): Volunteer => {
+    if (row.id !== id && row.volunteerId !== id) return row;
+    return {
+      ...row,
+      ...(typeof values.email === "string" ? { email: text(values.email) } : {}),
+      ...(typeof values.mobile === "string" ? { mobile: digits(values.mobile) } : {}),
+      ...(typeof values.address === "string" ? { address: text(values.address) } : {}),
+      ...(typeof values.bloodGroup === "string" ? { bloodGroup: text(values.bloodGroup) } : {}),
+      ...(typeof values.fatherName === "string" ? { fatherName: text(values.fatherName) } : {}),
+      ...(typeof values.emergencyContact === "string" ? { emergencyContact: text(values.emergencyContact) } : {}),
+      ...(typeof values.abcId === "string" ? { abcId: text(values.abcId) } : {}),
+      ...(typeof values.myBharatId === "string" ? { myBharatId: text(values.myBharatId) } : {}),
+      ...(typeof values.mpin === "string" ? { mpin: text(values.mpin) || undefined } : {}),
+      ...(typeof values.webauthnId === "string" ? { webauthnId: text(values.webauthnId) || undefined } : {}),
+      ...(typeof values.photoUrl === "string" ? { photoUrl: safePhoto(values.photoUrl) } : {}),
+      ...(typeof values.password === "string" ? { loginPassword: passwordRecord(text(values.password)) } : {}),
+      ...(typeof values.nssRole === "string" ? { nssRole: knownRole(values.nssRole) } : {}),
+      ...(typeof values.status === "string" ? { status: text(values.status) === "alumni" ? "alumni" : "active" } : {}),
+    };
+  };
+  if (studentCache) studentCache = { ...studentCache, volunteers: studentCache.volunteers.map(apply) };
+  if (cloudCache) {
+    cloudCache = {
+      ...cloudCache,
+      data: { ...cloudCache.data, volunteers: cloudCache.data.volunteers.map(apply) },
+    };
+  }
 }
 
 export async function patchStudent(docId: string, values: Record<string, unknown>, opts?: { quiet?: boolean }) {
-  if (!opts?.quiet) {
-    invalidateCollegeCache();
-    rosterCache = null;
-  }
   const id = text(docId);
   if (!id) throw new Error("Student record was not found.");
+  const touchesBoard = Object.keys(values).some((key) => BOARD_FIELDS.has(key));
+  if (!opts?.quiet && touchesBoard) {
+    invalidateCollegeCache();
+    studentCache = null;
+    rosterCache = null;
+  } else {
+    mergeStudentCache(id, values);
+  }
   const fields: Record<string, unknown> = {};
   const params = new URLSearchParams();
   for (const [key, value] of Object.entries(values)) {
@@ -1061,11 +1134,12 @@ export async function patchStudent(docId: string, values: Record<string, unknown
     const body = await res.text();
     throw new Error(body.slice(0, 180) || "Could not update the student record");
   }
-  if (!opts?.quiet) void markBoardStale();
+  if (!opts?.quiet && touchesBoard) void markBoardStale();
 }
 
 export async function saveStudentToCloud(input: Record<string, unknown>) {
   invalidateCollegeCache();
+  studentCache = null;
   rosterCache = null;
   const mobile = digits(input.mobile);
   if (mobile.length < 10) throw new Error("Mobile must be 10 digits");

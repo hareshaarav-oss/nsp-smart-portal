@@ -1,4 +1,4 @@
-import { loadCollegeCloud, loadPublicBoard, loadOfficerRoll, collegeQuotaBlocked, saveStudentToCloud, incrementVisitors, readVisitorCount, knownVisitorCount, patchStudent, safePhoto, knownRole, issueChatPass, readChatPass, listRecentChatMessages, saveChatMessage, listChatPeople, clearAttendanceCloud, readBrandPhotos, saveBrandPhotos, listPhotoRoster, readPhotoBatch, saveAttendanceMarks, readLive, publishBestVolunteer, publishServiceHours, purgeCloudIds, deleteChatMessages, chatIdsInThread, readChatMedia, readOneChat, patchNotice, upsertNotice, sideDocId, listChatStatuses, readSide, readStudentCerts, saveStudentCerts, type ChatExtra } from "@/lib/nss/firestore";
+import { loadCollegeCloud, loadStudentRoll, loadPublicBoard, loadOfficerRoll, collegeQuotaBlocked, saveStudentToCloud, incrementVisitors, readVisitorCount, knownVisitorCount, patchStudent, safePhoto, knownRole, issueChatPass, readChatPass, listRecentChatMessages, saveChatMessage, listChatPeople, clearAttendanceCloud, readBrandPhotos, saveBrandPhotos, listPhotoRoster, readPhotoBatch, saveAttendanceMarks, readLive, publishBestVolunteer, publishServiceHours, purgeCloudIds, deleteChatMessages, chatIdsInThread, readChatMedia, readOneChat, patchNotice, upsertNotice, sideDocId, listChatStatuses, readSide, readStudentCerts, saveStudentCerts, type ChatExtra } from "@/lib/nss/firestore";
 import { passwordOk, sealText } from "@/lib/nss/seal.server";
 import { createFileRoute } from "@tanstack/react-router";
 
@@ -33,6 +33,11 @@ function busyError(error: unknown) {
 
 function text(value: unknown) {
   return String(value ?? "").trim();
+}
+
+async function studentRows() {
+  const volunteers = await loadStudentRoll();
+  return (volunteers ?? []) as unknown as Row[];
 }
 
 function digits(value: unknown) {
@@ -416,9 +421,9 @@ export const Route = createFileRoute("/api/nss-cloud")({
             if (role !== "volunteer" && role !== "leader") {
               return Response.json({ ok: false, error: "Open the desk from your saved login." }, { status: 400 });
             }
-            const data = await loadCollegeCloud({ gallery: false, photos: false });
+            const volunteers = await studentRows();
             const want = text(body.volunteerId).toLowerCase();
-            const found = (data?.volunteers ?? []).find(
+            const found = volunteers.find(
               (row) => text(row.volunteerId).toLowerCase() === want || text(row.id).toLowerCase() === want,
             );
             if (!found) return Response.json({ ok: false, error: "Sign in again." }, { status: 401 });
@@ -518,9 +523,9 @@ export const Route = createFileRoute("/api/nss-cloud")({
               if (user.role !== "po" && user.role !== "admin") {
                 return Response.json({ ok: false, error: "Only the Programme Officer can change the roll." }, { status: 403 });
               }
-              const data = await loadCollegeCloud({ gallery: false, photos: false });
+              const volunteers = await studentRows();
               const want = text(body.volunteerId).toLowerCase();
-              const target = (data?.volunteers ?? []).find(
+              const target = volunteers.find(
                 (row) => text(row.volunteerId).toLowerCase() === want || text(row.id).toLowerCase() === want,
               );
               if (!target) return Response.json({ ok: false, error: "Volunteer was not found on the roll." }, { status: 404 });
@@ -683,8 +688,7 @@ export const Route = createFileRoute("/api/nss-cloud")({
                 createdAt: new Date().toISOString(),
                 audience: "all",
               });
-              const cloud = await loadCollegeCloud({ gallery: false, photos: false }).catch(() => null);
-              const people = ((cloud?.volunteers ?? []) as { id?: string; volunteerId?: string; status?: string }[])
+              const people = (await studentRows())
                 .filter((row) => text(row.status) !== "alumni")
                 .slice(0, 40);
               for (let index = 0; index < people.length; index += 8) {
@@ -812,8 +816,7 @@ export const Route = createFileRoute("/api/nss-cloud")({
             });
           }
           if (body.action === "reset-password") {
-            const data = await loadCollegeCloud({ gallery: false, photos: false });
-            const volunteers = (data?.volunteers ?? []) as unknown as Row[];
+            const volunteers = await studentRows();
             const want = digits(body.mobile);
             const name = text(body.username).toLowerCase();
             const found = volunteers.find(
@@ -831,8 +834,7 @@ export const Route = createFileRoute("/api/nss-cloud")({
             return Response.json({ ok: true });
           }
           if (body.action === "set-password" || body.action === "update-profile") {
-            const data = await loadCollegeCloud({ gallery: false, photos: false });
-            const volunteers = (data?.volunteers ?? []) as unknown as Row[];
+            const volunteers = await studentRows();
             const matched = matchVolunteer(volunteers, body.username ?? body.volunteerId ?? "", body.password ?? "");
             if (!matched.row) return Response.json({ ok: false, error: matched.error }, { status: 401 });
             const found = matched.row;
@@ -888,17 +890,16 @@ export const Route = createFileRoute("/api/nss-cloud")({
             return Response.json({ ok: true, volunteer: selfVolunteer({ ...found, ...patch }) });
           }
           if (body.action === "lookup") {
-            const data = await loadCollegeCloud({ gallery: false, photos: false });
+            const volunteers = await studentRows();
             const want = digits(body.mobile);
-            const found = (data?.volunteers ?? []).find((row) => digits(row.mobile).endsWith(want) && want.length >= 10);
+            const found = volunteers.find((row) => digits(row.mobile).endsWith(want) && want.length >= 10);
             if (!found) return Response.json({ ok: false, error: "This mobile is not on the NSS roll." }, { status: 404 });
             const first = text(found.fullName).split(/\s+/)[0] ?? "";
             return Response.json({ ok: true, username: first.toUpperCase() });
           }
           if (body.action === "mpin-login" || body.action === "finger-login" || body.action === "my-certificates" || body.action === "my-profile") {
-            const data = await loadCollegeCloud({ gallery: false, photos: false });
-            const volunteers = (data?.volunteers ?? []) as unknown as Row[];
-            if (!data || volunteers.length === 0) {
+            const volunteers = await studentRows();
+            if (volunteers.length === 0) {
               return Response.json({ ok: false, error: "The college roll is busy. Wait a moment and sign in again." }, { status: 503 });
             }
             if (body.action === "finger-login") {
@@ -925,8 +926,7 @@ export const Route = createFileRoute("/api/nss-cloud")({
           if (body.action === "push-certificates") {
             const officer = await signedOfficer(body.chatToken);
             if (!officer) return Response.json({ ok: false, error: "Open the officer desk and sign in again." }, { status: 401 });
-            const data = await loadCollegeCloud({ gallery: false, photos: false });
-            const volunteers = (data?.volunteers ?? []) as unknown as Row[];
+            const volunteers = await studentRows();
             const incoming = (Array.isArray(body.certificates) ? body.certificates : []).slice(0, 200);
             const grouped = new Map<string, NonNullable<ReturnType<typeof wireCert>>[]>();
             for (const raw of incoming) {
@@ -952,9 +952,9 @@ export const Route = createFileRoute("/api/nss-cloud")({
           }
           if (body.action === "staff-login") {
             const { staffSession } = await import("@/lib/nss/staff-auth.server");
-            let data: Awaited<ReturnType<typeof loadCollegeCloud>> = null;
+            let data: Awaited<ReturnType<typeof loadOfficerRoll>> = null;
             try {
-              data = await loadCollegeCloud({ gallery: false, photos: false });
+              data = await loadOfficerRoll();
             } catch {
               data = null;
             }
@@ -981,9 +981,8 @@ export const Route = createFileRoute("/api/nss-cloud")({
             });
           }
           if (body.action !== "login") return Response.json({ ok: false, error: "Unsupported action." }, { status: 400 });
-          const data = await loadCollegeCloud({ gallery: false, photos: false });
-          const volunteers = (data?.volunteers ?? []) as unknown as Row[];
-          if (!data || volunteers.length === 0) {
+          const volunteers = await studentRows();
+          if (volunteers.length === 0) {
             return Response.json({ ok: false, error: "The college roll is busy. Wait a moment and sign in again." }, { status: 503 });
           }
           const matched = matchVolunteer(volunteers, body.username ?? "", body.password ?? "");
