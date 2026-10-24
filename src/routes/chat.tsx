@@ -68,11 +68,12 @@ type Prefs = {
   wallpaper: string;
   dark: boolean;
   lock: string;
+  hideSeen: boolean;
   disappear: Record<string, number>;
 };
 
 function blankPrefs(): Prefs {
-  return { stars: [], hidden: [], pins: [], mutes: [], archives: [], marked: [], favs: [], wallpaper: "#efeae2", dark: false, lock: "", disappear: {} };
+  return { stars: [], hidden: [], pins: [], mutes: [], archives: [], marked: [], favs: [], wallpaper: "#efeae2", dark: false, lock: "", hideSeen: false, disappear: {} };
 }
 
 function loadPrefs(): Prefs {
@@ -90,6 +91,7 @@ function loadPrefs(): Prefs {
       marked: Array.isArray(raw.marked) ? raw.marked.filter((id) => typeof id === "string") : [],
       favs: Array.isArray(raw.favs) ? raw.favs.filter((id) => typeof id === "string") : [],
       wallpaper: typeof raw.wallpaper === "string" ? raw.wallpaper : base.wallpaper,
+      hideSeen: raw.hideSeen === true,
       disappear: raw.disappear && typeof raw.disappear === "object" ? raw.disappear : {},
     };
   } catch {
@@ -239,19 +241,23 @@ function ChatPage() {
   const [unlocked, setUnlocked] = useState(false);
   const [pinDraft, setPinDraft] = useState("");
   const [recording, setRecording] = useState(false);
+  const [recordSec, setRecordSec] = useState(0);
+  const [infoOn, setInfoOn] = useState(false);
+  const [link, setLink] = useState<"online" | "offline" | "reconnect">("online");
   const [sheet, setSheet] = useState(false);
   const [archivesOn, setArchivesOn] = useState(false);
   const [starredOn, setStarredOn] = useState(false);
   const [pollOn, setPollOn] = useState(false);
   const [pollOptions, setPollOptions] = useState("Yes, No");
-  const [peer, setPeer] = useState<{ lastSeen?: string; typingThread?: string; typingAt?: string; readThread?: string; readAt?: string; call?: string; callThread?: string; callAt?: string; sdp?: string } | null>(null);
+  const [peer, setPeer] = useState<{ lastSeen?: string; online?: boolean; typingThread?: string; typingAt?: string; readThread?: string; readAt?: string } | null>(null);
   const [reads, setReads] = useState<{ id: string; thread: string; at: string }[]>([]);
   const [selected, setSelected] = useState<string[]>([]);
   const [statuses, setStatuses] = useState<{ id: string; text: string; senderId: string; senderName: string; createdAt: string }[]>([]);
   const [viewOnce, setViewOnce] = useState(false);
   const [forwarded, setForwarded] = useState(false);
   const [away, setAway] = useState(false);
-  const { t: say } = useUi();
+  const { t: say, lang } = useUi();
+  const tr = (en: string, gu: string) => (lang === "gu" ? gu : en);
   const scroller = useRef<HTMLDivElement>(null);
   const sendLock = useRef(false);
   const hold = useRef(0);
@@ -260,11 +266,26 @@ function ChatPage() {
   const mediaBag = useRef(new Map<string, { media: string; mediaType: "image" | "video" | "audio" | "file" }>());
   const recorder = useRef<MediaRecorder | null>(null);
   const draftRef = useRef("");
+  const volunteerHome = useRef(false);
+  const heard = useRef(new Set<string>());
+  const heardReady = useRef(false);
+  const hiddenPull = useRef(0);
+  const recordTimer = useRef(0);
+  const typingOn = useRef(false);
+  const liveRef = useRef({ active: "college", mobileList: true, mutes: [] as string[], meId: "", hideSeen: false });
   const token = session?.chatToken || "";
   const setSession = useSessionStore((s) => s.setSession);
   const poWhatsapp = useNssStore((s) => s.settings.poWhatsapp);
   const roll = useNssStore((s) => s.volunteers) ?? [];
+  const eventRows = useNssStore((s) => s.events) ?? [];
   const router = useRouter();
+  liveRef.current = {
+    active,
+    mobileList,
+    mutes: prefs.mutes,
+    meId: me?.id || session?.volunteerId || "",
+    hideSeen: prefs.hideSeen,
+  };
 
   useEffect(() => {
     const sync = () => {
@@ -379,15 +400,66 @@ function ChatPage() {
   }, [draft]);
 
   useEffect(() => {
+    const on = () => setLink("online");
+    const off = () => setLink("offline");
+    window.addEventListener("online", on);
+    window.addEventListener("offline", off);
+    return () => {
+      window.removeEventListener("online", on);
+      window.removeEventListener("offline", off);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!token) return;
+    const open = !mobileList || window.innerWidth >= 1280;
+    const typing = open && draft.trim().length > 0;
+    if (typing === typingOn.current) return;
+    typingOn.current = typing;
+    const thread = open ? canonicalThread(active) : "";
+    const other = thread.startsWith("dm:") ? thread.slice(3).split(":").find((part) => part !== (me?.id || "")) || "" : "";
+    void fetch("/api/nss-cloud", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        action: "chat-presence",
+        chatToken: token,
+        threadId: thread,
+        peerId: other,
+        typing,
+        hideSeen: liveRef.current.hideSeen,
+      }),
+    }).catch(() => undefined);
+  }, [draft, token, active, mobileList, me?.id]);
+
+  useEffect(() => {
     if (!session || session.role === "po" || session.role === "admin") return;
     const id = me?.id || session.volunteerId || "";
     if (!id) return;
-    const thread = canonicalThread(`dm:${id}:po`);
-    if (active !== thread) {
-      setActive(thread);
+    const home = canonicalThread(`dm:${id}:po`);
+    const unit = me?.unit || "";
+    const role = me?.role || session.role;
+    const allowed = (threadId: string) => {
+      if (threadId === home || threadId === "college" || threadId === "channel") return true;
+      if (threadId.startsWith("event:") && /^event:[A-Za-z0-9_-]{4,48}$/.test(threadId)) return true;
+      if (threadId === "leaders") return role === "leader";
+      if (threadId === "unit-2") return /unit\s*2/i.test(unit);
+      if (threadId === "unit-1") return !/unit\s*2/i.test(unit);
+      return false;
+    };
+    if (!volunteerHome.current) {
+      volunteerHome.current = true;
+      if (!window.location.hash.startsWith("#c=") && active !== home) {
+        setActive(home);
+        setMobileList(false);
+        return;
+      }
+    }
+    if (!allowed(active)) {
+      setActive(home);
       setMobileList(false);
     }
-  }, [session, me?.id, active]);
+  }, [session, me?.id, me?.unit, me?.role, active]);
 
   useEffect(() => {
     if (!session || session.chatToken) return;
@@ -419,7 +491,10 @@ function ChatPage() {
     if (!token) return;
     let stop = false;
     async function pull() {
-      if (document.hidden) return;
+      if (document.hidden) {
+        if (Date.now() - hiddenPull.current < 20000) return;
+        hiddenPull.current = Date.now();
+      }
       try {
         const res = await fetch("/api/nss-cloud", {
           method: "POST",
@@ -432,7 +507,11 @@ function ChatPage() {
           if (current?.chatToken) useSessionStore.getState().setSession({ ...current, chatToken: "" });
           return;
         }
-        if (stop || !res.ok || !data.ok || !data.me) return;
+        if (stop || !res.ok || !data.ok || !data.me) {
+          if (!stop) setLink(navigator.onLine ? "reconnect" : "offline");
+          return;
+        }
+        setLink(navigator.onLine ? "online" : "offline");
         const desk = data.me.role === "po" || data.me.role === "admin";
         setMe(data.me);
         setPeople(desk ? (data.people ?? []).map((person) => ({ ...person, mobile: undefined })) : []);
@@ -440,6 +519,27 @@ function ChatPage() {
           const kept = mediaBag.current.get(row.id);
           return kept && !row.media ? { ...row, media: kept.media, mediaType: kept.mediaType } : row;
         });
+        const live = liveRef.current;
+        if (heardReady.current && typeof Notification !== "undefined" && Notification.permission === "granted") {
+          for (const row of incoming) {
+            if (heard.current.has(row.id) || row.senderId === live.meId) continue;
+            const thread = canonicalThread(row.threadId);
+            if (live.mutes.includes(thread)) continue;
+            const looking = !document.hidden && !live.mobileList && canonicalThread(live.active) === thread;
+            if (looking) continue;
+            try {
+              const note = new Notification(row.senderName || "NSS Chat", { body: (row.text || "New message").slice(0, 140), tag: row.id });
+              note.onclick = () => {
+                window.focus();
+                window.location.hash = `c=${encodeURIComponent(thread)}`;
+              };
+            } catch {
+              /* the browser refused the notification */
+            }
+          }
+        }
+        for (const row of incoming) heard.current.add(row.id);
+        heardReady.current = true;
         if (data.reads) setReads(data.reads);
         setMessages((current) => {
           const map = new Map(current.map((row) => [row.id, row]));
@@ -480,7 +580,7 @@ function ChatPage() {
           return unique.slice(-200);
         });
       } catch {
-        /* keep the last messages on screen */
+        if (!stop) setLink(navigator.onLine ? "reconnect" : "offline");
       }
     }
     void pull();
@@ -545,6 +645,7 @@ function ChatPage() {
           threadId: thread,
           peerId: other,
           typing: open && draftRef.current.trim().length > 0,
+          hideSeen: liveRef.current.hideSeen,
         }),
       })
         .then((res) => res.json())
@@ -561,7 +662,7 @@ function ChatPage() {
       stop = true;
       window.clearInterval(timer);
     };
-  }, [token, active, me?.id, mobileList]);
+  }, [token, active, me?.id, mobileList, prefs.hideSeen]);
 
   useEffect(() => {
     const node = scroller.current;
@@ -581,7 +682,17 @@ function ChatPage() {
     });
   }, [messages, active, mobileList]);
 
-  const allowedGroups = session?.role === "po" || session?.role === "admin" ? GROUPS : [];
+  const roleNow = me?.role || session?.role || "";
+  const unitNow = me?.unit || "";
+  const deskNow = roleNow === "po" || roleNow === "admin";
+  const allowedGroups = GROUPS.filter((group) => {
+    if (!session) return false;
+    if (group.id === "leaders") return deskNow || roleNow === "leader";
+    if (group.id === "unit-2") return deskNow || /unit\s*2/i.test(unitNow);
+    if (group.id === "unit-1") return deskNow || !/unit\s*2/i.test(unitNow);
+    return true;
+  });
+  const eventChats = eventRows.filter((event) => event.name && /^[A-Za-z0-9_-]{4,48}$/.test(event.id)).slice(0, 8);
 
   function personName(id: string) {
     if (!id || id === "po") return "Programme Officer";
@@ -597,6 +708,10 @@ function ChatPage() {
   function threadTitle(id: string) {
     const group = GROUPS.find((item) => item.id === id);
     if (group) return group.title;
+    if (id.startsWith("event:")) {
+      const found = eventRows.find((event) => event.id === id.slice(6));
+      return found?.name || "Event";
+    }
     const parts = id.startsWith("dm:") ? id.slice(3).split(":") : [];
     const other = parts.find((part) => part && part !== me?.id && part !== meId && part !== "po" && part !== "admin") || parts.find((part) => part && part !== "po" && part !== "admin") || "";
     return personName(other);
@@ -635,6 +750,7 @@ function ChatPage() {
 
   function openThread(id: string) {
     const thread = canonicalThread(id);
+    setInfoOn(false);
     setActive(thread);
     setMobileList(false);
     const last = lastMessage(thread);
@@ -645,6 +761,7 @@ function ChatPage() {
   }
 
   function closeThread() {
+    setInfoOn(false);
     if (router.history.canGoBack()) {
       router.history.back();
       return;
@@ -782,7 +899,7 @@ function ChatPage() {
       }
       if (!res.ok || !data.ok || !data.message) {
         const message = data.error || "Message was not sent.";
-        if (/cannot send|blocked|too large|Type a message/i.test(message)) {
+        if (/cannot send|blocked|too large|Type a message|slow down|Choose a person/i.test(message)) {
           setMessages((current) => current.filter((row) => row.id !== localId));
           setDraft(text);
           toast.error(message);
@@ -836,6 +953,7 @@ function ChatPage() {
     if (recorder.current && recorder.current.state === "recording") {
       recorder.current.stop();
       setRecording(false);
+      window.clearInterval(recordTimer.current);
       return;
     }
     try {
@@ -846,6 +964,7 @@ function ChatPage() {
         if (event.data.size) bits.push(event.data);
       };
       rec.onstop = () => {
+        window.clearInterval(recordTimer.current);
         stream.getTracks().forEach((track) => track.stop());
         const blob = new Blob(bits, { type: rec.mimeType || "audio/webm" });
         if (blob.size > 1200000) {
@@ -858,6 +977,9 @@ function ChatPage() {
       };
       recorder.current = rec;
       rec.start();
+      setRecordSec(0);
+      window.clearInterval(recordTimer.current);
+      recordTimer.current = window.setInterval(() => setRecordSec((value) => value + 1), 1000);
       setRecording(true);
     } catch {
       toast.error("Microphone is not available.");
@@ -919,11 +1041,12 @@ function ChatPage() {
         body: JSON.stringify(payload),
       });
       const data = (await res.json()) as { ok?: boolean; error?: string; message?: ChatMessage };
-      if (!res.ok || !data.ok || !data.message) throw new Error(data.error || "Message was not sent.");
-      if (message.media && data.message.mediaType) mediaBag.current.set(data.message.id, { media: message.media, mediaType: message.mediaType || "file" });
+      const saved = data.message;
+      if (!res.ok || !data.ok || !saved?.id) throw new Error(data.error || "Message was not sent.");
+      if (message.media && saved.mediaType) mediaBag.current.set(saved.id, { media: message.media, mediaType: message.mediaType || "file" });
       setMessages((current) => [
-        ...current.filter((row) => row.id !== message.id && row.id !== data.message?.id),
-        { ...data.message, media: data.message.media || message.media || "", mediaType: data.message.mediaType || message.mediaType || "" },
+        ...current.filter((row) => row.id !== message.id && row.id !== saved.id),
+        { ...saved, id: saved.id, threadId: saved.threadId, text: saved.text, senderId: saved.senderId, senderName: saved.senderName, createdAt: saved.createdAt, media: saved.media || message.media || "", mediaType: saved.mediaType || message.mediaType || "" },
       ]);
     } catch (error) {
       setMessages((current) => current.map((row) => (row.id === message.id ? { ...row, extra: { ...row.extra, failed: true } } : row)));
@@ -1065,7 +1188,7 @@ function ChatPage() {
           style={{ backgroundColor: prefs.wallpaper }}
           className="min-h-0 flex-1 space-y-1 overflow-y-auto bg-[radial-gradient(#d9d0c3_0.6px,transparent_0.6px)] bg-[length:16px_16px] px-3 py-3"
         >
-          {shown.length === 0 ? <p className="mx-auto my-8 w-fit rounded-full bg-white/80 px-3 py-1 text-[12px] text-[#54656f]">No messages yet</p> : null}
+          {shown.length === 0 ? <p className="mx-auto my-8 w-fit rounded-full bg-white/80 px-3 py-1 text-[12px] text-[#54656f]">{tr("No messages yet", "હજી કોઈ સંદેશ નથી")}</p> : null}
           {shown.map((message, index) => {
             const mine = message.senderId === me?.id || message.senderId === meId;
             const previous = shown[index - 1];
@@ -1159,9 +1282,9 @@ function ChatPage() {
                       {clock(message.createdAt)}
                       {mine && message.id.startsWith("local-") ? (
                         extra.failed ? (
-                          <button type="button" className="text-[10px] font-medium text-red-700" onClick={(event) => { event.stopPropagation(); void retrySend(message); }}>Not sent</button>
+                          <button type="button" className="text-[10px] font-medium text-red-700" onClick={(event) => { event.stopPropagation(); void retrySend(message); }}>{tr("Not sent", "મોકલાયો નથી")}</button>
                         ) : (
-                          <span className="text-[10px]">Sending</span>
+                          <span className="text-[10px]">{tr("Sending", "મોકલાય છે")}</span>
                         )
                       ) : null}
                       {mine && !message.id.startsWith("local-") ? (read ? <CheckCheck className="size-3.5 text-[#53bdeb]" /> : <Check className="size-3.5 text-[#8696a0]" />) : null}
@@ -1255,7 +1378,7 @@ function ChatPage() {
                 <label className="flex flex-col items-center gap-1.5">
                   <span className="flex size-14 items-center justify-center rounded-full bg-[#7f66ff] text-white"><FileText className="size-6" /></span>
                   Document
-                  <input type="file" accept=".pdf,.txt,.doc,.docx,application/pdf" className="sr-only" onChange={(e) => { const file = e.target.files?.[0]; e.target.value = ""; setSheet(false); void attachFile(file); }} />
+                  <input type="file" accept=".pdf,.txt,.doc,.docx,.xls,.xlsx,.ppt,.pptx,application/pdf" className="sr-only" onChange={(e) => { const file = e.target.files?.[0]; e.target.value = ""; setSheet(false); void attachFile(file); }} />
                 </label>
                 <label className="flex flex-col items-center gap-1.5">
                   <span className="flex size-14 items-center justify-center rounded-full bg-[#ff2e74] text-white"><Camera className="size-6" /></span>
@@ -1310,6 +1433,22 @@ function ChatPage() {
             </div>
           ) : null}
           {pollOn ? <input value={pollOptions} onChange={(e) => setPollOptions(e.target.value)} className="mb-1 w-full rounded-full px-4 py-2 text-sm" placeholder="Yes, No, Maybe" /> : null}
+          {(() => {
+            const mention = draft.match(/(^|\s)@([^\n@]{0,24})$/);
+            if (!mention || threadId.startsWith("dm:")) return null;
+            const needle = mention[2].trim().toLowerCase();
+            const people = directory.filter((person) => person.name.toLowerCase().includes(needle)).slice(0, 6);
+            if (!people.length) return null;
+            return (
+              <div className="mb-1 overflow-hidden rounded-xl bg-white text-sm text-[#111b21]">
+                {people.map((person) => (
+                  <button key={person.id} type="button" className="block w-full px-3 py-2 text-left hover:bg-[#f5f6f6]" onClick={() => setDraft((current) => current.replace(/(^|\s)@([^\n@]{0,24})$/, `$1@${person.name} `))}>
+                    {person.name}
+                  </button>
+                ))}
+              </div>
+            );
+          })()}
           <div className="flex items-end gap-1.5">
             <div className="flex min-h-12 flex-1 items-end rounded-3xl bg-white pl-1 pr-1">
               <button type="button" className="mb-1 flex size-10 items-center justify-center text-[#54656f]" aria-label="Emoji" onClick={() => { setSheet(false); setEmojiOn((on) => !on); }}>
@@ -1344,7 +1483,7 @@ function ChatPage() {
               </Button>
             ) : (
               <button type="button" className={`flex size-12 items-center justify-center rounded-full text-white ${recording ? "bg-red-600" : "bg-[#00a884]"}`} aria-label="Voice message" onClick={() => void toggleVoice()}>
-                <Mic className="size-5" />
+                {recording ? <span className="text-xs font-semibold">{recordSec}s</span> : <Mic className="size-5" />}
               </button>
             )}
           </div>
@@ -1383,6 +1522,14 @@ function ChatPage() {
   const activeRoll = roll.find((row) => row.volunteerId === otherId() || row.id === otherId());
   const activeHours = activeRoll ? volunteerHours(useNssStore.getState(), activeRoll.id) : 0;
   const activePhone = phoneFor(otherId());
+
+  function groupPeople(threadId: string) {
+    if (threadId === "unit-2") return directory.filter((person) => /unit\s*2/i.test(person.unit));
+    if (threadId === "unit-1") return directory.filter((person) => !/unit\s*2/i.test(person.unit));
+    if (threadId === "leaders") return directory.filter((person) => /leader/i.test(person.role));
+    if (threadId === "college" || threadId === "channel" || threadId.startsWith("event:")) return directory;
+    return [];
+  }
 
   function threadButton(id: string) {
     const last = lastMessage(id);
@@ -1431,7 +1578,7 @@ function ChatPage() {
               <ArrowLeft className="size-5" />
             </button>
             <div>
-              <p className="font-medium">Chats</p>
+              <p className="font-medium">{tr("Chats", "ચેટ")}</p>
               <p className="text-xs text-white/70">{me?.name || session.name}</p>
             </div>
           </div>
@@ -1443,7 +1590,7 @@ function ChatPage() {
           <div className="border-b border-[#d1d7db] bg-white p-2">
               <div className="relative">
                 <Search className="pointer-events-none absolute left-3 top-2.5 size-4 text-[#667781]" />
-                <Input id="chat-search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search" className="rounded-lg border-0 bg-[#f0f2f5] pl-9" />
+                <Input id="chat-search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder={tr("Search", "શોધો")} className="rounded-lg border-0 bg-[#f0f2f5] pl-9" />
               </div>
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto">
@@ -1470,7 +1617,7 @@ function ChatPage() {
                 </span>
               </button>
             ) : null}
-            {officer && directory.length === 0 ? <p className="px-4 py-3 text-sm text-muted-foreground">No volunteer on the roll yet.</p> : null}
+            {officer && directory.length === 0 ? <p className="px-4 py-3 text-sm text-muted-foreground">{query.trim() ? tr("No conversations yet", "હજી કોઈ ચેટ નથી") : tr("No volunteer on the roll yet.", "રોલ પર સ્વયંસેવક નથી.")}</p> : null}
             {officer ? directory.map((person) => {
                   const thread = canonicalThread(`dm:${meId}:${person.id}`);
                   const archived = prefs.archives.includes(thread);
@@ -1492,8 +1639,10 @@ function ChatPage() {
                     </button>
                   );
             }) : null}
-            {officer ? <p className="px-4 pt-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">NSS Community</p> : null}
+            {allowedGroups.length || eventChats.length ? <p className="px-4 pt-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">{tr("NSS Community", "NSS સમુદાય")}</p> : null}
             {allowedGroups.map((group) => threadButton(group.id))}
+            {eventChats.length ? <p className="px-4 pt-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">{tr("Events", "કાર્યક્રમ")}</p> : null}
+            {eventChats.map((event) => threadButton(`event:${event.id}`))}
           </div>
         </aside>
         <section className={`${mobileList ? "hidden" : "flex"} relative min-w-0 flex-1 flex-col min-[1280px]:flex`}>
@@ -1502,20 +1651,22 @@ function ChatPage() {
               <ArrowLeft className="size-5" />
             </button>
             <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-white/20 text-sm font-semibold">{threadTitle(active).slice(0, 1)}</span>
-            <div className="min-w-0 flex-1">
+            <button type="button" className="min-w-0 flex-1 text-left" onClick={() => setInfoOn(true)}>
               <p className="truncate font-medium">{threadTitle(active)}</p>
               <p className="truncate text-xs text-white/70">
                 {peer?.typingThread === canonicalThread(active) && peer.typingAt && Date.now() - new Date(peer.typingAt).getTime() < 25000
-                  ? "typing..."
-                  : peer?.lastSeen && Date.now() - new Date(peer.lastSeen).getTime() < 40000
-                    ? "online"
+                  ? tr("typing...", "લખે છે...")
+                  : peer?.online || (peer?.lastSeen && Date.now() - new Date(peer.lastSeen).getTime() < 40000)
+                    ? tr("online", "ઓનલાઇન")
                     : peer?.lastSeen
-                      ? `last seen ${clock(peer.lastSeen)}`
+                      ? `${tr("last seen", "છેલ્લે")} ${clock(peer.lastSeen)}`
                       : active.startsWith("dm:")
-                        ? "private"
-                        : GROUPS.find((group) => group.id === active)?.subtitle}
+                        ? tr("private", "ખાનગી")
+                        : active.startsWith("event:")
+                          ? tr("Event group", "કાર્યક્રમ ગ્રુપ")
+                          : GROUPS.find((group) => group.id === active)?.subtitle}
               </p>
-            </div>
+            </button>
             <button type="button" className="rounded-full p-2 hover:bg-white/10" aria-label="Menu" onClick={() => { setMenuMore(false); setMenu((on) => !on); }}>
               <MoreVertical className="size-5" />
             </button>
@@ -1523,7 +1674,7 @@ function ChatPage() {
           {menu ? (
             <div className="absolute right-2 top-14 z-30 w-56 overflow-hidden rounded-md bg-white py-1 text-[15px] text-[#111b21] shadow-xl">
               {([
-                ["View chat", () => setMenu(false)],
+                ["View chat", () => setInfoOn(true)],
                 ["Search", () => setFinder(" ")],
                 ["Clear chat", () => setAsk("clear")],
                 ["Mute notifications", () => togglePref("mutes", canonicalThread(active))],
@@ -1556,9 +1707,37 @@ function ChatPage() {
                           toast.error(data.error || "Could not update the block.");
                           return;
                         }
-                        toast((data.blocked || []).includes(who) ? "Blocked" : "Unblocked");
+                        toast((data.blocked || []).includes(who) ? tr("Blocked", "બ્લોક થયું") : tr("Unblocked", "બ્લોક દૂર થયો"));
                       })
                       .catch(() => toast.error("Could not update the block."));
+                  }],
+                  ["Report", () => {
+                    if (!active.startsWith("dm:")) {
+                      toast.error(tr("Open a personal chat to report.", "રિપોર્ટ માટે વ્યક્તિગત ચેટ ખોલો."));
+                      return;
+                    }
+                    const reason = window.prompt(tr("Why report this chat?", "આ ચેટની જાણ શા માટે?"), "") || "";
+                    void fetch("/api/nss-cloud", {
+                      method: "POST",
+                      headers: { "content-type": "application/json" },
+                      body: JSON.stringify({ action: "chat-report", chatToken: token, reportId: otherId(), reason }),
+                    })
+                      .then((res) => res.json())
+                      .then((data: { ok?: boolean; error?: string }) => {
+                        if (!data.ok) toast.error(data.error || "Report was not saved.");
+                        else toast(tr("Report sent", "રિપોર્ટ મોકલાયો"));
+                      })
+                      .catch(() => toast.error("Report was not saved."));
+                  }],
+                  ["Hide last seen", () => savePrefs({ ...prefs, hideSeen: !prefs.hideSeen })],
+                  ["Notifications", () => {
+                    if (typeof Notification === "undefined") {
+                      toast.error("Notifications are not available.");
+                      return;
+                    }
+                    void Notification.requestPermission().then((result) => {
+                      toast(result === "granted" ? tr("Notifications on", "નોટિફિકેશન ચાલુ") : tr("Notifications blocked", "નોટિફિકેશન બંધ"));
+                    });
                   }],
                   ["Status", () => { const status = window.prompt("Status", ""); if (status?.trim()) void fetch("/api/nss-cloud", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "chat-status", chatToken: token, text: status.trim() }) }); }],
                   ["Broadcast", () => { if (officer) void broadcast(); }],
@@ -1579,6 +1758,48 @@ function ChatPage() {
                   {status.senderName.split(" ")[0]}
                 </button>
               ))}
+            </div>
+          ) : null}
+          {link !== "online" ? (
+            <p className="bg-[#fff4d6] px-3 py-1 text-center text-xs text-[#3b2f12]">
+              {link === "offline" ? tr("Offline. Messages send when you reconnect.", "ઑફલાઇન. નેટ આવે ત્યારે સંદેશ જશે.") : tr("Reconnecting…", "ફરી જોડાય છે…")}
+            </p>
+          ) : null}
+          {infoOn ? (
+            <div className="absolute inset-0 z-40 flex flex-col bg-[#f0f2f5] text-[#111b21]">
+              <div className="flex items-center gap-2 bg-[#075e54] px-2 py-3 text-white">
+                <button type="button" className="rounded-full p-2" aria-label="Close" onClick={() => setInfoOn(false)}><ArrowLeft className="size-5" /></button>
+                <p className="font-medium">{tr("Chat info", "ચેટ માહિતી")}</p>
+              </div>
+              <div className="min-h-0 flex-1 overflow-y-auto">
+                <div className="bg-white px-4 py-6 text-center">
+                  <span className="mx-auto flex size-20 items-center justify-center rounded-full bg-[#075e54] text-2xl text-white">{threadTitle(active).slice(0, 1)}</span>
+                  <p className="mt-3 text-lg font-medium">{threadTitle(active)}</p>
+                  <p className="text-sm text-[#667781]">{active.startsWith("dm:") ? activePerson?.unit || tr("Private chat", "ખાનગી ચેટ") : tr("Group", "ગ્રુપ")}</p>
+                  {officer && active.startsWith("dm:") && activeHours ? <p className="mt-1 text-sm">{activeHours} {tr("service hours", "કલાક")}</p> : null}
+                  {officer && activePhone ? (
+                    <button type="button" className="mt-3 rounded-full bg-[#00a884] px-4 py-2 text-sm text-white" onClick={() => openWhatsAppChat("")}>{tr("Message on WhatsApp", "WhatsApp પર સંદેશ")}</button>
+                  ) : null}
+                </div>
+                {!active.startsWith("dm:") ? (
+                  <div className="mt-2 bg-white">
+                    <p className="px-4 pt-3 text-xs font-semibold uppercase text-[#667781]">{tr("Members", "સભ્યો")} · {groupPeople(active).length}</p>
+                    {groupPeople(active).slice(0, 40).map((person) => (
+                      <p key={person.id} className="border-b border-[#f0f2f5] px-4 py-2 text-sm">{person.name}<span className="ml-2 text-xs text-[#667781]">{person.role}</span></p>
+                    ))}
+                  </div>
+                ) : null}
+                <div className="mt-2 bg-white px-4 py-3">
+                  <p className="text-xs font-semibold uppercase text-[#667781]">{tr("Shared media", "શેર કરેલી ફાઇલ")}</p>
+                  {messages.some((message) => canonicalThread(message.threadId) === canonicalThread(active) && message.media && message.mediaType === "image") ? (
+                    <div className="mt-2 grid grid-cols-3 gap-1">
+                      {messages.filter((message) => canonicalThread(message.threadId) === canonicalThread(active) && message.media && message.mediaType === "image").slice(-9).map((message) => (
+                        <img key={message.id} src={message.media} alt="" className="aspect-square w-full object-cover" />
+                      ))}
+                    </div>
+                  ) : <p className="mt-2 text-sm text-[#667781]">{tr("No shared photos yet", "હજી કોઈ ફોટો નથી")}</p>}
+                </div>
+              </div>
             </div>
           ) : null}
           {!token ? <div className="flex flex-1" /> : talk(threadMessages, canonicalThread(active), !active.startsWith("dm:"))}

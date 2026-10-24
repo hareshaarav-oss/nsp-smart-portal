@@ -308,17 +308,39 @@ function canonicalThread(threadId: string) {
 
 function validThread(threadId: string) {
   if (threadId === "college" || threadId === "unit-1" || threadId === "unit-2" || threadId === "leaders" || threadId === "channel") return true;
+  if (/^event:[A-Za-z0-9_-]{4,48}$/.test(threadId)) return true;
   return /^dm:[A-Za-z0-9-]{1,24}:[A-Za-z0-9-]{1,24}$/.test(threadId);
+}
+
+function isUnit2(unit: string) {
+  return /unit\s*2/i.test(unit);
 }
 
 function canSeeThread(user: { id: string; role: string; unit: string }, threadId: string) {
   const officer = user.role === "po" || user.role === "admin";
-  if (officer && (threadId === "channel" || threadId === "college" || threadId === "leaders" || threadId === "unit-1" || threadId === "unit-2")) return true;
-  if (!officer && threadId === "channel") return true;
+  if (threadId === "channel" || threadId === "college") return true;
+  if (threadId === "leaders") return officer || user.role === "leader";
+  if (threadId === "unit-1") return officer || !isUnit2(user.unit);
+  if (threadId === "unit-2") return officer || isUnit2(user.unit);
+  if (/^event:[A-Za-z0-9_-]{4,48}$/.test(threadId)) return true;
   if (!threadId.startsWith("dm:")) return false;
   const ids = threadId.slice(3).split(":");
   if (officer) return ids.includes("po") || ids.includes("admin") || ids.includes(user.id);
   return ids.includes(user.id) && ids.includes("po");
+}
+
+const chatSendTimes = new Map<string, number[]>();
+
+function chatSendLimited(userId: string) {
+  const now = Date.now();
+  const recent = (chatSendTimes.get(userId) || []).filter((at) => now - at < 60_000);
+  if (recent.length >= 20) {
+    chatSendTimes.set(userId, recent);
+    return true;
+  }
+  recent.push(now);
+  chatSendTimes.set(userId, recent);
+  return false;
 }
 
 function officerRole(user: { role?: string } | null | undefined) {
@@ -402,6 +424,10 @@ export const Route = createFileRoute("/api/nss-cloud")({
             peerId?: string;
             typing?: boolean;
             blockId?: string;
+            reportId?: string;
+            reason?: string;
+            hideSeen?: boolean;
+            clientId?: string;
             viewOnce?: boolean;
             expiresAt?: string;
             fileName?: string;
@@ -549,7 +575,7 @@ export const Route = createFileRoute("/api/nss-cloud")({
             const saved = await saveStudentToCloud({ ...body, nssRole: "Volunteer" });
             return Response.json(saved);
           }
-          if (body.action === "chat-sync" || body.action === "chat-send" || body.action === "chat-delete" || body.action === "chat-clear" || body.action === "chat-media" || body.action === "chat-edit" || body.action === "chat-react" || body.action === "chat-vote" || body.action === "chat-once" || body.action === "chat-presence" || body.action === "chat-block" || body.action === "chat-status" || body.action === "set-role" || body.action === "set-status" || body.action === "announce") {
+          if (body.action === "chat-sync" || body.action === "chat-send" || body.action === "chat-delete" || body.action === "chat-clear" || body.action === "chat-media" || body.action === "chat-edit" || body.action === "chat-react" || body.action === "chat-vote" || body.action === "chat-once" || body.action === "chat-presence" || body.action === "chat-block" || body.action === "chat-report" || body.action === "chat-status" || body.action === "set-role" || body.action === "set-status" || body.action === "announce") {
             const user = await readChatPass(text(body.chatToken));
             if (!user) return Response.json({ ok: false, error: "Sign in again to use NSS Chat." }, { status: 401 });
             if (body.action === "set-role" || body.action === "set-status") {
@@ -624,7 +650,7 @@ export const Route = createFileRoute("/api/nss-cloud")({
               void patchNotice(row.id, { media: "", mediaType: "", extra: sealText(JSON.stringify(extra).slice(0, 1800)) }).catch(() => undefined);
               return Response.json({ ok: true, id: row.id, extra });
             }
-            if (body.action === "chat-presence" || body.action === "chat-block" || body.action === "chat-status") {
+            if (body.action === "chat-presence" || body.action === "chat-block" || body.action === "chat-report" || body.action === "chat-status") {
               if (body.action === "chat-presence") {
                 const seenThread = canonicalThread(text(body.threadId));
                 if (seenThread && canSeeThread(user, seenThread)) void markChatRead(user.id, seenThread, new Date().toISOString()).catch(() => undefined);
@@ -640,6 +666,21 @@ export const Route = createFileRoute("/api/nss-cloud")({
                 const ids = [...set].slice(0, 80).join(",");
                 await upsertNotice(id, { kind: "chat-block", title: "NSS_CHAT_INTERNAL", ids, senderId: user.id });
                 return Response.json({ ok: true, blocked: ids.split(",").filter(Boolean) });
+              }
+              if (body.action === "chat-report") {
+                const other = text(body.reportId).replace(/[^A-Za-z0-9-]/g, "").slice(0, 24);
+                const reason = text(body.reason).slice(0, 180);
+                if (!other || other === user.id) return Response.json({ ok: false, error: "Choose a person to report." }, { status: 400 });
+                const id = `rpt${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+                await upsertNotice(id, {
+                  kind: "chat-report",
+                  title: "NSS_CHAT_INTERNAL",
+                  senderId: user.id,
+                  targetId: other,
+                  text: sealText(reason || "Reported from chat"),
+                  createdAt: new Date().toISOString(),
+                });
+                return Response.json({ ok: true });
               }
               if (body.action === "chat-status") {
                 const message = String(body.text ?? "").split("\u0000").join("").trim().slice(0, 140);
@@ -669,6 +710,7 @@ export const Route = createFileRoute("/api/nss-cloud")({
                 typingAt: body.typing && reading ? now : "",
                 readThread: reading ? seenThread : text(keep?.readThread),
                 readAt: reading ? now : text(keep?.readAt),
+                hideSeen: body.hideSeen ? "1" : "",
                 call: hasCall ? text(body.call).slice(0, 16) : text(keep?.call),
                 callThread: hasCall ? (body.call ? canonicalThread(text(body.threadId)) : "") : text(keep?.callThread),
                 callAt: hasCall ? (body.call ? now : "") : text(keep?.callAt),
@@ -677,20 +719,20 @@ export const Route = createFileRoute("/api/nss-cloud")({
               const peerId = text(body.peerId).replace(/[^A-Za-z0-9-]/g, "").slice(0, 24);
               const peer = peerId ? await readSide(sideDocId("pre", peerId)) : null;
               const statuses = await listChatStatuses().catch(() => []);
+              const seenAt = peer ? text(peer.lastSeen) : "";
+              const seenMs = seenAt ? new Date(seenAt).getTime() : 0;
+              const hideSeen = text(peer?.hideSeen) === "1";
               return Response.json({
                 ok: true,
                 statuses,
                 peer: peer
                   ? {
-                      lastSeen: text(peer.lastSeen),
+                      lastSeen: hideSeen ? "" : seenAt,
+                      online: Boolean(seenMs) && Date.now() - seenMs < 40000,
                       typingThread: text(peer.typingThread),
                       typingAt: text(peer.typingAt),
                       readThread: text(peer.readThread),
                       readAt: text(peer.readAt),
-                      call: text(peer.call),
-                      callThread: text(peer.callThread),
-                      callAt: text(peer.callAt),
-                      sdp: text(peer.sdp),
                     }
                   : null,
               });
@@ -780,6 +822,7 @@ export const Route = createFileRoute("/api/nss-cloud")({
                   return Response.json({ ok: false, error: "This chat is blocked." }, { status: 403 });
                 }
               }
+              if (chatSendLimited(user.id)) return Response.json({ ok: false, error: "Slow down a moment." }, { status: 429 });
               const pollOptions = Array.isArray(body.pollOptions) ? body.pollOptions.map((item) => text(item).slice(0, 40)).filter(Boolean).slice(0, 4) : [];
               const kind = text(body.kind).slice(0, 16);
               if (!message && !mediaOk && kind !== "poll") return Response.json({ ok: false, error: "Type a message first." }, { status: 400 });
