@@ -344,7 +344,7 @@ export const Route = createFileRoute("/api/nss-cloud")({
           const brand = collegeQuotaBlocked() ? { poPhoto: "", principalPhoto: "" } : await readBrandPhotos();
           return Response.json(
             { ...publicPayload(data as unknown as Row, includeGallery), brand, degraded: false },
-            { headers: { "cache-control": "public, max-age=60, s-maxage=600, stale-while-revalidate=86400" } },
+            { headers: { "cache-control": "public, max-age=20, s-maxage=30" } },
           );
         } catch (error) {
           if (busyError(error) || collegeQuotaBlocked()) {
@@ -367,6 +367,7 @@ export const Route = createFileRoute("/api/nss-cloud")({
             next?: string;
             volunteerId?: string;
             photoUrl?: string;
+            thumbUrl?: string;
             email?: string;
             address?: string;
             bloodGroup?: string;
@@ -912,6 +913,8 @@ export const Route = createFileRoute("/api/nss-cloud")({
               patch.webauthnId = finger;
             }
             if (photo.startsWith("data:image/")) patch.photoUrl = photo;
+            const thumb = text(body.thumbUrl);
+            if (thumb.startsWith("data:image/") && thumb.length < 8000) patch.thumbUrl = thumb;
             const docId = text(found?.id) || located.blindId || "";
             try {
               await patchStudent(docId, patch);

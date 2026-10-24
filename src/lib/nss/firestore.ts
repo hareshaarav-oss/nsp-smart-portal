@@ -92,6 +92,7 @@ const STUDENT_FIELDS = [
   "volunteerId",
   "unit",
   "photoUrl",
+  "thumbUrl",
   "password",
   "mpin",
   "webauthnId",
@@ -343,7 +344,7 @@ async function loadCollegeCloudFresh(opts: { gallery?: boolean; photos?: boolean
       emergencyContact: text(s.emergencyContact),
       abcId: text(s.abcId),
       myBharatId: text(s.myBharatId),
-      photoUrl: safePhoto(s.photoUrl),
+      photoUrl: smallPublicPhoto(s.thumbUrl) || (opts?.photos === false ? "" : safePhoto(s.photoUrl)),
       loginPassword: text(s.password),
       mpin: text(s.mpin) || undefined,
       webauthnId: text(s.webauthnId) || undefined,
@@ -545,7 +546,7 @@ export async function loadStudentRoll(): Promise<Volunteer[] | null> {
 }
 
 const BOARD_TTL_MS = 12 * 60 * 60 * 1000;
-const PUBLIC_MEMORY_MS = 10 * 60 * 1000;
+const PUBLIC_MEMORY_MS = 45 * 1000;
 let publicCache: { at: number; data: CloudPortal; galleryReady?: boolean } | null = null;
 let officerCache: { at: number; data: CloudPortal } | null = null;
 
@@ -594,7 +595,11 @@ function publicBoardShape(data: CloudPortal): CloudPortal {
       emergencyContact: "",
       abcId: "",
       myBharatId: "",
-      photoUrl: v.photoUrl && v.photoUrl.startsWith("https://") && v.photoUrl.length < 8000 ? v.photoUrl : "",
+      photoUrl:
+        (v.photoUrl && v.photoUrl.startsWith("data:image/") && v.photoUrl.length < 8000) ||
+        (v.photoUrl && v.photoUrl.startsWith("https://") && v.photoUrl.length < 8000)
+          ? v.photoUrl
+          : "",
     })),
   };
 }
@@ -723,8 +728,21 @@ async function readBoard(): Promise<{ data: CloudPortal; galleryCount: number | 
 
 async function writeBoard(data: CloudPortal) {
   if (data.volunteers.length < 1 || collegeQuotaBlocked()) return;
-  const shaped = publicBoardShape(data);
-  const payload = JSON.stringify(shaped);
+  let shaped = publicBoardShape(data);
+  let payload = JSON.stringify(shaped);
+  if (payload.length > 850000) {
+    const volunteers = shaped.volunteers.map((row) => ({ ...row }));
+    const ranked = volunteers
+      .map((row, index) => ({ index, size: row.photoUrl?.length ?? 0 }))
+      .filter((row) => row.size > 0)
+      .sort((a, b) => b.size - a.size);
+    for (const row of ranked) {
+      volunteers[row.index] = { ...volunteers[row.index], photoUrl: "" };
+      shaped = { ...shaped, volunteers };
+      payload = JSON.stringify(shaped);
+      if (payload.length <= 850000) break;
+    }
+  }
   if (payload.length > 900000) return;
   const fields = {
     roll: { stringValue: payload },
@@ -766,13 +784,14 @@ export async function loadPublicBoard(opts: { gallery?: boolean } = {}): Promise
     if (ready) return omitPurged(publicCache.data);
   }
   const board = await readBoard();
-  if (board && (board.fresh || collegeQuotaBlocked() || now < boardRebuildAt)) {
+  if (board && (board.fresh || collegeQuotaBlocked())) {
     const clean = omitPurged(board.data);
     const usable = !wantGallery || clean.gallery.length > 0 || board.galleryCount === 0;
     if (!wantGallery || usable) return rememberBoard(clean, usable);
   }
   if (collegeQuotaBlocked()) return board ? rememberBoard(omitPurged(board.data), board.data.gallery.length > 0) : publicCache?.data ? omitPurged(publicCache.data) : null;
-  boardRebuildAt = Date.now() + 10 * 60 * 1000;
+  if (board && now < boardRebuildAt) return rememberBoard(omitPurged(board.data), !wantGallery || board.data.gallery.length > 0 || board.galleryCount === 0);
+  boardRebuildAt = Date.now() + 45 * 1000;
   try {
     const fresh = await loadCollegeCloudFresh({ gallery: wantGallery, photos: false, attendance: false });
     if (fresh && fresh.volunteers.length >= 1) {
@@ -855,6 +874,13 @@ function encodeValue(value: unknown): Record<string, unknown> {
 export function safePhoto(value: unknown) {
   const src = text(value);
   if ((src.startsWith("data:image/") || src.startsWith("https://")) && src.length < 1200000) return src;
+  return "";
+}
+
+function smallPublicPhoto(value: unknown) {
+  const src = text(value);
+  if (src.startsWith("data:image/") && src.length > 80 && src.length < 8000) return src;
+  if (src.startsWith("https://") && src.length < 8000) return src;
   return "";
 }
 
@@ -1087,6 +1113,7 @@ const BOARD_FIELDS = new Set([
   "gender",
   "dob",
   "photoUrl",
+  "thumbUrl",
 ]);
 
 function mergeStudentCache(id: string, values: Record<string, unknown>) {
@@ -1243,6 +1270,8 @@ export async function saveStudentToCloud(input: Record<string, unknown>) {
   };
   const photo = safePhoto(input.photoUrl);
   if (photo) fields.photoUrl = encodeValue(photo);
+  const thumb = text(input.thumbUrl);
+  if (thumb.startsWith("data:image/") && thumb.length > 80 && thumb.length < 8000) fields.thumbUrl = encodeValue(thumb);
   const res = await fetch(`${FIRESTORE_BASE}/students?documentId=${mobile}`, {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -1744,12 +1773,27 @@ function chatStillLive(createdAt: string) {
   return Number.isFinite(at) && Date.now() - at < CHAT_LIFE_MS;
 }
 
+function sameChatBubble(a: { threadId: string; senderId: string; senderName: string; text: string; createdAt: string }, b: { threadId: string; senderId: string; senderName: string; text: string; createdAt: string }) {
+  const left = a.text.trim();
+  const right = b.text.trim();
+  if (!left || left !== right || a.threadId !== b.threadId) return false;
+  const gap = Math.abs(new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+  if (!Number.isFinite(gap) || gap >= 90_000) return false;
+  if (a.senderId === b.senderId) return true;
+  const name = a.senderName.trim().toLowerCase();
+  return Boolean(name) && name === b.senderName.trim().toLowerCase();
+}
+
 function visibleChats(rows: ChatRow[]) {
-  return rows.filter((row) => {
-    if (!row.id || goneCache.has(row.id) || !chatStillLive(row.createdAt)) return false;
+  const kept: ChatRow[] = [];
+  for (const row of rows) {
+    if (!row.id || goneCache.has(row.id) || !chatStillLive(row.createdAt)) continue;
     const cut = clearedAt.get(row.threadId);
-    return !cut || row.createdAt > cut;
-  });
+    if (cut && row.createdAt <= cut) continue;
+    if (kept.some((item) => sameChatBubble(item, row))) continue;
+    kept.push(row);
+  }
+  return kept;
 }
 
 async function markChatField(field: "reads" | "gone" | "cleared", value: string) {
@@ -2016,15 +2060,26 @@ export async function readChatMedia(ids: string[]) {
 }
 
 export async function saveChatMessage(input: { threadId: string; text: string; senderId: string; senderName: string; replyName?: string; replyText?: string; media?: string; mediaType?: "" | "image" | "video" | "audio" | "file"; extra?: ChatExtra }) {
-  const textBody = input.text.slice(0, 1000);
-  const twin = (chatCache?.rows ?? []).find(
-    (row) =>
-      row.threadId === input.threadId &&
-      row.senderId === input.senderId &&
-      row.text === textBody &&
-      Date.now() - new Date(row.createdAt).getTime() < 60000,
-  );
+  const textBody = input.text.slice(0, 1000).trim();
+  const draft = {
+    threadId: input.threadId,
+    senderId: input.senderId,
+    senderName: input.senderName,
+    text: textBody,
+    createdAt: new Date().toISOString(),
+  };
+  const recent = visibleChats(chatCache?.rows ?? []);
+  const twin = recent.find((row) => sameChatBubble(row, draft));
   if (twin && !input.media) return twin;
+  if (!twin && !collegeQuotaBlocked()) {
+    try {
+      const doc = await getDocument("portalSettings/chatlog");
+      const stored = visibleChats(tailRows(doc?.recent)).find((row) => sameChatBubble(row, draft));
+      if (stored && !input.media) return stored;
+    } catch {
+      /* a busy register still accepts a new message */
+    }
+  }
   const createdAt = new Date().toISOString();
   const id = `chat${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
   const replyName = text(input.replyName).slice(0, 80);
@@ -2050,7 +2105,7 @@ export async function saveChatMessage(input: { threadId: string; text: string; s
   const saved: ChatRow = {
     id,
     threadId: input.threadId,
-    text: input.text.slice(0, 1000),
+    text: textBody,
     senderId: input.senderId,
     senderName: input.senderName.slice(0, 80),
     createdAt,
@@ -2066,7 +2121,7 @@ export async function saveChatMessage(input: { threadId: string; text: string; s
       kind: "chat",
       title: "NSS_CHAT_INTERNAL",
       threadId: input.threadId,
-      text: sealText(input.text.slice(0, 1000)),
+      text: sealText(textBody),
       senderId: input.senderId,
       senderName: input.senderName.slice(0, 80),
       replyName: replyName ? sealText(replyName) : "",

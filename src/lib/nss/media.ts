@@ -154,6 +154,24 @@ export async function compressPassport(file: File) {
   return compressHdPhoto(file, 1080);
 }
 
+export async function compressCardPhoto(file: File) {
+  let bitmap: ImageBitmap | null = null;
+  try {
+    bitmap = await createImageBitmap(file);
+    let edge = 140;
+    let quality = 0.55;
+    let result = await drawJpeg(bitmap, bitmap.width, bitmap.height, edge, quality);
+    for (let i = 0; i < 6 && result.blob.size > 4200; i += 1) {
+      edge = Math.max(64, Math.round(edge * 0.82));
+      quality = Math.max(0.38, quality - 0.05);
+      result = await drawJpeg(bitmap, bitmap.width, bitmap.height, edge, quality);
+    }
+    return result;
+  } finally {
+    bitmap?.close();
+  }
+}
+
 export async function videoPoster(file: File): Promise<Blob | null> {
   return new Promise((resolve) => {
     const url = URL.createObjectURL(file);

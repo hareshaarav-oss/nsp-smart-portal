@@ -281,7 +281,7 @@ export function HydrateGate({ children }: { children: ReactNode }) {
         : await fetch("/api/nss-cloud");
       const cloud = (await res.json()) as CloudBody;
       if (cloud.degraded || !res.ok) nextPull = Date.now() + 10 * 60 * 1000;
-      else nextPull = Date.now() + 3 * 60 * 1000;
+      else nextPull = Date.now() + 40 * 1000;
       if (!cancelled) {
         applyBody(cloud);
         applyCachedPhotos();
@@ -338,12 +338,19 @@ export function HydrateGate({ children }: { children: ReactNode }) {
       }
     })();
 
-    const retry = window.setTimeout(() => {
+    const retry = window.setInterval(() => {
       void pullLive().catch(() => undefined);
-    }, 90_000);
+    }, 20_000);
+    const wake = () => {
+      if (document.hidden) return;
+      if (nextPull - Date.now() > 15_000) nextPull = 0;
+      void pullLive().catch(() => undefined);
+    };
+    document.addEventListener("visibilitychange", wake);
     return () => {
       cancelled = true;
-      window.clearTimeout(retry);
+      window.clearInterval(retry);
+      document.removeEventListener("visibilitychange", wake);
     };
   }, []);
 

@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { blobToDataUrl, compressPassport, rememberPhoto } from "@/lib/nss/media";
+import { blobToDataUrl, compressCardPhoto, compressPassport, rememberPhoto } from "@/lib/nss/media";
 import { latinDigits } from "@/lib/nss/format";
 import { useNssStore, rememberVolunteer } from "@/lib/nss/store";
 import type { Course, Gender, NssRole, NssUnit, Volunteer } from "@/lib/nss/types";
@@ -18,6 +18,7 @@ function RegisterPage() {
   const addLog = useNssStore((s) => s.addLog);
   const [done, setDone] = useState<{ name: string; id: string; mobile: string; enrollment: string } | null>(null);
   const [photoUrl, setPhotoUrl] = useState("");
+  const [thumbUrl, setThumbUrl] = useState("");
   const [form, setForm] = useState({
     fullName: "",
     mobile: "",
@@ -44,8 +45,9 @@ function RegisterPage() {
   async function onPhoto(file: File | undefined) {
     if (!file) return;
     try {
-      const { blob } = await compressPassport(file);
-      setPhotoUrl(await blobToDataUrl(blob));
+      const [full, card] = await Promise.all([compressPassport(file), compressCardPhoto(file)]);
+      setPhotoUrl(await blobToDataUrl(full.blob));
+      setThumbUrl(await blobToDataUrl(card.blob));
     } catch {
       toast.error("Could not read that photograph. Try a JPG or PNG.");
     }
@@ -63,7 +65,7 @@ function RegisterPage() {
       const res = await fetch("/api/nss-cloud", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ action: "register", ...form, mobile, photoUrl }),
+        body: JSON.stringify({ action: "register", ...form, mobile, photoUrl, thumbUrl }),
       });
       const data = (await res.json()) as { ok?: boolean; error?: string; volunteer?: Volunteer };
       if (!res.ok || !data.ok || !data.volunteer) {

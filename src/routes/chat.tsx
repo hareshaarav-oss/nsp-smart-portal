@@ -422,21 +422,25 @@ function ChatPage() {
                 other.id !== row.id &&
                 !other.id.startsWith("local-") &&
                 canonicalThread(other.threadId) === canonicalThread(row.threadId) &&
-                other.text === row.text &&
-                Math.abs(new Date(other.createdAt).getTime() - new Date(row.createdAt).getTime()) < 20000,
+                other.text.trim() === row.text.trim() &&
+                row.text.trim().length > 0 &&
+                Math.abs(new Date(other.createdAt).getTime() - new Date(row.createdAt).getTime()) < 90000,
             );
             if (sent) map.delete(row.id);
           }
           const kept = [...map.values()].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
           const unique: ChatMessage[] = [];
           for (const row of kept) {
-            const twin = unique.find(
-              (item) =>
-                canonicalThread(item.threadId) === canonicalThread(row.threadId) &&
-                item.senderId === row.senderId &&
-                item.text === row.text &&
-                Math.abs(new Date(item.createdAt).getTime() - new Date(row.createdAt).getTime()) < 15000,
-            );
+            const twin = unique.find((item) => {
+              const left = item.text.trim();
+              const right = row.text.trim();
+              if (!left || left !== right) return false;
+              if (canonicalThread(item.threadId) !== canonicalThread(row.threadId)) return false;
+              if (Math.abs(new Date(item.createdAt).getTime() - new Date(row.createdAt).getTime()) >= 90000) return false;
+              if (item.senderId === row.senderId) return true;
+              const name = item.senderName.trim().toLowerCase();
+              return Boolean(name) && name === row.senderName.trim().toLowerCase();
+            });
             if (!twin) unique.push(row);
           }
           return unique.slice(-200);
@@ -668,6 +672,7 @@ function ChatPage() {
       toast.error("Open a chat, then send.");
       return;
     }
+    sendLock.current = true;
     const hours = prefs.disappear[thread] || 0;
     const localId = `local-${Date.now()}`;
     const localMessage: ChatMessage = {

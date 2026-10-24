@@ -103,16 +103,21 @@ body {
   overflow: hidden;
 }
 .name {
-  left: 20.1%;
-  top: 48.05%;
-  width: 60%;
-  height: 2.7%;
+  left: 12%;
+  top: 46.15%;
+  width: 76%;
+  height: 4.55%;
+  overflow: visible;
+  align-items: flex-end;
   font-family: "Cormorant Garamond", Georgia, serif;
-  font-size: 2.01cqw;
+  font-size: 2.45cqw;
   font-weight: 700;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.05em;
   color: #1a2256;
   text-transform: uppercase;
+  line-height: 1;
+  z-index: 4;
+  white-space: nowrap;
 }
 .event-name {
   left: 19%;
@@ -193,7 +198,7 @@ body {
     margin: 0;
     page-break-after: always;
   }
-  .name { font-size: 17pt; }
+  .name { font-size: 20pt; overflow: visible; align-items: flex-end; }
   .event-name { font-size: 17pt; }
   .year { font-size: 15pt; }
   .cert-id, .date { font-size: 9.5pt; }
@@ -318,8 +323,7 @@ function wrapCertificateDocument(title: string, sheets: string) {
         }
       }
       window.addEventListener("load", function () {
-        document.querySelectorAll(".name").forEach(function (el) { fitText(el, 17, 11); });
-        document.querySelectorAll(".event-name").forEach(function (el) { fitText(el, 17, 10); });
+        document.querySelectorAll(".event-name").forEach(function (el) { fitText(el, 16, 10); });
       });
     </script>
     <p class="no-print">

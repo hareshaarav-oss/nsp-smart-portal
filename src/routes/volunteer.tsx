@@ -13,7 +13,7 @@ import { Label } from "@/components/ui/label";
 import { htmlForCertificate, openPreparedCertificate, preparedCertificate } from "@/lib/nss/certificates";
 import { daysUntilBirthday, formatLongDate, idCardName, parseDob, todayIso } from "@/lib/nss/format";
 import { openIdCard } from "@/lib/nss/id-card";
-import { blobToDataUrl, compressPassport, rememberPhoto } from "@/lib/nss/media";
+import { blobToDataUrl, compressCardPhoto, compressPassport, rememberPhoto } from "@/lib/nss/media";
 import { findSessionVolunteer, isOfficer, registerFingerprint, useSessionStore } from "@/lib/nss/session";
 import { attendanceOf, bestVolunteer, rsvpOf, useNssStore, volunteerHours } from "@/lib/nss/store";
 import { useUi } from "@/lib/nss/ui-prefs";
@@ -543,15 +543,28 @@ function VolunteerDash() {
                   const file = e.target.files?.[0];
                   e.target.value = "";
                   if (!file) return;
-                  void compressPassport(file).then(({ blob }) => blobToDataUrl(blob)).then((photoUrl) => {
+                  void (async () => {
+                    const [full, card] = await Promise.all([compressPassport(file), compressCardPhoto(file)]);
+                    const photoUrl = await blobToDataUrl(full.blob);
+                    const thumbUrl = await blobToDataUrl(card.blob);
                     updateVolunteer(me.id, { photoUrl });
+                    rememberPhoto([me.volunteerId, me.id, me.fullName.toLowerCase()], photoUrl);
                     const session = useSessionStore.getState().session;
-                    return fetch("/api/nss-cloud", {
+                    const res = await fetch("/api/nss-cloud", {
                       method: "POST",
                       headers: { "content-type": "application/json" },
-                      body: JSON.stringify({ action: "update-profile", username: session?.volunteerId || me.volunteerId || me.id, password: session?.mobile || me.mobile, volunteerId: me.id, photoUrl }),
+                      body: JSON.stringify({
+                        action: "update-profile",
+                        username: session?.volunteerId || me.volunteerId || me.id,
+                        password: session?.mobile || me.mobile,
+                        volunteerId: me.id,
+                        photoUrl,
+                        thumbUrl,
+                      }),
                     });
-                  }).then(() => toast.success("Photo saved.")).catch(() => toast.error("Could not save the photo."));
+                    if (!res.ok) throw new Error("save");
+                    toast.success("Photo saved. It will show on the home page.");
+                  })().catch(() => toast.error("Could not save the photo."));
                 }} />
               </label>
               <label className="text-sm">
@@ -678,6 +691,7 @@ function EditProfile({ volunteerId }: { volunteerId: string }) {
     (s.volunteers ?? []).find((v) => v.id === volunteerId || v.volunteerId === volunteerId),
   );
   const [photoDirty, setPhotoDirty] = useState(false);
+  const [thumbUrl, setThumbUrl] = useState("");
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState(() => profileForm(volunteer));
@@ -701,8 +715,9 @@ function EditProfile({ volunteerId }: { volunteerId: string }) {
   async function onPhoto(file: File | undefined) {
     if (!file) return;
     try {
-      const { blob } = await compressPassport(file);
-      const url = await blobToDataUrl(blob);
+      const [full, card] = await Promise.all([compressPassport(file), compressCardPhoto(file)]);
+      const url = await blobToDataUrl(full.blob);
+      setThumbUrl(await blobToDataUrl(card.blob));
       setPhotoDirty(true);
       setDirty(true);
       setForm((f) => ({ ...f, photoUrl: url }));
@@ -744,7 +759,7 @@ function EditProfile({ volunteerId }: { volunteerId: string }) {
           abcId: form.abcId,
           myBharatId: form.myBharatId,
           emergencyContact: form.emergencyContact,
-          ...(photoDirty && form.photoUrl.startsWith("data:image/") ? { photoUrl: form.photoUrl } : {}),
+          ...(photoDirty && form.photoUrl.startsWith("data:image/") ? { photoUrl: form.photoUrl, ...(thumbUrl.startsWith("data:image/") && thumbUrl.length < 8000 ? { thumbUrl } : {}) } : {}),
         }),
       });
       const data = (await res.json()) as { ok?: boolean; error?: string; docId?: string; volunteer?: OwnProfile };
