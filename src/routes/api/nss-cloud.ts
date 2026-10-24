@@ -1,4 +1,4 @@
-import { loadCollegeCloud, loadStudentRoll, readOneStudent, loadPublicBoard, loadOfficerRoll, collegeQuotaBlocked, saveStudentToCloud, incrementVisitors, readVisitorCount, knownVisitorCount, patchStudent, safePhoto, knownRole, readChatPass, listRecentChatMessages, saveChatMessage, listChatPeople, clearAttendanceCloud, readBrandPhotos, saveBrandPhotos, listPhotoRoster, readPhotoBatch, saveAttendanceMarks, readLive, publishBestVolunteer, publishServiceHours, purgeCloudIds, deleteChatMessages, readChatMedia, readOneChat, patchNotice, upsertNotice, sideDocId, listChatStatuses, readSide, readStudentCerts, saveStudentCerts, markChatRead, chatReads, markThreadCleared, type ChatExtra } from "@/lib/nss/firestore";
+import { loadCollegeCloud, loadStudentRoll, readOneStudent, loadPublicBoard, loadOfficerRoll, collegeQuotaBlocked, saveStudentToCloud, incrementVisitors, readVisitorCount, knownVisitorCount, patchStudent, safePhoto, knownRole, readChatPass, listRecentChatMessages, saveChatMessage, listChatPeople, clearAttendanceCloud, readBrandPhotos, saveBrandPhotos, listPhotoRoster, readPhotoBatch, saveAttendanceMarks, readLive, publishBestVolunteer, publishServiceHours, purgeCloudIds, deleteChatMessages, readChatMedia, readOneChat, patchNotice, upsertNotice, sideDocId, listChatStatuses, readSide, readStudentCerts, saveStudentCerts, markChatRead, chatReads, markThreadCleared, reviseChatMessage, chatBlocked, type ChatExtra } from "@/lib/nss/firestore";
 import { passwordOk, sealText, signChatPass } from "@/lib/nss/seal.server";
 import { createFileRoute } from "@tanstack/react-router";
 
@@ -580,17 +580,22 @@ export const Route = createFileRoute("/api/nss-cloud")({
               return Response.json({ ok: true, media });
             }
             if (body.action === "chat-edit" || body.action === "chat-react" || body.action === "chat-vote" || body.action === "chat-once") {
-              const row = await readOneChat(text(body.messageId));
+              const messageId = text(body.messageId);
+              const recent = await listRecentChatMessages(120).catch(() => []);
+              const row = recent.find((item) => item.id === messageId) || (await readOneChat(messageId));
               if (!row || !canSeeThread(user, canonicalThread(row.threadId))) {
                 return Response.json({ ok: false, error: "That message is not in your chat." }, { status: 404 });
               }
               const extra: ChatExtra = { ...(row.extra ?? {}) };
               if (body.action === "chat-edit") {
                 if (row.senderId !== user.id) return Response.json({ ok: false, error: "You can edit only your own message." }, { status: 403 });
+                if (Date.now() - new Date(row.createdAt).getTime() > 15 * 60 * 1000) {
+                  return Response.json({ ok: false, error: "You can edit a message for 15 minutes." }, { status: 403 });
+                }
                 const message = String(body.text ?? "").split("\u0000").join("").trim().slice(0, 1000);
                 if (!message) return Response.json({ ok: false, error: "Type a message first." }, { status: 400 });
                 extra.editedAt = new Date().toISOString();
-                await patchNotice(row.id, { text: sealText(message), extra: sealText(JSON.stringify(extra).slice(0, 1800)) });
+                await reviseChatMessage(row.id, { text: message, extra });
                 return Response.json({ ok: true, id: row.id, text: message, extra });
               }
               if (body.action === "chat-react") {
@@ -599,7 +604,7 @@ export const Route = createFileRoute("/api/nss-cloud")({
                 if (!emoji || reactions[user.id] === emoji) delete reactions[user.id];
                 else reactions[user.id] = emoji;
                 extra.reactions = reactions;
-                await patchNotice(row.id, { extra: sealText(JSON.stringify(extra).slice(0, 1800)) });
+                await reviseChatMessage(row.id, { extra });
                 return Response.json({ ok: true, id: row.id, extra });
               }
               if (body.action === "chat-vote") {
@@ -611,17 +616,18 @@ export const Route = createFileRoute("/api/nss-cloud")({
                 }
                 poll.votes = { ...(poll.votes ?? {}), [user.id]: String(option) };
                 extra.poll = poll;
-                await patchNotice(row.id, { extra: sealText(JSON.stringify(extra).slice(0, 1800)) });
+                await reviseChatMessage(row.id, { extra });
                 return Response.json({ ok: true, id: row.id, extra });
               }
               extra.opened = true;
-              await patchNotice(row.id, { media: "", mediaType: "", extra: sealText(JSON.stringify(extra).slice(0, 1800)) });
+              await reviseChatMessage(row.id, { extra });
+              void patchNotice(row.id, { media: "", mediaType: "", extra: sealText(JSON.stringify(extra).slice(0, 1800)) }).catch(() => undefined);
               return Response.json({ ok: true, id: row.id, extra });
             }
             if (body.action === "chat-presence" || body.action === "chat-block" || body.action === "chat-status") {
               if (body.action === "chat-presence") {
                 const seenThread = canonicalThread(text(body.threadId));
-                if (seenThread) void markChatRead(user.id, seenThread, new Date().toISOString()).catch(() => undefined);
+                if (seenThread && canSeeThread(user, seenThread)) void markChatRead(user.id, seenThread, new Date().toISOString()).catch(() => undefined);
               }
               if (body.action === "chat-block") {
                 const other = text(body.blockId).replace(/[^A-Za-z0-9-]/g, "").slice(0, 24);
@@ -652,15 +658,17 @@ export const Route = createFileRoute("/api/nss-cloud")({
               const now = new Date().toISOString();
               const keep = await readSide(sideDocId("pre", user.id));
               const hasCall = Object.prototype.hasOwnProperty.call(body, "call");
+              const seenThread = canonicalThread(text(body.threadId));
+              const reading = Boolean(seenThread) && canSeeThread(user, seenThread);
               await upsertNotice(sideDocId("pre", user.id), {
                 kind: "chat-presence",
                 title: "NSS_CHAT_INTERNAL",
                 senderId: user.id,
                 lastSeen: now,
-                typingThread: body.typing ? canonicalThread(text(body.threadId)) : "",
-                typingAt: body.typing ? now : "",
-                readThread: canonicalThread(text(body.threadId)),
-                readAt: now,
+                typingThread: body.typing && reading ? seenThread : "",
+                typingAt: body.typing && reading ? now : "",
+                readThread: reading ? seenThread : text(keep?.readThread),
+                readAt: reading ? now : text(keep?.readAt),
                 call: hasCall ? text(body.call).slice(0, 16) : text(keep?.call),
                 callThread: hasCall ? (body.call ? canonicalThread(text(body.threadId)) : "") : text(keep?.callThread),
                 callAt: hasCall ? (body.call ? now : "") : text(keep?.callAt),
@@ -766,6 +774,12 @@ export const Route = createFileRoute("/api/nss-cloud")({
               if (!validThread(threadId) || !canSeeThread(user, threadId) || (threadId === "channel" && !officer)) {
                 return Response.json({ ok: false, error: "You cannot send to that chat." }, { status: 403 });
               }
+              if (threadId.startsWith("dm:")) {
+                const other = threadId.slice(3).split(":").find((part) => part && part !== user.id) || "";
+                if (other && (await chatBlocked(user.id, other))) {
+                  return Response.json({ ok: false, error: "This chat is blocked." }, { status: 403 });
+                }
+              }
               const pollOptions = Array.isArray(body.pollOptions) ? body.pollOptions.map((item) => text(item).slice(0, 40)).filter(Boolean).slice(0, 4) : [];
               const kind = text(body.kind).slice(0, 16);
               if (!message && !mediaOk && kind !== "poll") return Response.json({ ok: false, error: "Type a message first." }, { status: 400 });
@@ -780,6 +794,7 @@ export const Route = createFileRoute("/api/nss-cloud")({
                 contactName: text(body.contactName).slice(0, 80),
                 contactUnit: text(body.contactUnit).slice(0, 40),
                 forwarded: Boolean(body.forwarded),
+                clientId: text(body.clientId).slice(0, 40),
                 poll: kind === "poll" && pollOptions.length >= 2 ? { q: message.slice(0, 140), options: pollOptions, votes: {} } : undefined,
               };
               const saved = await saveChatMessage({

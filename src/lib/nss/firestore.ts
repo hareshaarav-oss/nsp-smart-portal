@@ -1701,6 +1701,7 @@ export type ChatExtra = {
   contactName?: string;
   contactUnit?: string;
   forwarded?: boolean;
+  clientId?: string;
 };
 
 export type ChatRow = {
@@ -1852,7 +1853,7 @@ function visibleChats(rows: ChatRow[]) {
   return kept;
 }
 
-async function markChatField(field: "reads" | "gone" | "cleared", value: string) {
+async function markChatField(field: "reads" | "gone" | "cleared" | "edits", value: string) {
   const project = process.env.NSS_FIRESTORE_PROJECT_ID?.trim() || "studio-8504026975-1fdbc";
   await fetch(`${FIRESTORE_BASE}:commit`, {
     method: "POST",
@@ -1928,6 +1929,7 @@ function tailRows(value: unknown): ChatRow[] {
         replyText: text(row.replyText).slice(0, 140),
         media: "",
         mediaType: row.mediaType === "video" || row.mediaType === "audio" || row.mediaType === "file" || row.mediaType === "image" ? row.mediaType : "",
+        extra: parseChatExtra(typeof row.extra === "string" ? row.extra : ""),
       });
     } catch {
       /* skip a bad line */
@@ -1936,7 +1938,57 @@ function tailRows(value: unknown): ChatRow[] {
   return rows.sort((a, b) => a.createdAt.localeCompare(b.createdAt)).slice(-80);
 }
 
+function slimExtra(extra?: ChatExtra): ChatExtra | undefined {
+  if (!extra) return undefined;
+  const slim: ChatExtra = {};
+  if (extra.kind) slim.kind = extra.kind.slice(0, 16);
+  if (extra.editedAt) slim.editedAt = extra.editedAt;
+  if (extra.expiresAt) slim.expiresAt = extra.expiresAt.slice(0, 40);
+  if (extra.viewOnce) slim.viewOnce = true;
+  if (extra.opened) slim.opened = true;
+  if (extra.forwarded) slim.forwarded = true;
+  if (extra.clientId) slim.clientId = extra.clientId.slice(0, 40);
+  if (extra.contactName) slim.contactName = extra.contactName.slice(0, 80);
+  if (extra.contactUnit) slim.contactUnit = extra.contactUnit.slice(0, 40);
+  if (extra.fileName) slim.fileName = extra.fileName.slice(0, 40);
+  if (extra.reactions) slim.reactions = Object.fromEntries(Object.entries(extra.reactions).slice(0, 8));
+  if (extra.poll) slim.poll = { q: extra.poll.q.slice(0, 140), options: extra.poll.options.slice(0, 4), votes: extra.poll.votes || {} };
+  return JSON.stringify(slim).length > 2 ? slim : undefined;
+}
+
+function applyChatEdits(rows: ChatRow[], raw: unknown) {
+  const list = Array.isArray(raw) ? raw : [];
+  const latest = new Map<string, { text: string; extra?: ChatExtra; at: string }>();
+  for (const item of list) {
+    if (typeof item !== "string" || !item.startsWith("{")) continue;
+    try {
+      const row = JSON.parse(item) as { id?: string; text?: string; extra?: string; at?: string };
+      if (!row.id || !row.at) continue;
+      const prev = latest.get(row.id);
+      if (prev && prev.at >= row.at) continue;
+      latest.set(row.id, {
+        text: row.text ? openText(row.text).slice(0, 1000) : "",
+        extra: row.extra ? parseChatExtra(row.extra) : undefined,
+        at: row.at,
+      });
+    } catch {
+      /* skip a bad edit */
+    }
+  }
+  if (!latest.size) return rows;
+  return rows.map((row) => {
+    const edit = latest.get(row.id);
+    if (!edit) return row;
+    return {
+      ...row,
+      text: edit.text || row.text,
+      extra: edit.extra ? { ...row.extra, ...edit.extra } : row.extra,
+    };
+  });
+}
+
 async function publishChatTail(row: ChatRow) {
+  const packed = slimExtra(row.extra);
   const slim = JSON.stringify({
     id: row.id,
     threadId: row.threadId,
@@ -1947,6 +1999,7 @@ async function publishChatTail(row: ChatRow) {
     replyName: row.replyName || "",
     replyText: row.replyText || "",
     mediaType: row.mediaType || "",
+    extra: packed ? sealText(JSON.stringify(packed).slice(0, 700)) : "",
   });
   const project = process.env.NSS_FIRESTORE_PROJECT_ID?.trim() || "studio-8504026975-1fdbc";
   const res = await fetch(`${FIRESTORE_BASE}:commit`, {
@@ -1964,6 +2017,44 @@ async function publishChatTail(row: ChatRow) {
     }),
   });
   if (!res.ok) throw new Error("Could not save the message.");
+}
+
+export async function reviseChatMessage(id: string, next: { text?: string; extra?: ChatExtra }) {
+  const safe = text(id);
+  if (!/^chat[a-z0-9]{4,40}$/i.test(safe)) throw new Error("That message was not found.");
+  const current = (chatCache?.rows ?? []).find((row) => row.id === safe);
+  const textBody = next.text !== undefined ? next.text.slice(0, 1000).trim() : current?.text || "";
+  const extra = next.extra ?? current?.extra;
+  if (chatCache) {
+    chatCache = {
+      at: Date.now(),
+      rows: chatCache.rows.map((row) => (row.id === safe ? { ...row, text: textBody || row.text, extra } : row)),
+    };
+  }
+  const packed = slimExtra(extra);
+  const line = JSON.stringify({
+    id: safe,
+    text: textBody ? sealText(textBody) : "",
+    extra: packed ? sealText(JSON.stringify(packed).slice(0, 700)) : "",
+    at: new Date().toISOString(),
+  });
+  await markChatField("edits", line.slice(0, 1800));
+  void patchNotice(safe, {
+    ...(textBody ? { text: sealText(textBody) } : {}),
+    ...(packed ? { extra: sealText(JSON.stringify(packed).slice(0, 900)) } : {}),
+  }).catch(() => undefined);
+}
+
+export async function chatBlocked(leftId: string, rightId: string) {
+  const left = text(leftId);
+  const right = text(rightId);
+  if (!left || !right || left === right) return false;
+  const [mine, theirs] = await Promise.all([
+    readSide(sideDocId("blk", left)).catch(() => null),
+    readSide(sideDocId("blk", right)).catch(() => null),
+  ]);
+  const has = (doc: Record<string, unknown> | null, id: string) => text(doc?.ids).split(",").filter(Boolean).includes(id);
+  return has(mine, right) || has(theirs, left);
 }
 
 export async function listRecentChatMessages(limit = 60): Promise<ChatRow[]> {
@@ -1984,7 +2075,7 @@ export async function listRecentChatMessages(limit = 60): Promise<ChatRow[]> {
           /* skip a bad receipt */
         }
       }
-      const fromTail = tailRows(doc?.recent);
+      const fromTail = applyChatEdits(tailRows(doc?.recent), doc?.edits);
       const cleared = Array.isArray(doc?.cleared) ? doc.cleared : [];
       for (const item of cleared) {
         if (typeof item !== "string" || !item.startsWith("{")) continue;
@@ -2125,12 +2216,22 @@ export async function saveChatMessage(input: { threadId: string; text: string; s
     createdAt: new Date().toISOString(),
   };
   const recent = visibleChats(chatCache?.rows ?? []);
+  const clientId = input.extra?.clientId?.slice(0, 40) || "";
+  const sameClient = clientId
+    ? recent.find((row) => row.senderId === input.senderId && row.extra?.clientId === clientId)
+    : undefined;
+  if (sameClient) return sameClient;
   const twin = recent.find((row) => sameChatBubble(row, draft));
   if (twin && !input.media) return twin;
   if (!twin && !collegeQuotaBlocked()) {
     try {
       const doc = await getDocument("portalSettings/chatlog");
-      const stored = visibleChats(tailRows(doc?.recent)).find((row) => sameChatBubble(row, draft));
+      const storedRows = visibleChats(applyChatEdits(tailRows(doc?.recent), doc?.edits));
+      const storedClient = clientId
+        ? storedRows.find((row) => row.senderId === input.senderId && row.extra?.clientId === clientId)
+        : undefined;
+      if (storedClient) return storedClient;
+      const stored = storedRows.find((row) => sameChatBubble(row, draft));
       if (stored && !input.media) return stored;
     } catch {
       /* a busy register still accepts a new message */

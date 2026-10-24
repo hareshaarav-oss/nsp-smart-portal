@@ -1,6 +1,6 @@
 import { createFileRoute, Navigate, useRouter } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
-import { ArrowLeft, Camera, Check, CheckCheck, Copy, Download, FileText, Lock, MapPin, Mic, MoreVertical, Paperclip, Phone, PhoneOff, Reply, Search, SendHorizonal, Smile, Star, Trash2, UserRound, Video, X } from "lucide-react";
+import { ArrowLeft, Camera, Check, CheckCheck, Copy, Download, FileText, Lock, MapPin, Mic, MoreVertical, Paperclip, Reply, Search, SendHorizonal, Smile, Star, Trash2, UserRound, X } from "lucide-react";
 import { useUi } from "@/lib/nss/ui-prefs";
 import { toast } from "sonner";
 import { AppShell } from "@/components/nss/shell";
@@ -27,6 +27,8 @@ type ChatExtra = {
   contactName?: string;
   contactUnit?: string;
   forwarded?: boolean;
+  clientId?: string;
+  failed?: boolean;
 };
 type ChatMessage = {
   id: string;
@@ -246,7 +248,6 @@ function ChatPage() {
   const [reads, setReads] = useState<{ id: string; thread: string; at: string }[]>([]);
   const [selected, setSelected] = useState<string[]>([]);
   const [statuses, setStatuses] = useState<{ id: string; text: string; senderId: string; senderName: string; createdAt: string }[]>([]);
-  const [callOn, setCallOn] = useState<"" | "audio" | "video">("");
   const [viewOnce, setViewOnce] = useState(false);
   const [forwarded, setForwarded] = useState(false);
   const [away, setAway] = useState(false);
@@ -331,7 +332,17 @@ function ChatPage() {
             headers: { "content-type": "application/json" },
             body: JSON.stringify({ ...body, chatToken: token }),
           });
-          if (!res.ok) left.push(body);
+          const data = (await res.json()) as { ok?: boolean; message?: ChatMessage };
+          if (!res.ok || !data.ok || !data.message) {
+            left.push(body);
+            continue;
+          }
+          const clientId = typeof body.clientId === "string" ? body.clientId : "";
+          const saved = data.message;
+          setMessages((current) => [
+            ...current.filter((row) => row.id !== clientId && row.extra?.clientId !== clientId && row.id !== saved.id),
+            saved,
+          ]);
         } catch {
           left.push(body);
         }
@@ -350,11 +361,6 @@ function ChatPage() {
   }, [token]);
 
   useEffect(() => {
-    if (localVideo.current && localStream.current) localVideo.current.srcObject = localStream.current;
-    if (remoteVideo.current && remoteStream.current) remoteVideo.current.srcObject = remoteStream.current;
-  }, [callOn]);
-
-  useEffect(() => {
     const onVis = () => setAway(document.hidden);
     document.addEventListener("visibilitychange", onVis);
     return () => document.removeEventListener("visibilitychange", onVis);
@@ -371,11 +377,6 @@ function ChatPage() {
   useEffect(() => {
     draftRef.current = draft;
   }, [draft]);
-
-  useEffect(() => {
-    if (peer?.call !== "answer" || !peer.sdp || !callPeer.current?.localDescription) return;
-    void callPeer.current.setRemoteDescription({ type: "answer", sdp: peer.sdp }).catch(() => undefined);
-  }, [peer]);
 
   useEffect(() => {
     if (!session || session.role === "po" || session.role === "admin") return;
@@ -448,15 +449,17 @@ function ChatPage() {
           }
           for (const row of [...map.values()]) {
             if (!row.id.startsWith("local-")) continue;
-            const sent = [...map.values()].some(
-              (other) =>
-                other.id !== row.id &&
-                !other.id.startsWith("local-") &&
+            const clientId = row.extra?.clientId;
+            const sent = [...map.values()].some((other) => {
+              if (other.id === row.id || other.id.startsWith("local-")) return false;
+              if (clientId && other.extra?.clientId === clientId) return true;
+              return (
                 canonicalThread(other.threadId) === canonicalThread(row.threadId) &&
                 other.text.trim() === row.text.trim() &&
                 row.text.trim().length > 0 &&
-                Math.abs(new Date(other.createdAt).getTime() - new Date(row.createdAt).getTime()) < 90000,
-            );
+                Math.abs(new Date(other.createdAt).getTime() - new Date(row.createdAt).getTime()) < 90000
+              );
+            });
             if (sent) map.delete(row.id);
           }
           const kept = [...map.values()].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
@@ -528,7 +531,9 @@ function ChatPage() {
 
   useEffect(() => {
     if (!token) return;
-    const other = active.startsWith("dm:") ? active.slice(3).split(":").find((part) => part !== (me?.id || "")) || "" : "";
+    const open = !mobileList || window.innerWidth >= 1280;
+    const thread = open ? canonicalThread(active) : "";
+    const other = thread.startsWith("dm:") ? thread.slice(3).split(":").find((part) => part !== (me?.id || "")) || "" : "";
     let stop = false;
     const push = () => {
       void fetch("/api/nss-cloud", {
@@ -537,9 +542,9 @@ function ChatPage() {
         body: JSON.stringify({
           action: "chat-presence",
           chatToken: token,
-          threadId: active,
+          threadId: thread,
           peerId: other,
-          typing: draftRef.current.trim().length > 0,
+          typing: open && draftRef.current.trim().length > 0,
         }),
       })
         .then((res) => res.json())
@@ -551,12 +556,12 @@ function ChatPage() {
         .catch(() => undefined);
     };
     push();
-    const timer = window.setInterval(push, callOn ? 8000 : 20000);
+    const timer = window.setInterval(push, 20000);
     return () => {
       stop = true;
       window.clearInterval(timer);
     };
-  }, [token, active, me?.id, callOn]);
+  }, [token, active, me?.id, mobileList]);
 
   useEffect(() => {
     const node = scroller.current;
@@ -732,7 +737,7 @@ function ChatPage() {
       replyText: reply?.text || "",
       media: attachment?.media || "",
       mediaType: attachment?.mediaType || "",
-      extra: forwarded ? { forwarded: true } : undefined,
+      extra: { ...(forwarded ? { forwarded: true } : {}), clientId: localId },
     };
     if (attachment?.media) mediaBag.current.set(localId, attachment);
     setMessages((current) => [...current, localMessage]);
@@ -756,6 +761,7 @@ function ChatPage() {
       media: attachment?.media || "",
       mediaType: attachment?.mediaType || "",
       fileName: attachment?.name || "",
+      clientId: localId,
       kind: pollOn ? "poll" : attachment?.mediaType === "file" ? "file" : "",
       pollOptions: pollOn ? pollOptions.split(",").map((item) => item.trim()).filter(Boolean) : [],
       expiresAt: hours ? new Date(Date.now() + hours * 3600000).toISOString() : "",
@@ -782,22 +788,24 @@ function ChatPage() {
           toast.error(message);
           return;
         }
-        const queued = JSON.parse(localStorage.getItem("nsp-chat-out") || "[]") as { threadId?: string; text?: string }[];
-        if (!queued.some((item) => item.threadId === payload.threadId && item.text === payload.text)) {
+        const queued = JSON.parse(localStorage.getItem("nsp-chat-out") || "[]") as { threadId?: string; text?: string; clientId?: string }[];
+        if (!queued.some((item) => item.clientId === localId || (item.threadId === payload.threadId && item.text === payload.text))) {
           queued.push(payload);
           localStorage.setItem("nsp-chat-out", JSON.stringify(queued.slice(-15)));
         }
+        setMessages((current) => current.map((row) => (row.id === localId ? { ...row, extra: { ...row.extra, failed: true, clientId: localId } } : row)));
         return;
       }
       if (attachment?.media && data.message.mediaType) mediaBag.current.set(data.message.id, { media: data.message.media || attachment.media, mediaType: attachment.mediaType });
       setMessages((current) => [...current.filter((row) => row.id !== localId && row.id !== data.message?.id), { ...data.message!, media: data.message!.media || attachment?.media || "", mediaType: data.message!.mediaType || attachment?.mediaType || "" }]);
       if ((session?.role === "po" || session?.role === "admin") && active.startsWith("dm:") && alsoWa && phoneFor(otherId())) openWhatsAppChat(text);
     } catch {
-      const queued = JSON.parse(localStorage.getItem("nsp-chat-out") || "[]") as { threadId?: string; text?: string }[];
-      if (!queued.some((item) => item.threadId === payload.threadId && item.text === payload.text)) {
+      const queued = JSON.parse(localStorage.getItem("nsp-chat-out") || "[]") as { threadId?: string; text?: string; clientId?: string }[];
+      if (!queued.some((item) => item.clientId === localId || (item.threadId === payload.threadId && item.text === payload.text))) {
         queued.push(payload);
         localStorage.setItem("nsp-chat-out", JSON.stringify(queued.slice(-15)));
       }
+      setMessages((current) => current.map((row) => (row.id === localId ? { ...row, extra: { ...row.extra, failed: true, clientId: localId } } : row)));
     } finally {
       sendLock.current = false;
     }
@@ -884,86 +892,44 @@ function ChatPage() {
     void postChat({ text: name, kind: "contact", contactName: name, contactUnit: unit }, active).catch((error) => toast.error(error instanceof Error ? error.message : "Contact was not sent."));
   }
 
-  const callPeer = useRef<RTCPeerConnection | null>(null);
-  const localStream = useRef<MediaStream | null>(null);
-  const remoteStream = useRef<MediaStream | null>(null);
-  const localVideo = useRef<HTMLVideoElement>(null);
-  const remoteVideo = useRef<HTMLVideoElement>(null);
-
-  function waitIce(pc: RTCPeerConnection) {
-    if (pc.iceGatheringState === "complete") return Promise.resolve();
-    return new Promise<void>((resolve) => {
-      const done = () => {
-        if (pc.iceGatheringState === "complete") {
-          clearTimeout(timer);
-          pc.removeEventListener("icegatheringstatechange", done);
-          resolve();
-        }
-      };
-      const timer = setTimeout(() => {
-        pc.removeEventListener("icegatheringstatechange", done);
-        resolve();
-      }, 2200);
-      pc.addEventListener("icegatheringstatechange", done);
-    });
-  }
-
-  async function ring(kind: "" | "audio" | "video" | "answer", sdp = "") {
-    if (!navigator.onLine) return;
-    await fetch("/api/nss-cloud", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ action: "chat-presence", chatToken: token, threadId: active, peerId: otherId(), call: kind, sdp, typing: false }),
-    });
-  }
-
-  function endCall() {
-    localStream.current?.getTracks().forEach((track) => track.stop());
-    remoteStream.current?.getTracks().forEach((track) => track.stop());
-    localStream.current = null;
-    remoteStream.current = null;
-    callPeer.current?.close();
-    callPeer.current = null;
-    setCallOn("");
-    void ring("");
-  }
-
-  async function startCall(kind: "audio" | "video", remoteSdp?: string) {
+  async function retrySend(message: ChatMessage) {
+    if (sendLock.current || !message.id.startsWith("local-") || !message.extra?.failed) return;
+    sendLock.current = true;
+    setMessages((current) => current.map((row) => (row.id === message.id ? { ...row, extra: { ...row.extra, failed: false } } : row)));
+    const payload = {
+      action: "chat-send",
+      chatToken: token,
+      threadId: canonicalThread(message.threadId),
+      text: message.text,
+      replyName: message.replyName || "",
+      replyText: message.replyText || "",
+      media: message.media || "",
+      mediaType: message.mediaType || "",
+      fileName: message.extra?.fileName || "",
+      clientId: message.extra?.clientId || message.id,
+      kind: message.extra?.kind || "",
+      forwarded: Boolean(message.extra?.forwarded),
+      viewOnce: Boolean(message.extra?.viewOnce),
+    };
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: kind === "video" });
-      localStream.current = stream;
-      const pc = new RTCPeerConnection({
-        iceServers: [
-          { urls: "stun:stun.l.google.com:19302" },
-          { urls: "stun:stun1.l.google.com:19302" },
-          { urls: "turn:openrelay.metered.ca:80", username: "openrelayproject", credential: "openrelayproject" },
-          { urls: "turn:openrelay.metered.ca:443", username: "openrelayproject", credential: "openrelayproject" },
-          { urls: "turn:openrelay.metered.ca:443?transport=tcp", username: "openrelayproject", credential: "openrelayproject" },
-        ],
+      if (!navigator.onLine) throw new Error("offline");
+      const res = await fetch("/api/nss-cloud", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(payload),
       });
-      callPeer.current = pc;
-      stream.getTracks().forEach((track) => pc.addTrack(track, stream));
-      pc.ontrack = (event) => {
-        const remote = event.streams[0];
-        if (!remote) return;
-        remoteStream.current = remote;
-        if (remoteVideo.current) remoteVideo.current.srcObject = remote;
-      };
-      setCallOn(kind);
-      if (remoteSdp) {
-        await pc.setRemoteDescription({ type: "offer", sdp: remoteSdp });
-        await pc.setLocalDescription(await pc.createAnswer());
-        await waitIce(pc);
-        await ring("answer", pc.localDescription?.sdp || "");
-      } else {
-        await pc.setLocalDescription(await pc.createOffer());
-        await waitIce(pc);
-        await ring(kind, pc.localDescription?.sdp || "");
-      }
-      if (localVideo.current) localVideo.current.srcObject = stream;
-    } catch {
-      endCall();
-      toast.error("Allow the microphone to start the call.");
+      const data = (await res.json()) as { ok?: boolean; error?: string; message?: ChatMessage };
+      if (!res.ok || !data.ok || !data.message) throw new Error(data.error || "Message was not sent.");
+      if (message.media && data.message.mediaType) mediaBag.current.set(data.message.id, { media: message.media, mediaType: message.mediaType || "file" });
+      setMessages((current) => [
+        ...current.filter((row) => row.id !== message.id && row.id !== data.message?.id),
+        { ...data.message, media: data.message.media || message.media || "", mediaType: data.message.mediaType || message.mediaType || "" },
+      ]);
+    } catch (error) {
+      setMessages((current) => current.map((row) => (row.id === message.id ? { ...row, extra: { ...row.extra, failed: true } } : row)));
+      toast.error(error instanceof Error ? error.message : "Message was not sent.");
+    } finally {
+      sendLock.current = false;
     }
   }
 
@@ -1086,6 +1052,7 @@ function ChatPage() {
 
   function talk(list: ChatMessage[], threadId: string, showNames: boolean) {
     const chosen = list.find((message) => message.id === picked);
+    const shown = list.filter((message) => !prefs.hidden.includes(message.id) && (!starredOn || prefs.stars.includes(message.id)) && (!finder || `${message.text} ${message.senderName}`.toLowerCase().includes(finder.toLowerCase())));
     return (
       <>
         <div
@@ -1098,7 +1065,8 @@ function ChatPage() {
           style={{ backgroundColor: prefs.wallpaper }}
           className="min-h-0 flex-1 space-y-1 overflow-y-auto bg-[radial-gradient(#d9d0c3_0.6px,transparent_0.6px)] bg-[length:16px_16px] px-3 py-3"
         >
-          {list.filter((message) => !prefs.hidden.includes(message.id) && (!starredOn || prefs.stars.includes(message.id)) && (!finder || `${message.text} ${message.senderName}`.toLowerCase().includes(finder.toLowerCase()))).map((message, index, shown) => {
+          {shown.length === 0 ? <p className="mx-auto my-8 w-fit rounded-full bg-white/80 px-3 py-1 text-[12px] text-[#54656f]">No messages yet</p> : null}
+          {shown.map((message, index) => {
             const mine = message.senderId === me?.id || message.senderId === meId;
             const previous = shown[index - 1];
             const showDay = !previous || previous.createdAt.slice(0, 10) !== message.createdAt.slice(0, 10);
@@ -1189,7 +1157,14 @@ function ChatPage() {
                       {prefs.stars.includes(message.id) ? <Star className="size-3 fill-current" /> : null}
                       {extra.editedAt ? <span>Edited</span> : null}
                       {clock(message.createdAt)}
-                      {mine ? read ? <CheckCheck className="size-3.5 text-[#53bdeb]" /> : <Check className="size-3.5 text-[#8696a0]" /> : null}
+                      {mine && message.id.startsWith("local-") ? (
+                        extra.failed ? (
+                          <button type="button" className="text-[10px] font-medium text-red-700" onClick={(event) => { event.stopPropagation(); void retrySend(message); }}>Not sent</button>
+                        ) : (
+                          <span className="text-[10px]">Sending</span>
+                        )
+                      ) : null}
+                      {mine && !message.id.startsWith("local-") ? (read ? <CheckCheck className="size-3.5 text-[#53bdeb]" /> : <Check className="size-3.5 text-[#8696a0]" />) : null}
                     </p>
                   </div>
                 </div>
@@ -1214,7 +1189,7 @@ function ChatPage() {
             <button type="button" className="inline-flex items-center gap-1 rounded-full px-2 py-1.5 text-xs text-navy" onClick={() => { setDraft(chosen.text); setForwarded(true); setPicked(""); }}>
               Forward
             </button>
-            {chosen.senderId === me?.id || chosen.senderId === meId ? (
+            {(chosen.senderId === me?.id || chosen.senderId === meId) && !chosen.id.startsWith("local-") && Date.now() - new Date(chosen.createdAt).getTime() <= 15 * 60 * 1000 ? (
               <button type="button" className="inline-flex items-center gap-1 rounded-full px-2 py-1.5 text-xs text-navy" onClick={() => { const next = window.prompt("Edit message", chosen.text); if (next && next.trim()) void patchMessage("chat-edit", chosen.id, { text: next.trim() }).catch((error) => toast.error(error instanceof Error ? error.message : "Edit was not saved.")); }}>
                 Edit
               </button>
@@ -1537,16 +1512,10 @@ function ChatPage() {
                     : peer?.lastSeen
                       ? `last seen ${clock(peer.lastSeen)}`
                       : active.startsWith("dm:")
-                        ? "encrypted"
+                        ? "private"
                         : GROUPS.find((group) => group.id === active)?.subtitle}
               </p>
             </div>
-            {active.startsWith("dm:") ? (
-              <>
-                <button type="button" className="rounded-full p-2 hover:bg-white/10" aria-label="Voice call" onClick={() => void startCall("audio")}><Phone className="size-4" /></button>
-                <button type="button" className="rounded-full p-2 hover:bg-white/10" aria-label="Video call" onClick={() => void startCall("video")}><Video className="size-4" /></button>
-              </>
-            ) : null}
             <button type="button" className="rounded-full p-2 hover:bg-white/10" aria-label="Menu" onClick={() => { setMenuMore(false); setMenu((on) => !on); }}>
               <MoreVertical className="size-5" />
             </button>
@@ -1573,7 +1542,24 @@ function ChatPage() {
                   ["Mark as unread", () => togglePref("marked", canonicalThread(active))],
                   ["Dark mode", () => savePrefs({ ...prefs, dark: !prefs.dark })],
                   ["Chat lock", () => { const pin = window.prompt("4 digit chat lock", ""); if (pin && pin.length >= 4) { savePrefs({ ...prefs, lock: pinHash(pin) }); setUnlocked(false); } }],
-                  ["Block", () => { if (active.startsWith("dm:")) void fetch("/api/nss-cloud", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "chat-block", chatToken: token, blockId: otherId() }) }); }],
+                  ["Block", () => {
+                    if (!active.startsWith("dm:")) return;
+                    const who = otherId();
+                    void fetch("/api/nss-cloud", {
+                      method: "POST",
+                      headers: { "content-type": "application/json" },
+                      body: JSON.stringify({ action: "chat-block", chatToken: token, blockId: who }),
+                    })
+                      .then((res) => res.json())
+                      .then((data: { ok?: boolean; error?: string; blocked?: string[] }) => {
+                        if (!data.ok) {
+                          toast.error(data.error || "Could not update the block.");
+                          return;
+                        }
+                        toast((data.blocked || []).includes(who) ? "Blocked" : "Unblocked");
+                      })
+                      .catch(() => toast.error("Could not update the block."));
+                  }],
                   ["Status", () => { const status = window.prompt("Status", ""); if (status?.trim()) void fetch("/api/nss-cloud", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "chat-status", chatToken: token, text: status.trim() }) }); }],
                   ["Broadcast", () => { if (officer) void broadcast(); }],
                   ["Archived chats", () => setArchivesOn((on) => !on)],
@@ -1593,21 +1579,6 @@ function ChatPage() {
                   {status.senderName.split(" ")[0]}
                 </button>
               ))}
-            </div>
-          ) : null}
-          {callOn ? (
-            <div className="absolute inset-0 z-40 flex flex-col bg-[#111b21] text-white">
-              <video ref={remoteVideo} autoPlay playsInline className={`min-h-0 flex-1 bg-black object-cover ${callOn === "audio" ? "hidden" : ""}`} />
-              {callOn === "audio" ? <div className="flex flex-1 flex-col items-center justify-center"><span className="flex size-24 items-center justify-center rounded-full bg-[#00a884] text-3xl">{threadTitle(active).slice(0, 1)}</span><p className="mt-4 text-lg">{threadTitle(active)}</p><p className="text-sm text-white/70">Voice call</p></div> : null}
-              <video ref={localVideo} autoPlay muted playsInline className={`absolute right-3 top-4 h-36 w-24 rounded-xl object-cover ${callOn === "audio" ? "hidden" : ""}`} />
-              <div className="flex justify-center pb-8 pt-4">
-                <button type="button" className="rounded-full bg-red-600 p-4" aria-label="End call" onClick={() => endCall()}><PhoneOff className="size-6" /></button>
-              </div>
-            </div>
-          ) : (peer?.call === "audio" || peer?.call === "video") && peer.callThread === canonicalThread(active) ? (
-            <div className="absolute inset-x-0 top-16 z-30 mx-3 flex items-center justify-between rounded-2xl bg-[#111b21] px-4 py-3 text-sm text-white">
-              <span>Incoming {peer.call} call</span>
-              <button type="button" className="rounded-full bg-[#00a884] px-3 py-1" onClick={() => void startCall(peer.call === "video" ? "video" : "audio", peer.sdp)}>Answer</button>
             </div>
           ) : null}
           {!token ? <div className="flex flex-1" /> : talk(threadMessages, canonicalThread(active), !active.startsWith("dm:"))}
