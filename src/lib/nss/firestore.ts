@@ -280,7 +280,7 @@ async function loadCollegeCloudFresh(opts: { gallery?: boolean; photos?: boolean
   await readPurgedIds().catch(() => undefined);
   const studentsOnly = opts.studentsOnly === true;
   const withAttendance = opts.attendance === true && !studentsOnly;
-  const [students, eventDocs, noticeDocs, attendanceDocs, galleryDocs, stats, visitorsDoc] =
+  const [students, eventDocs, noticeDocs, attendanceDocs, galleryDocs, stats, visitorsDoc, liveDoc] =
     await Promise.all([
       listCollection("students", { photos: opts.photos !== false }),
       studentsOnly ? Promise.resolve([]) : listCollection("events"),
@@ -289,6 +289,7 @@ async function loadCollegeCloudFresh(opts: { gallery?: boolean; photos?: boolean
       studentsOnly || opts.gallery === false ? Promise.resolve([]) : listCollection("gallery", { maxDocs: 24 }),
       studentsOnly ? Promise.resolve(null) : getDocument("portalSettings/publicStats"),
       studentsOnly ? Promise.resolve(null) : getDocument("portalSettings/visitors"),
+      studentsOnly ? Promise.resolve(null) : getDocument("portalSettings/live"),
     ]);
 
   if (!students.length && !eventDocs.length && !noticeDocs.length) return null;
@@ -471,14 +472,14 @@ async function loadCollegeCloudFresh(opts: { gallery?: boolean; photos?: boolean
   }).length;
 
   const computedHours = computeServiceHours(events, attendance);
-  const storedHours = Number(stats?.serviceHours ?? 0);
+  const storedHours = Math.max(Number(stats?.serviceHours ?? 0), Number(liveDoc?.serviceHours ?? 0));
   return {
     volunteers,
     events,
     attendance,
     notices,
     gallery,
-    visitors: Number(visitorsDoc?.count ?? 0),
+    visitors: Math.max(Number(visitorsDoc?.count ?? 0), Number(liveDoc?.visitors ?? 0)),
     alumniCount,
     serviceHours: Math.max(storedHours, computedHours),
   };
@@ -604,10 +605,10 @@ export async function markBoardStale() {
   officerCache = null;
   if (collegeQuotaBlocked()) return;
   try {
-    await fetch(`${FIRESTORE_BASE}/portalSettings/board?updateMask.fieldPaths=stale`, {
+    await fetch(`${FIRESTORE_BASE}/portalSettings/publicStats?updateMask.fieldPaths=rollStale`, {
       method: "PATCH",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ fields: { stale: { booleanValue: true } } }),
+      body: JSON.stringify({ fields: { rollStale: { booleanValue: true } } }),
     });
   } catch {
     /* the board expires on its own */
@@ -701,17 +702,18 @@ async function readBoard(): Promise<{ data: CloudPortal; galleryCount: number | 
   }
   let doc: Record<string, unknown> | null = null;
   try {
-    doc = await getDocument("portalSettings/board");
+    doc = await getDocument("portalSettings/publicStats");
   } catch {
     return publicCache ? { data: publicCache.data, galleryCount: publicCache.galleryReady ? publicCache.data.gallery.length : null, fresh: true } : null;
   }
-  if (!doc) return null;
+  const payload = text(doc?.roll);
+  if (!payload) return null;
   try {
-    const parsed = JSON.parse(text(doc.payload)) as CloudPortal;
+    const parsed = JSON.parse(payload) as CloudPortal;
     if (!parsed || !Array.isArray(parsed.volunteers) || parsed.volunteers.length < 1) return null;
-    const updatedAt = Date.parse(text(doc.updatedAt));
-    const fresh = doc.stale !== true && Number.isFinite(updatedAt) && Date.now() - updatedAt <= BOARD_TTL_MS;
-    const rawCount = doc.galleryCount;
+    const updatedAt = Date.parse(text(doc?.rollUpdatedAt));
+    const fresh = doc?.rollStale !== true && Number.isFinite(updatedAt) && Date.now() - updatedAt <= BOARD_TTL_MS;
+    const rawCount = doc?.galleryCount;
     const galleryCount = typeof rawCount === "number" && Number.isFinite(rawCount) ? rawCount : null;
     return { data: parsed, galleryCount, fresh };
   } catch {
@@ -725,30 +727,28 @@ async function writeBoard(data: CloudPortal) {
   const payload = JSON.stringify(shaped);
   if (payload.length > 900000) return;
   const fields = {
-    payload: { stringValue: payload },
-    stale: { booleanValue: false },
-    updatedAt: { stringValue: new Date().toISOString() },
+    roll: { stringValue: payload },
+    rollStale: { booleanValue: false },
+    rollUpdatedAt: { stringValue: new Date().toISOString() },
     volunteers: { integerValue: String(shaped.volunteers.length) },
     galleryCount: { integerValue: String(shaped.gallery.length) },
+    activeStudents: { integerValue: String(shaped.volunteers.filter((v) => v.status !== "alumni").length) },
+    serviceHours: { integerValue: String(Math.max(0, Math.round(shaped.serviceHours || 0))) },
+    cloudTouch: { nullValue: null },
   };
-  const patch = await fetch(
-    `${FIRESTORE_BASE}/portalSettings/board?updateMask.fieldPaths=payload&updateMask.fieldPaths=stale&updateMask.fieldPaths=updatedAt&updateMask.fieldPaths=volunteers&updateMask.fieldPaths=galleryCount`,
-    {
-      method: "PATCH",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ fields }),
-    },
-  );
+  const mask = ["roll", "rollStale", "rollUpdatedAt", "volunteers", "galleryCount", "activeStudents", "serviceHours", "cloudTouch"]
+    .map((field) => `updateMask.fieldPaths=${field}`)
+    .join("&");
+  const patch = await fetch(`${FIRESTORE_BASE}/portalSettings/publicStats?${mask}`, {
+    method: "PATCH",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ fields }),
+  });
   if (patch.status === 429 || patch.status === 503) {
     noteQuota();
     return;
   }
-  if (patch.ok) return;
-  await fetch(`${FIRESTORE_BASE}/portalSettings?documentId=board`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ fields }),
-  });
+  if (!patch.ok) return;
 }
 
 let boardRebuildAt = 0;
