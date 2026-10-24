@@ -3,18 +3,18 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import { MediaThumb } from "@/components/nss/media-thumb";
 import type { GalleryItem } from "@/lib/nss/types";
 
-export function PhotoCarousel({ items }: { items: GalleryItem[] }) {
+export function PhotoCarousel({ items, auto = true, seconds = 5 }: { items: GalleryItem[]; auto?: boolean; seconds?: number }) {
   const photos = items.filter((item) => item.src || item.mediaKey).slice(0, 16);
   const [index, setIndex] = useState(0);
   const [paused, setPaused] = useState(false);
 
   useEffect(() => {
-    if (photos.length < 2 || paused) return;
+    if (photos.length < 2 || paused || auto === false) return;
     const timer = window.setInterval(() => {
       setIndex((current) => (current + 1) % photos.length);
-    }, 3500);
+    }, Math.max(2, seconds) * 1000);
     return () => window.clearInterval(timer);
-  }, [photos.length, paused]);
+  }, [photos.length, paused, auto, seconds]);
 
   useEffect(() => {
     if (index >= photos.length) setIndex(0);

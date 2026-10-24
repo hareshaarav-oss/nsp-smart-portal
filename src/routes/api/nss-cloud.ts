@@ -1,4 +1,4 @@
-import { loadCollegeCloud, loadStudentRoll, readOneStudent, loadPublicBoard, loadOfficerRoll, collegeQuotaBlocked, saveStudentToCloud, incrementVisitors, readVisitorCount, knownVisitorCount, patchStudent, safePhoto, knownRole, readChatPass, listRecentChatMessages, saveChatMessage, listChatPeople, clearAttendanceCloud, readBrandPhotos, saveBrandPhotos, listPhotoRoster, readPhotoBatch, saveAttendanceMarks, readLive, publishBestVolunteer, publishServiceHours, purgeCloudIds, deleteChatMessages, readChatMedia, readOneChat, patchNotice, upsertNotice, sideDocId, listChatStatuses, readSide, readStudentCerts, saveStudentCerts, markChatRead, chatReads, markThreadCleared, reviseChatMessage, chatBlocked, type ChatExtra } from "@/lib/nss/firestore";
+import { loadCollegeCloud, loadStudentRoll, readOneStudent, loadPublicBoard, loadOfficerRoll, collegeQuotaBlocked, saveStudentToCloud, incrementVisitors, readVisitorCount, knownVisitorCount, patchStudent, safePhoto, knownRole, readChatPass, listRecentChatMessages, saveChatMessage, listChatPeople, clearAttendanceCloud, readBrandPhotos, saveBrandPhotos, listPhotoRoster, readPhotoBatch, saveAttendanceMarks, readLive, publishBestVolunteer, publishServiceHours, purgeCloudIds, deleteChatMessages, readChatMedia, readOneChat, patchNotice, upsertNotice, sideDocId, listChatStatuses, readSide, readStudentCerts, saveStudentCerts, markChatRead, chatReads, markThreadCleared, reviseChatMessage, chatBlocked, readHomeSlides, type ChatExtra } from "@/lib/nss/firestore";
 import { passwordOk, sealText, signChatPass } from "@/lib/nss/seal.server";
 import { createFileRoute } from "@tanstack/react-router";
 
@@ -364,15 +364,16 @@ export const Route = createFileRoute("/api/nss-cloud")({
       GET: async ({ request }) => {
         const includeGallery = new URL(request.url).searchParams.get("gallery") === "1";
         try {
-          const data = await loadPublicBoard({ gallery: includeGallery });
+          const data = await loadPublicBoard({ gallery: false });
           if (!data || data.volunteers.length < 1) {
             return Response.json(degradedBody(), {
               headers: { "cache-control": "public, max-age=20, s-maxage=20" },
             });
           }
-          const brand = collegeQuotaBlocked() ? { poPhoto: "", principalPhoto: "" } : await readBrandPhotos();
+          const brand = collegeQuotaBlocked() ? { poPhoto: "", principalPhoto: "", poQuote: "", principalQuote: "" } : await readBrandPhotos();
+          const slides = includeGallery ? await readHomeSlides().catch(() => []) : [];
           return Response.json(
-            { ...publicPayload(data as unknown as Row, includeGallery), brand, degraded: false },
+            { ...publicPayload(data as unknown as Row, false), gallery: includeGallery ? slides : undefined, brand, degraded: false },
             { headers: { "cache-control": "public, max-age=20, s-maxage=30" } },
           );
         } catch (error) {
@@ -445,6 +446,8 @@ export const Route = createFileRoute("/api/nss-cloud")({
             eventName?: string;
             poPhoto?: string;
             principalPhoto?: string;
+            poQuote?: string;
+            principalQuote?: string;
             deskRole?: string;
             all?: boolean;
             unit?: string;
@@ -527,6 +530,8 @@ export const Route = createFileRoute("/api/nss-cloud")({
             const saved = await saveBrandPhotos({
               poPhoto: typeof body.poPhoto === "string" ? body.poPhoto : undefined,
               principalPhoto: typeof body.principalPhoto === "string" ? body.principalPhoto : undefined,
+              poQuote: typeof body.poQuote === "string" ? body.poQuote : undefined,
+              principalQuote: typeof body.principalQuote === "string" ? body.principalQuote : undefined,
             });
             return Response.json({ ok: true, brand: saved });
           }

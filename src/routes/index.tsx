@@ -1,11 +1,14 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useCallback, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { Star } from "lucide-react";
 import { AppShell } from "@/components/nss/shell";
+import { PhotoCarousel } from "@/components/nss/photo-carousel";
 import { SplashScreen } from "@/components/nss/splash";
 import { Badge } from "@/components/ui/badge";
+import { DEFAULT_SETTINGS } from "@/lib/nss/constants";
 import { daysUntilBirthday, formatLongDate, isBirthdayOn, todayIso } from "@/lib/nss/format";
 import { activeVolunteers, alumniVolunteers, bestVolunteer, liveServiceHours, useNssStore, volunteerHours } from "@/lib/nss/store";
+import type { GalleryItem } from "@/lib/nss/types";
 import { useUi } from "@/lib/nss/ui-prefs";
 
 export const Route = createFileRoute("/")({ component: Home });
@@ -81,6 +84,27 @@ function Home() {
   );
 
   const { t } = useUi();
+  const gallery = useNssStore((s) => s.gallery) ?? [];
+  const slides = useMemo(
+    () => gallery.filter((item) => item.src.startsWith("data:image/") && !SEED_IDS.has(item.id)).slice(0, 12),
+    [gallery],
+  );
+  useEffect(() => {
+    let stop = false;
+    void fetch("/api/nss-cloud?gallery=1")
+      .then((res) => res.json())
+      .then((data: { ok?: boolean; gallery?: unknown; brand?: { poPhoto?: string; principalPhoto?: string; poQuote?: string; principalQuote?: string } }) => {
+        if (stop || !data.ok) return;
+        useNssStore.getState().applyCloud({
+          gallery: asHomeSlides(data.gallery),
+          brand: data.brand,
+        });
+      })
+      .catch(() => undefined);
+    return () => {
+      stop = true;
+    };
+  }, []);
   const collegeReady = shownVolunteers > 0;
   const collegeEvents = collegeReady ? events.filter((event) => !SEED_IDS.has(event.id)) : events;
   const collegeNotices = collegeReady ? notices.filter((notice) => !SEED_IDS.has(notice.id)) : notices;
@@ -122,6 +146,19 @@ function Home() {
             <Link to="/login" search={{ role: "po" }} className="underline-offset-4 hover:underline">{t("adminLogin")}</Link>
             <Link to="/verify" search={{ id: "" }} className="underline-offset-4 hover:underline">{t("verify")}</Link>
           </nav>
+
+          {settings.showHomeGallery !== false && slides.length ? (
+            <div className="mt-6">
+              <PhotoCarousel items={slides} auto={settings.heroAutoPlay !== false} seconds={settings.heroIntervalSeconds || 5} />
+            </div>
+          ) : null}
+
+          {settings.showHomeOfficers !== false ? (
+            <div className="mt-6 grid gap-6 sm:grid-cols-2">
+              <HomeOfficer role="Programme Officer" name={settings.poName || DEFAULT_SETTINGS.poName} photo={settings.poPhoto} quote={settings.poQuote?.trim() || DEFAULT_SETTINGS.poQuote} />
+              <HomeOfficer role="Principal" name={settings.principalName || DEFAULT_SETTINGS.principalName} photo={settings.principalPhoto} quote={settings.principalQuote?.trim() || DEFAULT_SETTINGS.principalQuote} />
+            </div>
+          ) : null}
 
           <div className="mt-6 space-y-3">
             {settings.showHomeNotices !== false ? (
@@ -236,6 +273,41 @@ function Home() {
         </section>
       </AppShell>
     </>
+  );
+}
+
+function asHomeSlides(value: unknown): GalleryItem[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const rows: GalleryItem[] = [];
+  for (const row of value) {
+    if (!row || typeof row !== "object") continue;
+    const item = row as Partial<GalleryItem>;
+    if (typeof item.id !== "string" || typeof item.src !== "string" || !item.src.startsWith("data:image/")) continue;
+    rows.push({
+      id: item.id,
+      src: item.src,
+      caption: typeof item.caption === "string" ? item.caption : "NSS activity",
+      date: typeof item.date === "string" ? item.date : "",
+      eventName: typeof item.eventName === "string" ? item.eventName : "",
+      folder: typeof item.folder === "string" ? item.folder : "",
+      kind: "photo",
+    });
+  }
+  return rows.length ? rows : undefined;
+}
+
+function HomeOfficer({ role, name, photo, quote }: { role: string; name: string; photo?: string; quote: string }) {
+  return (
+    <article className="border border-navy/15 bg-card p-4 text-center">
+      <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-saffron">{role}</p>
+      {photo ? (
+        <img src={photo} alt="" className="mx-auto mt-3 h-28 w-24 object-cover ring-1 ring-saffron/40" />
+      ) : (
+        <span className="mx-auto mt-3 flex h-28 w-24 items-center justify-center bg-navy text-2xl font-semibold text-paper">{name.slice(0, 1)}</span>
+      )}
+      <h2 className="mt-3 font-display text-xl text-navy">{name}</h2>
+      <p className="gu mt-2 text-sm leading-relaxed text-muted-foreground">“{quote}”</p>
+    </article>
   );
 }
 

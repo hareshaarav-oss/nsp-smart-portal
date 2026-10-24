@@ -77,7 +77,7 @@ type CloudSlice =
     serviceHours?: number;
     keepPrivate?: boolean;
     degraded?: boolean;
-    brand?: { poPhoto?: string; principalPhoto?: string };
+    brand?: { poPhoto?: string; principalPhoto?: string; poQuote?: string; principalQuote?: string };
   };
 
 type Actions = {
@@ -1040,6 +1040,12 @@ export const useNssStore =
               cloud.brand?.principalPhoto ||
               current.settings.principalPhoto ||
               "",
+            poQuote:
+              cloud.brand?.poQuote ||
+              current.settings.poQuote,
+            principalQuote:
+              cloud.brand?.principalQuote ||
+              current.settings.principalQuote,
           };
 
           if (

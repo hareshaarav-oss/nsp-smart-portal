@@ -34,7 +34,16 @@ function rescueOfficerPhotos() {
       const poPhoto = settings?.poPhoto || "";
       const principalPhoto = settings?.principalPhoto || "";
       if (poPhoto.startsWith("data:image") || principalPhoto.startsWith("data:image")) {
-        sessionStorage.setItem("nsp-rescued-photos", JSON.stringify({ poPhoto, principalPhoto }));
+        const kept = {
+          poPhoto: poPhoto.startsWith("data:image") ? poPhoto : "",
+          principalPhoto: principalPhoto.startsWith("data:image") ? principalPhoto : "",
+        };
+        sessionStorage.setItem("nsp-rescued-photos", JSON.stringify(kept));
+        try {
+          localStorage.setItem("nsp-officer-photos", JSON.stringify(kept));
+        } catch {
+          /* this device cannot keep the photographs */
+        }
       }
       const volunteers = parsed.state?.volunteers || parsed.volunteers || [];
       for (const volunteer of volunteers) {
@@ -48,6 +57,64 @@ function rescueOfficerPhotos() {
     writePhotoCache(cached);
   } catch {
     /* keep going */
+  }
+}
+
+function rememberedOfficerPhotos() {
+  try {
+    const raw = localStorage.getItem("nsp-officer-photos") || sessionStorage.getItem("nsp-rescued-photos") || "";
+    if (!raw) return { poPhoto: "", principalPhoto: "" };
+    const saved = JSON.parse(raw) as { poPhoto?: string; principalPhoto?: string };
+    return {
+      poPhoto: saved.poPhoto?.startsWith("data:image") ? saved.poPhoto : "",
+      principalPhoto: saved.principalPhoto?.startsWith("data:image") ? saved.principalPhoto : "",
+    };
+  } catch {
+    return { poPhoto: "", principalPhoto: "" };
+  }
+}
+
+function applyRememberedOfficerPhotos() {
+  const saved = rememberedOfficerPhotos();
+  if (!saved.poPhoto && !saved.principalPhoto) return;
+  const state = useNssStore.getState();
+  useNssStore.setState({
+    settings: {
+      ...state.settings,
+      poPhoto: state.settings.poPhoto || saved.poPhoto,
+      principalPhoto: state.settings.principalPhoto || saved.principalPhoto,
+    },
+  });
+}
+
+async function publishRememberedBrand() {
+  const session = useSessionStore.getState().session;
+  if (!session?.chatToken || (session.role !== "po" && session.role !== "admin")) return;
+  try {
+    if (sessionStorage.getItem("nsp-brand-pushed") === "1") return;
+  } catch {
+    return;
+  }
+  const saved = rememberedOfficerPhotos();
+  if (!saved.poPhoto && !saved.principalPhoto) return;
+  const state = useNssStore.getState();
+  try {
+    const res = await fetch("/api/nss-cloud", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        action: "save-brand",
+        chatToken: session.chatToken,
+        poPhoto: saved.poPhoto || state.settings.poPhoto || "",
+        principalPhoto: saved.principalPhoto || state.settings.principalPhoto || "",
+        poQuote: state.settings.poQuote || "",
+        principalQuote: state.settings.principalQuote || "",
+      }),
+    });
+    const data = (await res.json()) as { ok?: boolean };
+    if (res.ok && data.ok) sessionStorage.setItem("nsp-brand-pushed", "1");
+  } catch {
+    /* the officer can save again from settings */
   }
 }
 
@@ -285,6 +352,7 @@ export function HydrateGate({ children }: { children: ReactNode }) {
       if (!cancelled) {
         applyBody(cloud);
         applyCachedPhotos();
+        applyRememberedOfficerPhotos();
       }
     }
 
@@ -297,6 +365,8 @@ export function HydrateGate({ children }: { children: ReactNode }) {
           Promise.resolve(useSessionStore.persist.rehydrate()),
         ]);
         applyCachedPhotos();
+        applyRememberedOfficerPhotos();
+        void publishRememberedBrand();
         const session = useSessionStore.getState().session;
         try {
           if (session && localStorage.getItem("nsp-view") === "app") localStorage.removeItem("nsp-view");

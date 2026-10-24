@@ -27,16 +27,18 @@ function SettingsPage() {
   const saveSettings = () => {
     update(draft);
     const token = useSessionStore.getState().session?.chatToken || "";
-    if (token && (draft.poPhoto || draft.principalPhoto)) {
+    if (token) {
       void cloudPost({
         action: "save-brand",
         chatToken: token,
         poPhoto: draft.poPhoto || "",
         principalPhoto: draft.principalPhoto || "",
+        poQuote: draft.poQuote || "",
+        principalQuote: draft.principalQuote || "",
       }).then((result) => {
         if (result.ok) toast.success("Settings saved on this device and the college cloud.");
-        else if (result.queued) toast.success("Settings saved on this device. Photographs will reach the cloud when the internet is back.");
-        else toast.error(result.error || "Photograph stayed on this phone only.");
+        else if (result.queued) toast.success("Settings saved on this device. They will reach the cloud when the internet is back.");
+        else toast.success("Settings saved on this device.");
       });
       return;
     }

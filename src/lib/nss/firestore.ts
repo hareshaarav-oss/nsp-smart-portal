@@ -940,31 +940,38 @@ function smallPublicPhoto(value: unknown) {
   return "";
 }
 
-let brandCache: { at: number; value: { poPhoto: string; principalPhoto: string } } | null = null;
+let brandCache: { at: number; value: { poPhoto: string; principalPhoto: string; poQuote: string; principalQuote: string } } | null = null;
 
 export async function readBrandPhotos() {
-  if (brandCache && Date.now() - brandCache.at < CLOUD_FRESH_MS) return brandCache.value;
-  if (collegeQuotaBlocked()) return brandCache?.value ?? { poPhoto: "", principalPhoto: "" };
+  const empty = { poPhoto: "", principalPhoto: "", poQuote: "", principalQuote: "" };
+  if (brandCache && Date.now() - brandCache.at < 60_000) return brandCache.value;
+  if (collegeQuotaBlocked()) return brandCache?.value ?? empty;
   try {
     const doc = await getDocument("portalSettings/brand");
     const value = {
       poPhoto: safePhoto(doc?.poPhoto),
       principalPhoto: safePhoto(doc?.principalPhoto),
+      poQuote: text(doc?.poQuote).slice(0, 500),
+      principalQuote: text(doc?.principalQuote).slice(0, 500),
     };
     brandCache = { at: Date.now(), value };
     return value;
   } catch {
-    return brandCache?.value ?? { poPhoto: "", principalPhoto: "" };
+    return brandCache?.value ?? empty;
   }
 }
 
-export async function saveBrandPhotos(patch: { poPhoto?: string; principalPhoto?: string }) {
+export async function saveBrandPhotos(patch: { poPhoto?: string; principalPhoto?: string; poQuote?: string; principalQuote?: string }) {
   const current = await readBrandPhotos();
   const poPhoto = patch.poPhoto !== undefined ? safePhoto(patch.poPhoto) : current.poPhoto;
   const principalPhoto = patch.principalPhoto !== undefined ? safePhoto(patch.principalPhoto) : current.principalPhoto;
+  const poQuote = patch.poQuote !== undefined ? text(patch.poQuote).slice(0, 500) : current.poQuote;
+  const principalQuote = patch.principalQuote !== undefined ? text(patch.principalQuote).slice(0, 500) : current.principalQuote;
   const fields = {
     poPhoto: encodeValue(poPhoto),
     principalPhoto: encodeValue(principalPhoto),
+    poQuote: encodeValue(poQuote),
+    principalQuote: encodeValue(principalQuote),
     updatedAt: encodeValue(new Date().toISOString()),
   };
   const patchRes = await fetch(`${FIRESTORE_BASE}/portalSettings/brand`, {
@@ -972,14 +979,46 @@ export async function saveBrandPhotos(patch: { poPhoto?: string; principalPhoto?
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ fields }),
   });
-  if (patchRes.ok) return { poPhoto, principalPhoto };
+  brandCache = { at: Date.now(), value: { poPhoto, principalPhoto, poQuote, principalQuote } };
+  if (patchRes.ok) return brandCache.value;
   const createRes = await fetch(`${FIRESTORE_BASE}/portalSettings?documentId=brand`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ fields }),
   });
   if (!createRes.ok) throw new Error("Could not save the photographs.");
-  return { poPhoto, principalPhoto };
+  return brandCache.value;
+}
+
+let slideCache: { at: number; rows: GalleryItem[] } | null = null;
+
+export async function readHomeSlides(): Promise<GalleryItem[]> {
+  if (slideCache && Date.now() - slideCache.at < 60_000) return slideCache.rows;
+  if (collegeQuotaBlocked()) return slideCache?.rows ?? [];
+  try {
+    const docs = await listCollection("gallery", { maxDocs: 12 });
+    const rows = docs
+      .map((item) => {
+        const eventName = text(item.eventName) || text(item.title) || "NSS activity";
+        const src = text(item.image) || text(item.src);
+        return {
+          id: text(item._id),
+          src: src.startsWith("data:image/") && src.length > 80 && src.length < 220000 ? src : "",
+          caption: text(item.title) || eventName,
+          date: isoDate(item.createdAt) || isoDate(item.date),
+          eventName,
+          folder: eventName,
+          kind: "photo" as const,
+        };
+      })
+      .filter((item) => item.src)
+      .sort((a, b) => b.date.localeCompare(a.date))
+      .slice(0, 12);
+    slideCache = { at: Date.now(), rows };
+    return rows;
+  } catch {
+    return slideCache?.rows ?? [];
+  }
 }
 
 let rosterCache: { at: number; rows: { docId: string; volunteerId: string; name: string }[] } | null = null;
