@@ -28,7 +28,7 @@ export function NspPwaRoot() {
     void (async () => {
       if ("caches" in window) {
         const keys = await caches.keys();
-        await Promise.all(keys.filter((key) => key !== "nsp-shell-v1").map((key) => caches.delete(key)));
+        await Promise.all(keys.filter((key) => key !== "nsp-shell-v2").map((key) => caches.delete(key)));
       }
       if (!("serviceWorker" in navigator)) return;
       const regs = await navigator.serviceWorker.getRegistrations();
@@ -36,6 +36,11 @@ export function NspPwaRoot() {
       const current = await navigator.serviceWorker.register("/sw.js", { updateViaCache: "none" });
       current.waiting?.postMessage("skip");
       void current.update();
+      navigator.serviceWorker.addEventListener("controllerchange", () => {
+        if (sessionStorage.getItem("nsp-sw-reloaded")) return;
+        sessionStorage.setItem("nsp-sw-reloaded", "1");
+        window.location.reload();
+      });
     })().catch(() => undefined);
     const onPrompt = (event: Event) => {
       event.preventDefault();

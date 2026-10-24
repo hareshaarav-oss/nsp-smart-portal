@@ -432,7 +432,7 @@ export function HydrateGate({ children }: { children: ReactNode }) {
       void pullVisitors().catch(() => undefined);
       void pullPulse().catch(() => undefined);
       void ensurePhotos();
-    }, 45000);
+    }, 20000);
     const wake = () => {
       void pullLive().catch(() => undefined);
       void pullVisitors().catch(() => undefined);

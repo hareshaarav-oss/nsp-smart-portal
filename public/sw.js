@@ -1,4 +1,4 @@
-const SHELL = "nsp-shell-v1";
+const SHELL = "nsp-shell-v2";
 
 self.addEventListener("install", (event) => {
   event.waitUntil(

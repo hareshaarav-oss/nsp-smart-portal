@@ -1722,6 +1722,7 @@ export async function listChatPeople(opts?: { includeMobile?: boolean }): Promis
 let chatCache: { at: number; rows: ChatRow[] } | null = null;
 let readCache: { id: string; thread: string; at: string }[] = [];
 const goneCache = new Set<string>();
+const clearedAt = new Map<string, string>();
 const CHAT_LIFE_MS = 24 * 60 * 60 * 1000;
 
 function chatStillLive(createdAt: string) {
@@ -1730,10 +1731,14 @@ function chatStillLive(createdAt: string) {
 }
 
 function visibleChats(rows: ChatRow[]) {
-  return rows.filter((row) => row.id && !goneCache.has(row.id) && chatStillLive(row.createdAt));
+  return rows.filter((row) => {
+    if (!row.id || goneCache.has(row.id) || !chatStillLive(row.createdAt)) return false;
+    const cut = clearedAt.get(row.threadId);
+    return !cut || row.createdAt > cut;
+  });
 }
 
-async function markChatField(field: "reads" | "gone", value: string) {
+async function markChatField(field: "reads" | "gone" | "cleared", value: string) {
   const project = process.env.NSS_FIRESTORE_PROJECT_ID?.trim() || "studio-8504026975-1fdbc";
   await fetch(`${FIRESTORE_BASE}:commit`, {
     method: "POST",
@@ -1762,6 +1767,18 @@ export async function markChatRead(userId: string, threadId: string, at: string)
 export function chatReads() {
   const cutoff = Date.now() - CHAT_LIFE_MS;
   return readCache.filter((row) => new Date(row.at).getTime() >= cutoff);
+}
+
+export async function markThreadCleared(threadId: string) {
+  const thread = text(threadId).slice(0, 80);
+  if (!thread) return [];
+  const at = new Date().toISOString();
+  clearedAt.set(thread, at);
+  const ids = (chatCache?.rows ?? []).filter((row) => row.threadId === thread).map((row) => row.id);
+  for (const id of ids) goneCache.add(id);
+  if (chatCache) chatCache = { at: Date.now(), rows: visibleChats(chatCache.rows) };
+  await markChatField("cleared", JSON.stringify({ thread, at }));
+  return ids;
 }
 
 export async function markChatGone(ids: string[]) {
@@ -1854,7 +1871,19 @@ export async function listRecentChatMessages(limit = 60): Promise<ChatRow[]> {
         }
       }
       const fromTail = tailRows(doc?.recent);
-      if (fromTail.length) {
+      const cleared = Array.isArray(doc?.cleared) ? doc.cleared : [];
+      for (const item of cleared) {
+        if (typeof item !== "string" || !item.startsWith("{")) continue;
+        try {
+          const row = JSON.parse(item) as { thread?: string; at?: string };
+          if (!row.thread || !row.at) continue;
+          const prev = clearedAt.get(row.thread);
+          if (!prev || row.at > prev) clearedAt.set(row.thread, row.at);
+        } catch {
+          /* skip a bad clear mark */
+        }
+      }
+      if (fromTail.length || cleared.length) {
         const seen = new Set(fromTail.map((row) => row.id));
         const merged = [...fromTail, ...(chatCache?.rows ?? []).filter((row) => !seen.has(row.id))]
           .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
@@ -1973,6 +2002,15 @@ export async function readChatMedia(ids: string[]) {
 }
 
 export async function saveChatMessage(input: { threadId: string; text: string; senderId: string; senderName: string; replyName?: string; replyText?: string; media?: string; mediaType?: "" | "image" | "video" | "audio" | "file"; extra?: ChatExtra }) {
+  const textBody = input.text.slice(0, 1000);
+  const twin = (chatCache?.rows ?? []).find(
+    (row) =>
+      row.threadId === input.threadId &&
+      row.senderId === input.senderId &&
+      row.text === textBody &&
+      Date.now() - new Date(row.createdAt).getTime() < 60000,
+  );
+  if (twin && !input.media) return twin;
   const createdAt = new Date().toISOString();
   const id = `chat${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
   const replyName = text(input.replyName).slice(0, 80);

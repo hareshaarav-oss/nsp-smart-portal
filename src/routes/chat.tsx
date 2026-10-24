@@ -252,6 +252,7 @@ function ChatPage() {
   const [away, setAway] = useState(false);
   const { t: say } = useUi();
   const scroller = useRef<HTMLDivElement>(null);
+  const sendLock = useRef(false);
   const hold = useRef(0);
   const stick = useRef(true);
   const mediaBag = useRef(new Map<string, { media: string; mediaType: "image" | "video" | "audio" | "file" }>());
@@ -417,11 +418,28 @@ function ChatPage() {
           for (const row of [...map.values()]) {
             if (!row.id.startsWith("local-")) continue;
             const sent = [...map.values()].some(
-              (other) => !other.id.startsWith("local-") && other.senderId === row.senderId && other.threadId === row.threadId && other.text === row.text,
+              (other) =>
+                other.id !== row.id &&
+                !other.id.startsWith("local-") &&
+                canonicalThread(other.threadId) === canonicalThread(row.threadId) &&
+                other.text === row.text &&
+                Math.abs(new Date(other.createdAt).getTime() - new Date(row.createdAt).getTime()) < 20000,
             );
             if (sent) map.delete(row.id);
           }
-          return [...map.values()].sort((a, b) => a.createdAt.localeCompare(b.createdAt)).slice(-200);
+          const kept = [...map.values()].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+          const unique: ChatMessage[] = [];
+          for (const row of kept) {
+            const twin = unique.find(
+              (item) =>
+                canonicalThread(item.threadId) === canonicalThread(row.threadId) &&
+                item.senderId === row.senderId &&
+                item.text === row.text &&
+                Math.abs(new Date(item.createdAt).getTime() - new Date(row.createdAt).getTime()) < 15000,
+            );
+            if (!twin) unique.push(row);
+          }
+          return unique.slice(-200);
         });
       } catch {
         /* keep the last messages on screen */
@@ -639,6 +657,7 @@ function ChatPage() {
 
   async function send(e?: React.FormEvent, threadId = active) {
     e?.preventDefault();
+    if (sendLock.current) return;
     const text = draft.trim();
     const attachment = pending;
     if (!text && !attachment && !pollOn) return;
@@ -675,6 +694,7 @@ function ChatPage() {
     setForwarded(false);
     setSheet(false);
     stick.current = true;
+    sendLock.current = true;
     const payload = {
       action: "chat-send",
       chatToken: token,
@@ -711,18 +731,24 @@ function ChatPage() {
           toast.error(message);
           return;
         }
-        const queued = JSON.parse(localStorage.getItem("nsp-chat-out") || "[]") as unknown[];
-        queued.push(payload);
-        localStorage.setItem("nsp-chat-out", JSON.stringify(queued.slice(-15)));
+        const queued = JSON.parse(localStorage.getItem("nsp-chat-out") || "[]") as { threadId?: string; text?: string }[];
+        if (!queued.some((item) => item.threadId === payload.threadId && item.text === payload.text)) {
+          queued.push(payload);
+          localStorage.setItem("nsp-chat-out", JSON.stringify(queued.slice(-15)));
+        }
         return;
       }
       if (attachment?.media && data.message.mediaType) mediaBag.current.set(data.message.id, { media: data.message.media || attachment.media, mediaType: attachment.mediaType });
       setMessages((current) => [...current.filter((row) => row.id !== localId && row.id !== data.message?.id), { ...data.message!, media: data.message!.media || attachment?.media || "", mediaType: data.message!.mediaType || attachment?.mediaType || "" }]);
       if ((session?.role === "po" || session?.role === "admin") && active.startsWith("dm:") && alsoWa && phoneFor(otherId())) openWhatsAppChat(text);
     } catch {
-      const queued = JSON.parse(localStorage.getItem("nsp-chat-out") || "[]") as unknown[];
-      queued.push(payload);
-      localStorage.setItem("nsp-chat-out", JSON.stringify(queued.slice(-15)));
+      const queued = JSON.parse(localStorage.getItem("nsp-chat-out") || "[]") as { threadId?: string; text?: string }[];
+      if (!queued.some((item) => item.threadId === payload.threadId && item.text === payload.text)) {
+        queued.push(payload);
+        localStorage.setItem("nsp-chat-out", JSON.stringify(queued.slice(-15)));
+      }
+    } finally {
+      sendLock.current = false;
     }
   }
 
@@ -1457,6 +1483,7 @@ function ChatPage() {
               {([
                 ["View chat", () => setMenu(false)],
                 ["Search", () => setFinder(" ")],
+                ["Clear chat", () => setAsk("clear")],
                 ["Mute notifications", () => togglePref("mutes", canonicalThread(active))],
                 ["Favourite", () => togglePref("favs", canonicalThread(active))],
                 ["Disappearing messages", () => { const hours = prefs.disappear[canonicalThread(active)] ? 0 : 24; savePrefs({ ...prefs, disappear: { ...prefs.disappear, [canonicalThread(active)]: hours } }); }],
@@ -1478,7 +1505,6 @@ function ChatPage() {
                   ["Broadcast", () => { if (officer) void broadcast(); }],
                   ["Archived chats", () => setArchivesOn((on) => !on)],
                   ["Export chat", () => { const blob = new Blob([JSON.stringify(messages.map((row) => ({ ...row, media: row.media ? "attached" : "" })))], { type: "application/json" }); const url = URL.createObjectURL(blob); const link = document.createElement("a"); link.href = url; link.download = "nss-chat-backup.json"; link.click(); }],
-                  ["Clear chat", () => setAsk("clear")],
                 ] as [string, () => void][]).map(([label, run]) => (
                   <button key={label} type="button" className="block w-full px-4 py-2.5 text-left hover:bg-[#f5f6f6]" onClick={() => { run(); setMenu(false); }}>{label}</button>
                 ))

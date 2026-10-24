@@ -1,4 +1,4 @@
-import { loadCollegeCloud, loadStudentRoll, readOneStudent, loadPublicBoard, loadOfficerRoll, collegeQuotaBlocked, saveStudentToCloud, incrementVisitors, readVisitorCount, knownVisitorCount, patchStudent, safePhoto, knownRole, readChatPass, listRecentChatMessages, saveChatMessage, listChatPeople, clearAttendanceCloud, readBrandPhotos, saveBrandPhotos, listPhotoRoster, readPhotoBatch, saveAttendanceMarks, readLive, publishBestVolunteer, publishServiceHours, purgeCloudIds, deleteChatMessages, chatIdsInThread, readChatMedia, readOneChat, patchNotice, upsertNotice, sideDocId, listChatStatuses, readSide, readStudentCerts, saveStudentCerts, markChatRead, chatReads, type ChatExtra } from "@/lib/nss/firestore";
+import { loadCollegeCloud, loadStudentRoll, readOneStudent, loadPublicBoard, loadOfficerRoll, collegeQuotaBlocked, saveStudentToCloud, incrementVisitors, readVisitorCount, knownVisitorCount, patchStudent, safePhoto, knownRole, readChatPass, listRecentChatMessages, saveChatMessage, listChatPeople, clearAttendanceCloud, readBrandPhotos, saveBrandPhotos, listPhotoRoster, readPhotoBatch, saveAttendanceMarks, readLive, publishBestVolunteer, publishServiceHours, purgeCloudIds, deleteChatMessages, readChatMedia, readOneChat, patchNotice, upsertNotice, sideDocId, listChatStatuses, readSide, readStudentCerts, saveStudentCerts, markChatRead, chatReads, markThreadCleared, type ChatExtra } from "@/lib/nss/firestore";
 import { passwordOk, sealText, signChatPass } from "@/lib/nss/seal.server";
 import { createFileRoute } from "@tanstack/react-router";
 
@@ -704,9 +704,8 @@ export const Route = createFileRoute("/api/nss-cloud")({
               if (!validThread(threadId) || !canSeeThread(user, threadId)) {
                 return Response.json({ ok: false, error: "You cannot clear that chat." }, { status: 403 });
               }
-              const ids = await chatIdsInThread(threadId);
-              await deleteChatMessages(ids);
-              return Response.json({ ok: true, removed: ids });
+              const removed = await markThreadCleared(threadId);
+              return Response.json({ ok: true, removed });
             }
             if (body.action === "announce") {
               if (user.role !== "po" && user.role !== "admin") return Response.json({ ok: false, error: "Officers only." }, { status: 403 });
