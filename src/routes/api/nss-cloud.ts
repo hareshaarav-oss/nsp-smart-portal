@@ -895,7 +895,7 @@ export const Route = createFileRoute("/api/nss-cloud")({
             const first = text(found.fullName).split(/\s+/)[0] ?? "";
             return Response.json({ ok: true, username: first.toUpperCase() });
           }
-          if (body.action === "mpin-login" || body.action === "finger-login" || body.action === "my-certificates") {
+          if (body.action === "mpin-login" || body.action === "finger-login" || body.action === "my-certificates" || body.action === "my-profile") {
             const data = await loadCollegeCloud({ gallery: false, photos: false });
             const volunteers = (data?.volunteers ?? []) as unknown as Row[];
             if (!data || volunteers.length === 0) {
@@ -916,6 +916,9 @@ export const Route = createFileRoute("/api/nss-cloud")({
             if (body.action === "my-certificates") {
               const certificates = await readStudentCerts(text(matched.row.id)).catch(() => []);
               return Response.json({ ok: true, certificates });
+            }
+            if (body.action === "my-profile") {
+              return Response.json({ ok: true, volunteer: selfVolunteer(matched.row) });
             }
             return Response.json(await studentLoginResponse(matched.row));
           }

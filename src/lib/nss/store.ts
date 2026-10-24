@@ -835,17 +835,16 @@ export const useNssStore =
                         ).slice(-10),
                       );
 
+                    const sessionMobile = digits(session?.mobile || "").slice(-10);
+                    const prevMobile = digits(prev?.mobile || "").slice(-10);
                     const self =
                       !officer &&
                       Boolean(
                         session &&
-                          (row.id ===
-                            session.volunteerId ||
-                            row.volunteerId ===
-                              session.volunteerId ||
-                            (session.enrollment &&
-                              row.enrollment ===
-                                session.enrollment)),
+                          (row.id === session.volunteerId ||
+                            row.volunteerId === session.volunteerId ||
+                            (session.enrollment && row.enrollment === session.enrollment) ||
+                            (sessionMobile.length >= 10 && prevMobile === sessionMobile)),
                       );
 
                     const cloudPhoto =
@@ -965,6 +964,13 @@ export const useNssStore =
                         officer || self
                           ? row.abcId ||
                             prev?.abcId ||
+                            ""
+                          : "",
+
+                      myBharatId:
+                        officer || self
+                          ? row.myBharatId ||
+                            prev?.myBharatId ||
                             ""
                           : "",
 

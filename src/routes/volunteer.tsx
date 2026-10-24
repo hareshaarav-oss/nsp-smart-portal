@@ -17,7 +17,33 @@ import { blobToDataUrl, compressPassport, rememberPhoto } from "@/lib/nss/media"
 import { findSessionVolunteer, isOfficer, registerFingerprint, useSessionStore } from "@/lib/nss/session";
 import { attendanceOf, bestVolunteer, rsvpOf, useNssStore, volunteerHours } from "@/lib/nss/store";
 import { useUi } from "@/lib/nss/ui-prefs";
-import type { IssuedCertificate } from "@/lib/nss/types";
+import type { IssuedCertificate, Volunteer } from "@/lib/nss/types";
+
+type OwnProfile = Pick<
+  Volunteer,
+  "mobile" | "email" | "address" | "bloodGroup" | "fatherName" | "abcId" | "myBharatId" | "emergencyContact" | "photoUrl"
+> & { id?: string; volunteerId?: string };
+
+function writeOwnProfile(profile: OwnProfile) {
+  const state = useNssStore.getState();
+  const target = (state.volunteers ?? []).find(
+    (row) =>
+      (profile.id && (row.id === profile.id || row.volunteerId === profile.id)) ||
+      (profile.volunteerId && (row.id === profile.volunteerId || row.volunteerId === profile.volunteerId)),
+  );
+  if (!target) return;
+  state.updateVolunteer(target.id, {
+    mobile: profile.mobile ?? target.mobile,
+    email: profile.email ?? target.email ?? "",
+    address: profile.address ?? target.address ?? "",
+    bloodGroup: profile.bloodGroup ?? target.bloodGroup ?? "",
+    fatherName: profile.fatherName ?? target.fatherName ?? "",
+    abcId: profile.abcId ?? target.abcId ?? "",
+    myBharatId: profile.myBharatId ?? target.myBharatId ?? "",
+    emergencyContact: profile.emergencyContact ?? target.emergencyContact ?? "",
+    ...(profile.photoUrl ? { photoUrl: profile.photoUrl } : {}),
+  });
+}
 
 export const Route = createFileRoute("/volunteer")({ component: VolunteerDash });
 
@@ -67,6 +93,28 @@ function VolunteerDash() {
       .then((res) => res.json())
       .then((data: { certificates?: IssuedCertificate[] }) => {
         if (!stop && Array.isArray(data.certificates)) setCloudCerts(data.certificates);
+      })
+      .catch(() => undefined);
+    return () => {
+      stop = true;
+    };
+  }, [session]);
+
+  useEffect(() => {
+    if (!session || isOfficer(session) || !session.mobile) return;
+    let stop = false;
+    void fetch("/api/nss-cloud", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        action: "my-profile",
+        username: session.volunteerId || session.name,
+        password: session.mobile,
+      }),
+    })
+      .then((res) => res.json())
+      .then((data: { ok?: boolean; volunteer?: OwnProfile }) => {
+        if (!stop && data.ok && data.volunteer) writeOwnProfile(data.volunteer);
       })
       .catch(() => undefined);
     return () => {
@@ -187,6 +235,21 @@ function VolunteerDash() {
             <div className="min-w-0 flex-1 text-center sm:text-left">
               <h1 className="font-display text-2xl font-semibold">{idCardName(me.fullName)}</h1>
               <p className="text-sm text-paper/70">{me.volunteerId} · {me.unit}</p>
+              <p className="mt-2 text-sm text-paper/90">
+                {[me.course, me.semester ? `Sem ${me.semester}` : "", me.mobile, me.email].filter(Boolean).join(" · ") || "Add mobile and email from Edit profile"}
+              </p>
+              {[me.fatherName, me.bloodGroup, me.address, me.abcId, me.myBharatId, me.emergencyContact].some(Boolean) ? (
+                <p className="mt-1 text-xs text-paper/70">
+                  {[
+                    me.fatherName ? `Father ${me.fatherName}` : "",
+                    me.bloodGroup ? `Blood ${me.bloodGroup}` : "",
+                    me.address,
+                    me.abcId ? `ABC ${me.abcId}` : "",
+                    me.myBharatId ? `MY Bharat ${me.myBharatId}` : "",
+                    me.emergencyContact ? `Emergency ${me.emergencyContact}` : "",
+                  ].filter(Boolean).join(" · ")}
+                </p>
+              ) : null}
               <p className="text-xs text-paper/60">{settings.collegeName}</p>
               <p className="mt-2 text-sm">{t("next")}: {upcoming[0] ? `${upcoming[0].name} · ${formatLongDate(upcoming[0].date)}` : "—"}</p>
             </div>
@@ -582,13 +645,18 @@ function VolunteerDash() {
   );
 }
 
-function EditProfile({ volunteerId }: { volunteerId: string }) {
-  const volunteer = useNssStore((s) =>
-    (s.volunteers ?? []).find((v) => v.id === volunteerId || v.volunteerId === volunteerId),
-  );
-  const update = useNssStore((s) => s.updateVolunteer);
-  const [photoDirty, setPhotoDirty] = useState(false);
-  const [form, setForm] = useState({
+function profileForm(volunteer?: {
+  mobile?: string;
+  email?: string;
+  address?: string;
+  bloodGroup?: string;
+  fatherName?: string;
+  abcId?: string;
+  myBharatId?: string;
+  emergencyContact?: string;
+  photoUrl?: string;
+}) {
+  return {
     mobile: volunteer?.mobile ?? "",
     email: volunteer?.email ?? "",
     address: volunteer?.address ?? "",
@@ -598,21 +666,41 @@ function EditProfile({ volunteerId }: { volunteerId: string }) {
     myBharatId: volunteer?.myBharatId ?? "",
     emergencyContact: volunteer?.emergencyContact ?? "",
     photoUrl: volunteer?.photoUrl ?? "",
-  });
-  if (!volunteer) {
-    return (
-      <Card>
-        <CardContent className="p-5 text-sm text-muted-foreground">Opening your profile…</CardContent>
-      </Card>
-    );
-  }
+  };
+}
+
+function EditProfile({ volunteerId }: { volunteerId: string }) {
+  const volunteer = useNssStore((s) =>
+    (s.volunteers ?? []).find((v) => v.id === volunteerId || v.volunteerId === volunteerId),
+  );
+  const [photoDirty, setPhotoDirty] = useState(false);
+  const [dirty, setDirty] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [form, setForm] = useState(() => profileForm(volunteer));
+  useEffect(() => {
+    if (!volunteer || dirty) return;
+    setForm(profileForm(volunteer));
+  }, [
+    dirty,
+    volunteer,
+    volunteer?.mobile,
+    volunteer?.email,
+    volunteer?.address,
+    volunteer?.bloodGroup,
+    volunteer?.fatherName,
+    volunteer?.abcId,
+    volunteer?.myBharatId,
+    volunteer?.emergencyContact,
+    volunteer?.photoUrl,
+  ]);
 
   async function onPhoto(file: File | undefined) {
-    if (!file || !volunteer) return;
+    if (!file) return;
     try {
       const { blob } = await compressPassport(file);
       const url = await blobToDataUrl(blob);
       setPhotoDirty(true);
+      setDirty(true);
       setForm((f) => ({ ...f, photoUrl: url }));
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not read that photograph.");
@@ -621,66 +709,93 @@ function EditProfile({ volunteerId }: { volunteerId: string }) {
 
   async function save(e: React.FormEvent) {
     e.preventDefault();
-    if (!volunteer) return;
+    if (!volunteer || saving) return;
     const session = useSessionStore.getState().session;
     const password = session?.mobile || volunteer.mobile;
     if (!password) {
       toast.error("Sign in again, then save the profile.");
       return;
     }
-    const payload: Record<string, string> = {
-      action: "update-profile",
-      username: volunteer.volunteerId || session?.volunteerId || volunteer.fullName.split(/\s+/)[0] || volunteer.id,
-      password,
-      volunteerId: volunteer.id,
-    };
-    const fields = ["mobile", "email", "address", "bloodGroup", "fatherName", "abcId", "myBharatId", "emergencyContact"] as const;
-    for (const key of fields) {
-      if (form[key] !== (volunteer[key] ?? "")) payload[key] = form[key];
-    }
-    if (photoDirty && form.photoUrl.startsWith("data:image/")) payload.photoUrl = form.photoUrl;
-    if (Object.keys(payload).length <= 4 && !payload.photoUrl) {
-      toast.success("Profile saved.");
+    const mobile = form.mobile.replace(/\D/g, "").slice(-10);
+    if (mobile && mobile.length < 10) {
+      toast.error("Mobile must be 10 digits.");
       return;
     }
+    setSaving(true);
     try {
       const res = await fetch("/api/nss-cloud", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({
+          action: "update-profile",
+          username: volunteer.volunteerId || session?.volunteerId || volunteer.fullName.split(/\s+/)[0] || volunteer.id,
+          password,
+          volunteerId: volunteer.id,
+          mobile,
+          email: form.email,
+          address: form.address,
+          bloodGroup: form.bloodGroup,
+          fatherName: form.fatherName,
+          abcId: form.abcId,
+          myBharatId: form.myBharatId,
+          emergencyContact: form.emergencyContact,
+          ...(photoDirty && form.photoUrl.startsWith("data:image/") ? { photoUrl: form.photoUrl } : {}),
+        }),
       });
-      const data = (await res.json()) as { ok?: boolean; error?: string; volunteer?: { photoUrl?: string; mobile?: string; email?: string } };
+      const data = (await res.json()) as { ok?: boolean; error?: string; volunteer?: OwnProfile };
       if (!res.ok || !data.ok) {
         toast.error(data.error || "Could not save the profile.");
         return;
       }
-      const photoUrl = data.volunteer?.photoUrl || form.photoUrl;
-      update(volunteer.id, {
-        mobile: form.mobile,
-        email: form.email,
-        address: form.address,
-        bloodGroup: form.bloodGroup,
-        fatherName: form.fatherName,
-        abcId: form.abcId,
-        myBharatId: form.myBharatId,
-        emergencyContact: form.emergencyContact,
-        photoUrl,
+      const saved = data.volunteer;
+      const next = profileForm({
+        mobile: saved?.mobile || mobile || form.mobile,
+        email: saved?.email ?? form.email,
+        address: saved?.address ?? form.address,
+        bloodGroup: saved?.bloodGroup ?? form.bloodGroup,
+        fatherName: saved?.fatherName ?? form.fatherName,
+        abcId: saved?.abcId ?? form.abcId,
+        myBharatId: saved?.myBharatId ?? form.myBharatId,
+        emergencyContact: saved?.emergencyContact ?? form.emergencyContact,
+        photoUrl: saved?.photoUrl || form.photoUrl,
+      });
+      writeOwnProfile({
+        id: volunteer.id,
+        volunteerId: volunteer.volunteerId || saved?.volunteerId,
+        ...next,
       });
       rememberPhoto(
         [volunteer.volunteerId || "", volunteer.id || "", (volunteer.fullName || "").toLowerCase(), session?.volunteerId || ""],
-        photoUrl,
+        next.photoUrl,
       );
-      if (session && form.mobile.replace(/\D/g, "").length >= 10) {
+      if (session && next.mobile.replace(/\D/g, "").length >= 10) {
         useSessionStore.getState().setSession({
           ...session,
-          mobile: form.mobile.replace(/\D/g, "").slice(-10),
+          mobile: next.mobile.replace(/\D/g, "").slice(-10),
         });
       }
+      setForm(next);
       setPhotoDirty(false);
+      setDirty(false);
       toast.success("Profile saved.");
     } catch {
       toast.error("Could not reach the college server.");
+    } finally {
+      setSaving(false);
     }
+  }
+
+  if (!volunteer) {
+    return (
+      <Card>
+        <CardContent className="p-5 text-sm text-muted-foreground">Opening your profile…</CardContent>
+      </Card>
+    );
+  }
+
+  function edit(patch: Partial<typeof form>) {
+    setDirty(true);
+    setForm((current) => ({ ...current, ...patch }));
   }
 
   return (
@@ -695,35 +810,35 @@ function EditProfile({ volunteerId }: { volunteerId: string }) {
             <input type="file" accept="image/*" onChange={(e) => void onPhoto(e.target.files?.[0])} />
           </div>
           <Field label="Mobile">
-            <Input value={form.mobile} inputMode="tel" onChange={(e) => setForm({ ...form, mobile: e.target.value })} />
+            <Input value={form.mobile} inputMode="tel" onChange={(e) => edit({ mobile: e.target.value })} />
           </Field>
           <Field label="Email">
-            <Input value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+            <Input value={form.email} onChange={(e) => edit({ email: e.target.value })} />
           </Field>
           <Field label="Father's name">
-            <Input value={form.fatherName} onChange={(e) => setForm({ ...form, fatherName: e.target.value })} />
+            <Input value={form.fatherName} onChange={(e) => edit({ fatherName: e.target.value })} />
           </Field>
           <Field label="Blood group">
-            <Input value={form.bloodGroup} onChange={(e) => setForm({ ...form, bloodGroup: e.target.value })} />
+            <Input value={form.bloodGroup} onChange={(e) => edit({ bloodGroup: e.target.value })} />
           </Field>
           <Field label="Address" wide>
-            <Input value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} />
+            <Input value={form.address} onChange={(e) => edit({ address: e.target.value })} />
           </Field>
           <Field label="ABC ID">
-            <Input value={form.abcId} onChange={(e) => setForm({ ...form, abcId: e.target.value })} />
+            <Input value={form.abcId} onChange={(e) => edit({ abcId: e.target.value })} />
           </Field>
           <Field label="MY Bharat ID">
-            <Input value={form.myBharatId} onChange={(e) => setForm({ ...form, myBharatId: e.target.value })} />
+            <Input value={form.myBharatId} onChange={(e) => edit({ myBharatId: e.target.value })} />
           </Field>
           <Field label="Emergency contact">
             <Input
               value={form.emergencyContact}
               inputMode="tel"
-              onChange={(e) => setForm({ ...form, emergencyContact: e.target.value })}
+              onChange={(e) => edit({ emergencyContact: e.target.value })}
             />
           </Field>
           <div className="sm:col-span-2">
-            <Button type="submit">Save profile</Button>
+            <Button type="submit" disabled={saving}>{saving ? "Saving…" : "Save profile"}</Button>
           </div>
         </form>
       </CardContent>
