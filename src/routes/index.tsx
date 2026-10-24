@@ -53,9 +53,12 @@ function Home() {
   const today = todayIso();
   const volunteerSource = useNssStore((s) => s.volunteers);
   const volunteers = useMemo(() => volunteerSource ?? [], [volunteerSource]);
-  const portal = useNssStore();
-  const rollPhotos = useMemo(
-    () => volunteers.filter((v) => v.status !== "alumni" && v.photoUrl),
+  const rollCards = useMemo(
+    () =>
+      volunteers
+        .filter((v) => v.status !== "alumni" && v.fullName)
+        .slice()
+        .sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || "") || a.fullName.localeCompare(b.fullName, "en")),
     [volunteers],
   );
   const birthdayVolunteers = useMemo(
@@ -154,20 +157,24 @@ function Home() {
           </div>
 
           <OpenTab id="volunteers" title="Volunteers">
-            {rollPhotos.length ? (
+            {rollCards.length ? (
               <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8">
-                {rollPhotos.map((v) => (
+                {rollCards.map((v) => (
                   <figure key={v.id} className="press text-center">
-                    <img src={v.photoUrl} alt="" className="mx-auto h-24 w-20 object-cover ring-1 ring-saffron/40" />
+                    {v.photoUrl ? (
+                      <img src={v.photoUrl} alt="" className="mx-auto h-24 w-20 object-cover ring-1 ring-saffron/40" />
+                    ) : (
+                      <span className="mx-auto flex h-24 w-20 items-center justify-center bg-navy text-lg font-semibold text-paper">{v.fullName.slice(0, 1)}</span>
+                    )}
                     <figcaption className="mt-1 text-[11px] leading-tight text-navy">
                       {v.fullName}
-                      <span className="mt-0.5 block font-semibold text-forest">{volunteerHours(portal, v.id)} hrs</span>
+                      <span className="mt-0.5 block font-semibold text-forest">{v.volunteerId}</span>
                     </figcaption>
                   </figure>
                 ))}
               </div>
             ) : (
-              <p className="text-sm text-muted-foreground">No photographs yet.</p>
+              <p className="text-sm text-muted-foreground">No volunteers yet.</p>
             )}
           </OpenTab>
 

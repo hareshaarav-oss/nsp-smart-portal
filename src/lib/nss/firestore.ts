@@ -813,21 +813,68 @@ export async function loadPublicBoard(opts: { gallery?: boolean } = {}): Promise
   return publicCache?.data ? omitPurged(publicCache.data) : null;
 }
 
+const OFFICER_ROLL_MS = 20_000;
+
+function briefVolunteer(s: Record<string, unknown>, n: number): Volunteer {
+  const semester = latinDigits(text(s.semester) || "1");
+  const mobileDigits = mobileKey(s.mobile) || mobileKey(s._id);
+  const mobile = mobileDigits.length >= 10 ? mobileDigits : latinDigits(text(s.mobile));
+  const statusRaw = text(s.status).toLowerCase();
+  const assembled = [s.firstName, s.middleName, s.surname].map(text).filter(Boolean).join(" ");
+  const fullName = titleFirstName(cleanPersonName(text(s.fullName) || assembled));
+  return {
+    id: text(s._id) || `vol-${n}`,
+    volunteerId: text(s.volunteerId) || `NSS${padId(n)}`,
+    enrollment: latinDigits(text(s.enrollment)) || `2026-${semester}-${padId(n)}`,
+    fullName,
+    mobile,
+    email: text(s.email),
+    course: normalizeCourse(s.course) as Volunteer["course"],
+    semester,
+    unit: text(s.unit) === "Unit 2" ? "Unit 2" : "Unit 1",
+    nssRole: knownRole(s.nssRole),
+    fatherName: text(s.fatherName),
+    dob: isoDate(s.dob),
+    gender: (text(s.gender) === "Female" ? "Female" : text(s.gender) === "Male" ? "Male" : "") as Volunteer["gender"],
+    bloodGroup: text(s.bloodGroup),
+    address: text(s.address),
+    parentMobile: text(s.parentMobile) || text(s.emergencyContact) || mobile,
+    emergencyContact: text(s.emergencyContact),
+    abcId: text(s.abcId),
+    myBharatId: text(s.myBharatId),
+    photoUrl: smallPublicPhoto(s.thumbUrl),
+    createdAt: isoDate(s.createdAt) || isoDate(s.updatedAt),
+    status: statusRaw === "alumni" ? "alumni" : "active",
+  };
+}
+
 export async function loadOfficerRoll(): Promise<CloudPortal | null> {
-  if (officerCache && Date.now() - officerCache.at < CLOUD_FRESH_MS) return officerCache.data;
+  if (officerCache && Date.now() - officerCache.at < OFFICER_ROLL_MS) return officerCache.data;
   const board = await loadPublicBoard({ gallery: false });
   if (board && board.volunteers.length >= 1 && !collegeQuotaBlocked()) {
     try {
       const students = await listCollection("students", { photos: false, maxDocs: 400 });
       if (students.length >= 1) {
+        for (const row of students) reveal(row, [...SEAL_KEYS]);
         const byVid = new Map(students.map((s) => [text(s.volunteerId).toLowerCase(), s]));
         const byName = new Map(students.map((s) => [text(s.fullName).toLowerCase(), s]));
+        const known = new Set<string>();
         const volunteers = board.volunteers.map((v) => {
+          for (const key of [v.volunteerId, v.fullName, v.id]) {
+            const clean = key.toLowerCase();
+            if (clean) known.add(clean);
+          }
           const raw = byVid.get(v.volunteerId.toLowerCase()) || byName.get(v.fullName.toLowerCase());
           if (!raw) return v;
+          for (const key of [text(raw._id), text(raw.volunteerId), text(raw.fullName)]) {
+            const clean = key.toLowerCase();
+            if (clean) known.add(clean);
+          }
           const mobile = digits(raw.mobile);
+          const thumb = smallPublicPhoto(raw.thumbUrl);
           return {
             ...v,
+            photoUrl: thumb || v.photoUrl,
             mobile,
             email: text(raw.email),
             fatherName: text(raw.fatherName),
@@ -840,7 +887,16 @@ export async function loadOfficerRoll(): Promise<CloudPortal | null> {
             loginPassword: text(raw.password),
           };
         });
-        const merged = { ...board, volunteers };
+        const numbers = rollNumbers(students);
+        const extras = students
+          .filter((s) => {
+            const status = text(s.status).toLowerCase();
+            if (status === "inactive" || status === "deleted") return false;
+            const keys = [text(s._id), text(s.volunteerId), text(s.fullName)].map((item) => item.toLowerCase()).filter(Boolean);
+            return keys.length > 0 && keys.every((key) => !known.has(key));
+          })
+          .map((s) => briefVolunteer(s, numbers.get(s) ?? students.length));
+        const merged = { ...board, volunteers: [...volunteers, ...extras] };
         officerCache = { at: Date.now(), data: merged };
         return merged;
       }

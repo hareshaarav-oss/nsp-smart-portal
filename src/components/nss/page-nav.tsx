@@ -25,11 +25,11 @@ export function PageNav({
   const item = "shrink-0 rounded-none px-3 py-2 hover:bg-white/10 active:bg-saffron active:text-navy";
 
   function goBack() {
-    if (window.history.length > 1) {
+    if (router.history.canGoBack()) {
       router.history.back();
       return;
     }
-    void router.navigate({ to: "/" });
+    void router.navigate({ to: session ? dash : "/" });
   }
 
   return (

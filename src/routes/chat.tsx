@@ -1,4 +1,4 @@
-import { createFileRoute, Link, Navigate } from "@tanstack/react-router";
+import { createFileRoute, Navigate, useRouter } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { ArrowLeft, Camera, Check, CheckCheck, Copy, Download, FileText, Lock, MapPin, Mic, MoreVertical, Paperclip, Phone, PhoneOff, Reply, Search, SendHorizonal, Smile, Star, Trash2, UserRound, Video, X } from "lucide-react";
 import { useUi } from "@/lib/nss/ui-prefs";
@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { AppShell } from "@/components/nss/shell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { useSessionStore } from "@/lib/nss/session";
+import { dashboardPath, useSessionStore } from "@/lib/nss/session";
 import { useNssStore, volunteerHours } from "@/lib/nss/store";
 import { openWhatsApp } from "@/lib/nss/whatsapp";
 
@@ -255,6 +255,7 @@ function ChatPage() {
   const sendLock = useRef(false);
   const hold = useRef(0);
   const stick = useRef(true);
+  const swipe = useRef({ x: 0, y: 0, moved: false });
   const mediaBag = useRef(new Map<string, { media: string; mediaType: "image" | "video" | "audio" | "file" }>());
   const recorder = useRef<MediaRecorder | null>(null);
   const draftRef = useRef("");
@@ -262,6 +263,34 @@ function ChatPage() {
   const setSession = useSessionStore((s) => s.setSession);
   const poWhatsapp = useNssStore((s) => s.settings.poWhatsapp);
   const roll = useNssStore((s) => s.volunteers) ?? [];
+  const router = useRouter();
+
+  useEffect(() => {
+    const sync = () => {
+      const hash = window.location.hash.replace(/^#/, "");
+      let thread = "";
+      if (hash.startsWith("c=")) {
+        try {
+          thread = decodeURIComponent(hash.slice(2));
+        } catch {
+          thread = "";
+        }
+      }
+      if (thread) {
+        setActive(canonicalThread(thread));
+        setMobileList(false);
+        return;
+      }
+      setMobileList(true);
+    };
+    sync();
+    window.addEventListener("popstate", sync);
+    window.addEventListener("hashchange", sync);
+    return () => {
+      window.removeEventListener("popstate", sync);
+      window.removeEventListener("hashchange", sync);
+    };
+  }, []);
 
   useEffect(() => {
     setSeen(readSeen());
@@ -270,8 +299,10 @@ function ChatPage() {
       const wish = JSON.parse(sessionStorage.getItem("nsp-wish") || "null") as { thread?: string; text?: string } | null;
       sessionStorage.removeItem("nsp-wish");
       if (wish?.thread) {
-        setActive(canonicalThread(wish.thread));
+        const thread = canonicalThread(wish.thread);
+        setActive(thread);
         setMobileList(false);
+        router.history.push(`/chat#c=${encodeURIComponent(thread)}`);
       }
       if (wish?.text) setDraft(wish.text);
     } catch {
@@ -598,12 +629,27 @@ function ChatPage() {
   }
 
   function openThread(id: string) {
-    setActive(id);
+    const thread = canonicalThread(id);
+    setActive(thread);
     setMobileList(false);
-    const last = lastMessage(id);
-    const next = { ...seen, [id]: last?.createdAt || new Date().toISOString() };
+    const last = lastMessage(thread);
+    const next = { ...seen, [thread]: last?.createdAt || new Date().toISOString() };
     setSeen(next);
     localStorage.setItem("nsp-chat-seen", JSON.stringify(next));
+    void router.history.push(`/chat#c=${encodeURIComponent(thread)}`);
+  }
+
+  function closeThread() {
+    if (router.history.canGoBack()) {
+      router.history.back();
+      return;
+    }
+    setMobileList(true);
+    router.history.push("/chat");
+  }
+
+  function leaveChats() {
+    void router.navigate({ to: dashboardPath(session) });
   }
 
   async function attachFile(file: File | undefined) {
@@ -1072,17 +1118,32 @@ function ChatPage() {
                     role="button"
                     tabIndex={0}
                     className={`max-w-[82%] rounded-lg px-2 py-1 text-left shadow-sm ${mine ? "rounded-tr-none bg-[#d9fdd3] text-[#111b21]" : "rounded-tl-none bg-white text-[#111b21]"} ${on || picked === message.id ? "ring-2 ring-[#25d366]" : ""}`}
-                    onPointerDown={() => {
+                    onPointerDown={(e) => {
+                      swipe.current = { x: e.clientX, y: e.clientY, moved: false };
                       window.clearTimeout(hold.current);
                       hold.current = window.setTimeout(() => {
                         setSelected((current) => (current.includes(message.id) ? current : [...current, message.id]));
                         setPicked("");
                       }, 420);
                     }}
-                    onPointerUp={() => window.clearTimeout(hold.current)}
+                    onPointerUp={(e) => {
+                      window.clearTimeout(hold.current);
+                      const dx = e.clientX - swipe.current.x;
+                      const dy = e.clientY - swipe.current.y;
+                      if (dx > 72 && Math.abs(dx) > Math.abs(dy) + 12) {
+                        swipe.current.moved = true;
+                        setReply({ name: message.senderName, text: previewLine(message).slice(0, 140) });
+                        setPicked("");
+                        setSelected((current) => current.filter((id) => id !== message.id));
+                      }
+                    }}
                     onPointerCancel={() => window.clearTimeout(hold.current)}
                     onClick={() => {
                       window.clearTimeout(hold.current);
+                      if (swipe.current.moved) {
+                        swipe.current.moved = false;
+                        return;
+                      }
                       if (selected.length) {
                         setSelected((current) => (current.includes(message.id) ? current.filter((id) => id !== message.id) : [...current, message.id]));
                         return;
@@ -1389,11 +1450,11 @@ function ChatPage() {
     <AppShell eyebrow="NSS CHAT" current="page">
       <div className={`fixed inset-0 z-50 flex ${prefs.dark ? "bg-[#0b141a]" : "bg-[#efeae2]"}`} onContextMenu={(event) => event.preventDefault()}>
         {away ? <div className="absolute inset-0 z-[60] bg-[#075e54]" /> : null}
-        <aside className={`${mobileList ? "flex" : "hidden"} h-full w-full flex-col md:flex md:w-96 md:border-r md:border-[#d1d7db] ${prefs.dark ? "bg-[#111b21] text-white" : "bg-white"}`}>
+        <aside className={`${mobileList ? "flex" : "hidden"} h-full w-full flex-col min-[1280px]:flex min-[1280px]:w-96 min-[1280px]:border-r min-[1280px]:border-[#d1d7db] ${prefs.dark ? "bg-[#111b21] text-white" : "bg-white"}`}>
           <div className="flex items-center gap-3 bg-[#075e54] px-3 py-3 text-white">
-            <Link to={session.role === "po" ? "/po" : session.role === "admin" ? "/admin-dashboard" : "/student-dashboard"} className="rounded-full p-1 hover:bg-white/10" aria-label="Back">
+            <button type="button" className="rounded-full p-1 hover:bg-white/10" aria-label="Back" onClick={leaveChats}>
               <ArrowLeft className="size-5" />
-            </Link>
+            </button>
             <div>
               <p className="font-medium">Chats</p>
               <p className="text-xs text-white/70">{me?.name || session.name}</p>
@@ -1415,10 +1476,14 @@ function ChatPage() {
             {meId && meId !== "po" && (listTab !== "fav" || prefs.favs.includes(canonicalThread(`dm:${meId}:po`))) ? (
               <button type="button" className="flex w-full items-center gap-3 border-b border-border px-4 py-3 text-left hover:bg-muted" onClick={() => openThread(canonicalThread(`dm:${meId}:po`))}>
                 <span className="flex size-10 items-center justify-center rounded-full bg-navy text-xs font-semibold text-paper">PO</span>
-                <span>
-                  <span className="block font-medium text-navy">Programme Officer</span>
-                  <span className="block text-xs text-muted-foreground">Personal chat</span>
+                <span className="min-w-0 flex-1">
+                  <span className="flex items-center justify-between gap-2">
+                    <span className="block truncate font-medium text-navy">Programme Officer</span>
+                    <span className="shrink-0 text-[11px] text-[#667781]">{lastMessage(canonicalThread(`dm:${meId}:po`)) ? clock(lastMessage(canonicalThread(`dm:${meId}:po`))!.createdAt) : ""}</span>
+                  </span>
+                  <span className="block truncate text-xs text-muted-foreground">{lastMessage(canonicalThread(`dm:${meId}:po`)) ? previewLine(lastMessage(canonicalThread(`dm:${meId}:po`))!) : "Personal chat"}</span>
                 </span>
+                {unreadCount(canonicalThread(`dm:${meId}:po`)) > 0 ? <span className="min-w-5 rounded-full bg-[#25d366] px-1.5 text-center text-[11px] font-semibold text-white">{unreadCount(canonicalThread(`dm:${meId}:po`))}</span> : null}
               </button>
             ) : null}
             {officer && meId !== "admin" ? (
@@ -1442,8 +1507,11 @@ function ChatPage() {
                     <button key={person.id} type="button" className={`flex w-full items-center gap-3 border-b border-border px-4 py-3 text-left ${active === thread ? "bg-forest/10" : "hover:bg-muted"}`} onClick={() => openThread(thread)}>
                       {photo ? <img src={photo} alt="" className="size-10 rounded-full object-cover" /> : <span className="flex size-10 items-center justify-center rounded-full bg-forest text-xs font-semibold text-paper">{person.name.slice(0, 1)}</span>}
                       <span className="min-w-0 flex-1">
-                        <span className="block truncate font-medium text-navy">{person.name}</span>
-                        <span className="block truncate text-xs text-muted-foreground">{person.unit}{person.id && !looksLikePhone(person.id) ? ` · ${person.id}` : ""}</span>
+                        <span className="flex items-center justify-between gap-2">
+                          <span className="block truncate font-medium text-navy">{person.name}</span>
+                          <span className="shrink-0 text-[11px] text-[#667781]">{lastMessage(thread) ? clock(lastMessage(thread)!.createdAt) : ""}</span>
+                        </span>
+                        <span className="block truncate text-xs text-muted-foreground">{lastMessage(thread) ? previewLine(lastMessage(thread)!) : `${person.unit}${person.id && !looksLikePhone(person.id) ? ` · ${person.id}` : ""}`}</span>
                       </span>
                       {count > 0 ? <span className="min-w-5 rounded-full bg-forest px-1.5 text-center text-[10px] font-semibold text-white">{count}</span> : null}
                     </button>
@@ -1453,9 +1521,9 @@ function ChatPage() {
             {allowedGroups.map((group) => threadButton(group.id))}
           </div>
         </aside>
-        <section className={`${mobileList ? "hidden" : "flex"} relative min-w-0 flex-1 flex-col md:flex`}>
+        <section className={`${mobileList ? "hidden" : "flex"} relative min-w-0 flex-1 flex-col min-[1280px]:flex`}>
           <header className="flex items-center gap-2 bg-[#075e54] px-2 py-2.5 text-white">
-            <button type="button" className="rounded-md p-2 hover:bg-white/10 md:hidden" onClick={() => setMobileList(true)} aria-label="Back to chats">
+            <button type="button" className="rounded-md p-2 hover:bg-white/10 min-[1280px]:hidden" onClick={closeThread} aria-label="Back to chats">
               <ArrowLeft className="size-5" />
             </button>
             <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-white/20 text-sm font-semibold">{threadTitle(active).slice(0, 1)}</span>

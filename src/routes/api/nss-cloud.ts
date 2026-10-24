@@ -97,6 +97,13 @@ function publicId(row: Row) {
   return idIsPhone ? vid || rawId : rawId || vid;
 }
 
+function cardPhoto(value: unknown) {
+  const src = text(value);
+  if (src.startsWith("data:image/") && src.length > 80 && src.length < 8000) return src;
+  if (src.startsWith("https://") && src.length < 8000) return src;
+  return "";
+}
+
 function publicVolunteer(row: Row) {
   return {
     id: publicId(row),
@@ -827,7 +834,8 @@ export const Route = createFileRoute("/api/nss-cloud")({
             const rows = (data.volunteers ?? []) as unknown as Row[];
             const volunteers = rows.map((row) => {
               const shaped = officer ? officerVolunteer(row) : publicVolunteer(row);
-              return { ...shaped, photoUrl: undefined };
+              const photo = cardPhoto(row.photoUrl);
+              return photo ? { ...shaped, photoUrl: photo } : { ...shaped, photoUrl: undefined };
             });
             const attendance = publicAttendance(rows, (data.attendance ?? []) as unknown as Row[]);
             const brand = await readBrandPhotos();
