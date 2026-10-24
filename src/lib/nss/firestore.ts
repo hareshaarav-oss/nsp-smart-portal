@@ -803,7 +803,7 @@ export async function loadPublicBoard(opts: { gallery?: boolean } = {}): Promise
         visitors: Math.max(fresh.visitors, board?.data.visitors ?? 0),
       });
       const clean = publicBoardShape(packed);
-      void writeBoard(clean).catch(() => undefined);
+      await writeBoard(clean);
       return rememberBoard(clean, clean.gallery.length > 0 || !wantGallery);
     }
   } catch {
@@ -854,7 +854,7 @@ export async function loadOfficerRoll(): Promise<CloudPortal | null> {
     const full = await loadCollegeCloud({ gallery: false, photos: false, attendance: true });
     if (full && full.volunteers.length >= 1) {
       officerCache = { at: Date.now(), data: full };
-      void writeBoard(full).catch(() => undefined);
+      await writeBoard(full);
       return full;
     }
     if (full && full.volunteers.length > 0) return full;
