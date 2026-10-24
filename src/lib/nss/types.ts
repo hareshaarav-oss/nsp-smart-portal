@@ -517,6 +517,8 @@ export type PortalSession = {
 
   mobile?: string;
 
+  docId?: string;
+
   chatToken?: string;
 
   loginAt?: string;

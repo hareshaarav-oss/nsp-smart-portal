@@ -1105,6 +1105,45 @@ function mergeStudentCache(id: string, values: Record<string, unknown>) {
   }
 }
 
+export async function readOneStudent(docId: string): Promise<Volunteer | null> {
+  const id = text(docId);
+  if (!id || id.startsWith("vol-")) return null;
+  const row = await getDocument(`students/${encodeURIComponent(id)}`);
+  if (!row) return null;
+  if (!text(row.fullName) && !text(row.volunteerId) && !text(row.mobile)) return null;
+  reveal(row, [...SEAL_KEYS, "password"]);
+  const mobileDigits = mobileKey(row.mobile) || mobileKey(row._id);
+  const mobile = mobileDigits.length >= 10 ? mobileDigits : latinDigits(text(row.mobile));
+  const statusRaw = text(row.status).toLowerCase();
+  return {
+    id: text(row._id) || id,
+    volunteerId: text(row.volunteerId),
+    enrollment: latinDigits(text(row.enrollment)),
+    fullName: titleFirstName(cleanPersonName(text(row.fullName))),
+    mobile,
+    email: text(row.email),
+    course: normalizeCourse(row.course) as Volunteer["course"],
+    semester: latinDigits(text(row.semester) || "1"),
+    unit: text(row.unit) === "Unit 2" ? "Unit 2" : "Unit 1",
+    nssRole: knownRole(row.nssRole),
+    fatherName: text(row.fatherName),
+    dob: isoDate(row.dob),
+    gender: (text(row.gender) === "Female" ? "Female" : text(row.gender) === "Male" ? "Male" : "") as Volunteer["gender"],
+    bloodGroup: text(row.bloodGroup),
+    address: text(row.address),
+    parentMobile: text(row.parentMobile) || text(row.emergencyContact) || mobile,
+    emergencyContact: text(row.emergencyContact),
+    abcId: text(row.abcId),
+    myBharatId: text(row.myBharatId),
+    photoUrl: safePhoto(row.photoUrl),
+    loginPassword: text(row.password),
+    mpin: text(row.mpin) || undefined,
+    webauthnId: text(row.webauthnId) || undefined,
+    createdAt: isoDate(row.createdAt),
+    status: statusRaw === "alumni" ? "alumni" : "active",
+  };
+}
+
 export async function patchStudent(docId: string, values: Record<string, unknown>, opts?: { quiet?: boolean }) {
   const id = text(docId);
   if (!id) throw new Error("Student record was not found.");
@@ -1117,23 +1156,33 @@ export async function patchStudent(docId: string, values: Record<string, unknown
     mergeStudentCache(id, values);
   }
   const fields: Record<string, unknown> = {};
-  const params = new URLSearchParams();
   for (const [key, value] of Object.entries(values)) {
     let stored: unknown = value;
     if (key === "password") stored = passwordRecord(text(value));
     else if (SEAL_KEYS.has(key) && typeof value === "string") stored = sealText(value);
     fields[key] = encodeValue(stored);
-    params.append("updateMask.fieldPaths", key);
   }
-  const res = await fetch(`${FIRESTORE_BASE}/students/${encodeURIComponent(id)}?${params}`, {
-    method: "PATCH",
+  const project = process.env.NSS_FIRESTORE_PROJECT_ID?.trim() || "studio-8504026975-1fdbc";
+  const name = `projects/${project}/databases/(default)/documents/students/${id}`;
+  const res = await fetch(`${FIRESTORE_BASE}:commit`, {
+    method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ fields }),
+    body: JSON.stringify({
+      writes: [
+        {
+          update: { name, fields },
+          updateMask: { fieldPaths: Object.keys(fields) },
+          currentDocument: { exists: true },
+        },
+      ],
+    }),
   });
-  if (!res.ok) {
-    const body = await res.text();
-    throw new Error(body.slice(0, 180) || "Could not update the student record");
+  if (res.status === 429 || res.status === 503) {
+    noteQuota();
+    throw new Error("The college register is busy. Try again in a little while.");
   }
+  if (res.status === 404) throw new Error("Student record was not found.");
+  if (!res.ok) throw new Error("Could not update the student record.");
   if (!opts?.quiet && touchesBoard) void markBoardStale();
 }
 

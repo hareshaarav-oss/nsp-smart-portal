@@ -1,4 +1,4 @@
-import { loadCollegeCloud, loadStudentRoll, loadPublicBoard, loadOfficerRoll, collegeQuotaBlocked, saveStudentToCloud, incrementVisitors, readVisitorCount, knownVisitorCount, patchStudent, safePhoto, knownRole, issueChatPass, readChatPass, listRecentChatMessages, saveChatMessage, listChatPeople, clearAttendanceCloud, readBrandPhotos, saveBrandPhotos, listPhotoRoster, readPhotoBatch, saveAttendanceMarks, readLive, publishBestVolunteer, publishServiceHours, purgeCloudIds, deleteChatMessages, chatIdsInThread, readChatMedia, readOneChat, patchNotice, upsertNotice, sideDocId, listChatStatuses, readSide, readStudentCerts, saveStudentCerts, type ChatExtra } from "@/lib/nss/firestore";
+import { loadCollegeCloud, loadStudentRoll, readOneStudent, loadPublicBoard, loadOfficerRoll, collegeQuotaBlocked, saveStudentToCloud, incrementVisitors, readVisitorCount, knownVisitorCount, patchStudent, safePhoto, knownRole, issueChatPass, readChatPass, listRecentChatMessages, saveChatMessage, listChatPeople, clearAttendanceCloud, readBrandPhotos, saveBrandPhotos, listPhotoRoster, readPhotoBatch, saveAttendanceMarks, readLive, publishBestVolunteer, publishServiceHours, purgeCloudIds, deleteChatMessages, chatIdsInThread, readChatMedia, readOneChat, patchNotice, upsertNotice, sideDocId, listChatStatuses, readSide, readStudentCerts, saveStudentCerts, type ChatExtra } from "@/lib/nss/firestore";
 import { passwordOk, sealText } from "@/lib/nss/seal.server";
 import { createFileRoute } from "@tanstack/react-router";
 
@@ -38,6 +38,40 @@ function text(value: unknown) {
 async function studentRows() {
   const volunteers = await loadStudentRoll();
   return (volunteers ?? []) as unknown as Row[];
+}
+
+function phoneId(value: unknown) {
+  const d = digits(value);
+  return d.length >= 10 ? d.slice(-10) : "";
+}
+
+async function locateOwnStudent(body: { docId?: string; volunteerId?: string; username?: string; password?: string; mobile?: string }) {
+  const password = text(body.password);
+  const ids = [text(body.docId), phoneId(body.password), phoneId(body.mobile), text(body.volunteerId), text(body.username)].filter(
+    (id, index, list) => id.length > 2 && list.indexOf(id) === index,
+  );
+  let busy = false;
+  for (const id of ids) {
+    try {
+      const row = await readOneStudent(id);
+      if (!row) continue;
+      if (passwordOk(text(row.loginPassword), password, digits(row.mobile))) return { row: row as unknown as Row };
+    } catch (error) {
+      if (busyError(error) || collegeQuotaBlocked()) {
+        busy = true;
+        break;
+      }
+      throw error;
+    }
+  }
+  if (!busy && !collegeQuotaBlocked()) {
+    const matched = matchVolunteer(await studentRows(), body.username ?? body.volunteerId ?? "", password);
+    if (matched.row) return { row: matched.row };
+    if (matched.error) return { error: matched.error };
+  }
+  const blindId = phoneId(body.docId) || phoneId(body.password) || phoneId(body.mobile);
+  if (busy && blindId) return { blindId };
+  return { error: busy ? "The college register is busy. Try again in a little while." : "Username not found." };
 }
 
 function digits(value: unknown) {
@@ -251,6 +285,7 @@ async function studentLoginResponse(found: Row) {
       volunteerId: volunteer.id,
       enrollment: text(found.enrollment),
       mobile: digits(found.mobile),
+      docId: text(found.id),
       chatToken,
     },
     volunteer,
@@ -334,6 +369,7 @@ export const Route = createFileRoute("/api/nss-cloud")({
             role?: string;
             name?: string;
             mobile?: string;
+            docId?: string;
             next?: string;
             volunteerId?: string;
             photoUrl?: string;
@@ -834,11 +870,10 @@ export const Route = createFileRoute("/api/nss-cloud")({
             return Response.json({ ok: true });
           }
           if (body.action === "set-password" || body.action === "update-profile") {
-            const volunteers = await studentRows();
-            const matched = matchVolunteer(volunteers, body.username ?? body.volunteerId ?? "", body.password ?? "");
-            if (!matched.row) return Response.json({ ok: false, error: matched.error }, { status: 401 });
-            const found = matched.row;
+            const located = await locateOwnStudent(body);
             if (body.action === "set-password") {
+              if (!located.row) return Response.json({ ok: false, error: located.error || "Sign in again." }, { status: located.blindId ? 503 : 401 });
+              const found = located.row;
               const next = text(body.next);
               if (next.length < 6) {
                 return Response.json({ ok: false, error: "New password must be at least 6 characters." }, { status: 400 });
@@ -848,8 +883,12 @@ export const Route = createFileRoute("/api/nss-cloud")({
                 passwordHasBeenChanged: true,
                 updatedAt: new Date().toISOString(),
               });
-              return Response.json({ ok: true });
+              return Response.json({ ok: true, docId: text(found.id) });
             }
+            if (!located.row && !located.blindId) {
+              return Response.json({ ok: false, error: located.error || "Could not save the profile." }, { status: /busy/i.test(located.error || "") ? 503 : 401 });
+            }
+            const found = located.row;
             const photo = text(body.photoUrl);
             if (photo.startsWith("data:image/") && photo.length >= 1200000) {
               return Response.json({ ok: false, error: "Photograph is too large. Use a smaller JPG or PNG." }, { status: 400 });
@@ -863,13 +902,8 @@ export const Route = createFileRoute("/api/nss-cloud")({
               if (next.length < 10) {
                 return Response.json({ ok: false, error: "Mobile must be 10 digits." }, { status: 400 });
               }
-              const clash = volunteers.find(
-                (row) => digits(row.mobile).slice(-10) === next && text(row.id) !== text(found.id),
-              );
-              if (clash) {
-                return Response.json({ ok: false, error: "This mobile number is already on the NSS roll." }, { status: 409 });
-              }
-              patch.mobile = next;
+              const current = digits(found?.mobile).slice(-10);
+              if (next !== current) patch.mobile = next;
             }
             if (typeof body.mpin === "string" && text(body.mpin)) {
               const pin = text(body.mpin);
@@ -886,8 +920,23 @@ export const Route = createFileRoute("/api/nss-cloud")({
               patch.webauthnId = finger;
             }
             if (photo.startsWith("data:image/")) patch.photoUrl = photo;
-            await patchStudent(text(found.id), patch);
-            return Response.json({ ok: true, volunteer: selfVolunteer({ ...found, ...patch }) });
+            const docId = text(found?.id) || located.blindId || "";
+            try {
+              await patchStudent(docId, patch);
+            } catch (error) {
+              const message = error instanceof Error ? error.message : "";
+              if (/not found/i.test(message) && located.blindId && text(found?.id) && text(found?.id) !== located.blindId) {
+                await patchStudent(located.blindId, patch);
+              } else {
+                throw error;
+              }
+            }
+            const savedId = text(found?.id) || located.blindId || "";
+            return Response.json({
+              ok: true,
+              docId: savedId,
+              volunteer: found ? selfVolunteer({ ...found, ...patch, id: savedId }) : { ...patch, id: savedId, mobile: patch.mobile || located.blindId },
+            });
           }
           if (body.action === "lookup") {
             const volunteers = await studentRows();
@@ -898,6 +947,17 @@ export const Route = createFileRoute("/api/nss-cloud")({
             return Response.json({ ok: true, username: first.toUpperCase() });
           }
           if (body.action === "mpin-login" || body.action === "finger-login" || body.action === "my-certificates" || body.action === "my-profile") {
+            if (body.action === "my-profile" || body.action === "my-certificates") {
+              const located = await locateOwnStudent(body);
+              if (!located.row) {
+                return Response.json({ ok: false, error: located.error || "Sign in again." }, { status: located.blindId ? 503 : 401 });
+              }
+              if (body.action === "my-certificates") {
+                const certificates = await readStudentCerts(text(located.row.id)).catch(() => []);
+                return Response.json({ ok: true, certificates, docId: text(located.row.id) });
+              }
+              return Response.json({ ok: true, docId: text(located.row.id), volunteer: selfVolunteer(located.row) });
+            }
             const volunteers = await studentRows();
             if (volunteers.length === 0) {
               return Response.json({ ok: false, error: "The college roll is busy. Wait a moment and sign in again." }, { status: 503 });
@@ -914,13 +974,6 @@ export const Route = createFileRoute("/api/nss-cloud")({
               ? matchMpin(volunteers, body.username ?? "", body.password ?? "")
               : matchVolunteer(volunteers, body.username ?? body.volunteerId ?? "", body.password ?? "");
             if (!matched.row) return Response.json({ ok: false, error: matched.error }, { status: 401 });
-            if (body.action === "my-certificates") {
-              const certificates = await readStudentCerts(text(matched.row.id)).catch(() => []);
-              return Response.json({ ok: true, certificates });
-            }
-            if (body.action === "my-profile") {
-              return Response.json({ ok: true, volunteer: selfVolunteer(matched.row) });
-            }
             return Response.json(await studentLoginResponse(matched.row));
           }
           if (body.action === "push-certificates") {

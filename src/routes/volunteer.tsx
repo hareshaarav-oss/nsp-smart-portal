@@ -110,11 +110,15 @@ function VolunteerDash() {
         action: "my-profile",
         username: session.volunteerId || session.name,
         password: session.mobile,
+        docId: session.docId || "",
+        volunteerId: session.volunteerId || "",
       }),
     })
       .then((res) => res.json())
-      .then((data: { ok?: boolean; volunteer?: OwnProfile }) => {
-        if (!stop && data.ok && data.volunteer) writeOwnProfile(data.volunteer);
+      .then((data: { ok?: boolean; docId?: string; volunteer?: OwnProfile }) => {
+        if (stop || !data.ok || !data.volunteer) return;
+        writeOwnProfile(data.volunteer);
+        if (data.docId) useSessionStore.getState().setSession({ ...session, docId: data.docId });
       })
       .catch(() => undefined);
     return () => {
@@ -730,7 +734,8 @@ function EditProfile({ volunteerId }: { volunteerId: string }) {
           action: "update-profile",
           username: volunteer.volunteerId || session?.volunteerId || volunteer.fullName.split(/\s+/)[0] || volunteer.id,
           password,
-          volunteerId: volunteer.id,
+          docId: session?.docId || "",
+          volunteerId: volunteer.volunteerId || session?.volunteerId || volunteer.id,
           mobile,
           email: form.email,
           address: form.address,
@@ -742,7 +747,7 @@ function EditProfile({ volunteerId }: { volunteerId: string }) {
           ...(photoDirty && form.photoUrl.startsWith("data:image/") ? { photoUrl: form.photoUrl } : {}),
         }),
       });
-      const data = (await res.json()) as { ok?: boolean; error?: string; volunteer?: OwnProfile };
+      const data = (await res.json()) as { ok?: boolean; error?: string; docId?: string; volunteer?: OwnProfile };
       if (!res.ok || !data.ok) {
         toast.error(data.error || "Could not save the profile.");
         return;
@@ -768,10 +773,11 @@ function EditProfile({ volunteerId }: { volunteerId: string }) {
         [volunteer.volunteerId || "", volunteer.id || "", (volunteer.fullName || "").toLowerCase(), session?.volunteerId || ""],
         next.photoUrl,
       );
-      if (session && next.mobile.replace(/\D/g, "").length >= 10) {
+      if (session && (next.mobile.replace(/\D/g, "").length >= 10 || data.docId)) {
         useSessionStore.getState().setSession({
           ...session,
-          mobile: next.mobile.replace(/\D/g, "").slice(-10),
+          ...(next.mobile.replace(/\D/g, "").length >= 10 ? { mobile: next.mobile.replace(/\D/g, "").slice(-10) } : {}),
+          ...(data.docId ? { docId: data.docId } : {}),
         });
       }
       setForm(next);
