@@ -353,13 +353,6 @@ function ChatPage() {
   }, [peer]);
 
   useEffect(() => {
-    if (!session || session.role === "po" || session.role === "admin") return;
-    const id = me?.id || session.volunteerId || "";
-    if (!id) return;
-    setActive(canonicalThread(`dm:${id}:po`));
-  }, [session, me?.id]);
-
-  useEffect(() => {
     if (!session || session.chatToken) return;
     let stop = false;
     void fetch("/api/nss-cloud", {
@@ -411,18 +404,26 @@ function ChatPage() {
           return kept && !row.media ? { ...row, media: kept.media, mediaType: kept.mediaType } : row;
         });
         setMessages((current) => {
-          const locals = current.filter((row) => row.id.startsWith("local-"));
-          const kept = locals.filter((local) => !incoming.some((row) => row.senderId === local.senderId && row.threadId === local.threadId && row.text === local.text));
-          const next = [...incoming, ...kept].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
-          if (current.length === next.length && current.every((row, index) => row.id === next[index]?.id && row.text === next[index]?.text && row.media === next[index]?.media)) return current;
-          return next;
+          const map = new Map(current.map((row) => [row.id, row]));
+          for (const row of incoming) {
+            const prev = map.get(row.id);
+            map.set(row.id, prev?.media && !row.media ? { ...row, media: prev.media, mediaType: prev.mediaType } : row);
+          }
+          for (const row of [...map.values()]) {
+            if (!row.id.startsWith("local-")) continue;
+            const sent = [...map.values()].some(
+              (other) => !other.id.startsWith("local-") && other.senderId === row.senderId && other.threadId === row.threadId && other.text === row.text,
+            );
+            if (sent) map.delete(row.id);
+          }
+          return [...map.values()].sort((a, b) => a.createdAt.localeCompare(b.createdAt)).slice(-200);
         });
       } catch {
         /* keep the last messages on screen */
       }
     }
     void pull();
-    const timer = window.setInterval(() => void pull(), 20000);
+    const timer = window.setInterval(() => void pull(), 4000);
     const wake = () => void pull();
     document.addEventListener("visibilitychange", wake);
     window.addEventListener("focus", wake);
@@ -517,7 +518,12 @@ function ChatPage() {
     });
   }, [messages, active, mobileList]);
 
-  const allowedGroups = GROUPS.filter((group) => group.id === "channel" || session?.role === "po" || session?.role === "admin");
+  const allowedGroups = GROUPS.filter((group) => {
+    if (group.id === "channel" || group.id === "college") return true;
+    if (session?.role === "po" || session?.role === "admin") return true;
+    if (group.id === "leaders") return session?.role === "leader";
+    return false;
+  });
 
   function personName(id: string) {
     if (id === "po") return "Programme Officer";
@@ -631,9 +637,12 @@ function ChatPage() {
     const attachment = pending;
     if (!text && !attachment && !pollOn) return;
     const desk = session?.role === "po" || session?.role === "admin";
-    const mine = me?.id || session?.volunteerId || "";
-    const thread = desk ? canonicalThread(threadId) : mine ? canonicalThread(`dm:${mine}:po`) : "";
-    if (!thread || (!desk && !thread.endsWith(":po") && !thread.includes(":po"))) return;
+    const mine = me?.id || session?.volunteerId || (desk ? (session?.role === "admin" ? "admin" : "po") : "");
+    const thread = canonicalThread(threadId);
+    if (!thread || !mine) {
+      toast.error("Open a chat, then send.");
+      return;
+    }
     const hours = prefs.disappear[thread] || 0;
     const localId = `local-${Date.now()}`;
     const localMessage: ChatMessage = {
@@ -688,20 +697,26 @@ function ChatPage() {
         const current = useSessionStore.getState().session;
         if (current?.chatToken) useSessionStore.getState().setSession({ ...current, chatToken: "" });
       }
-      if (!res.ok || !data.ok || !data.message) throw new Error(data.error || "Message was not sent.");
-      if (attachment?.media && data.message.mediaType) mediaBag.current.set(data.message.id, { media: data.message.media || attachment.media, mediaType: attachment.mediaType });
-      setMessages((current) => [...current.filter((row) => row.id !== localId && row.id !== data.message?.id), { ...data.message!, media: data.message!.media || attachment?.media || "", mediaType: data.message!.mediaType || attachment?.mediaType || "" }]);
-      if ((session?.role === "po" || session?.role === "admin") && active.startsWith("dm:") && alsoWa && phoneFor(otherId())) openWhatsAppChat(text);
-    } catch (error) {
-      if (!navigator.onLine) {
+      if (!res.ok || !data.ok || !data.message) {
+        const message = data.error || "Message was not sent.";
+        if (/cannot send|blocked|too large|Type a message/i.test(message)) {
+          setMessages((current) => current.filter((row) => row.id !== localId));
+          setDraft(text);
+          toast.error(message);
+          return;
+        }
         const queued = JSON.parse(localStorage.getItem("nsp-chat-out") || "[]") as unknown[];
         queued.push(payload);
         localStorage.setItem("nsp-chat-out", JSON.stringify(queued.slice(-15)));
         return;
       }
-      setMessages((current) => current.filter((row) => row.id !== localId));
-      setDraft(text);
-      toast.error(error instanceof Error && error.message !== "offline" ? error.message : "Message was not sent.");
+      if (attachment?.media && data.message.mediaType) mediaBag.current.set(data.message.id, { media: data.message.media || attachment.media, mediaType: attachment.mediaType });
+      setMessages((current) => [...current.filter((row) => row.id !== localId && row.id !== data.message?.id), { ...data.message!, media: data.message!.media || attachment?.media || "", mediaType: data.message!.mediaType || attachment?.mediaType || "" }]);
+      if ((session?.role === "po" || session?.role === "admin") && active.startsWith("dm:") && alsoWa && phoneFor(otherId())) openWhatsAppChat(text);
+    } catch {
+      const queued = JSON.parse(localStorage.getItem("nsp-chat-out") || "[]") as unknown[];
+      queued.push(payload);
+      localStorage.setItem("nsp-chat-out", JSON.stringify(queued.slice(-15)));
     }
   }
 
@@ -1305,14 +1320,12 @@ function ChatPage() {
             <button type="button" className={`rounded-full px-3 py-1 text-sm ${listTab === "unread" ? "bg-[#d9fdd3] text-[#008069]" : "bg-[#f0f2f5] text-[#54656f]"}`} onClick={() => setListTab("unread")}>Unread</button>
             <button type="button" className={`rounded-full px-3 py-1 text-sm ${listTab === "fav" ? "bg-[#d9fdd3] text-[#008069]" : "bg-[#f0f2f5] text-[#54656f]"}`} onClick={() => setListTab("fav")}>Favourites</button>
           </div>
-          {officer ? (
           <div className="border-b border-[#d1d7db] bg-white p-2">
               <div className="relative">
                 <Search className="pointer-events-none absolute left-3 top-2.5 size-4 text-[#667781]" />
                 <Input id="chat-search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search" className="rounded-lg border-0 bg-[#f0f2f5] pl-9" />
               </div>
           </div>
-          ) : null}
           <div className="min-h-0 flex-1 overflow-y-auto">
             <p className="px-4 pt-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">Personal</p>
             {meId && meId !== "po" && (listTab !== "fav" || prefs.favs.includes(canonicalThread(`dm:${meId}:po`))) ? (
@@ -1333,9 +1346,8 @@ function ChatPage() {
                 </span>
               </button>
             ) : null}
-            {officer && directory.length === 0 ? <p className="px-4 py-3 text-sm text-muted-foreground">No volunteer on the roll yet.</p> : null}
-            {officer
-              ? directory.map((person) => {
+            {directory.length === 0 ? <p className="px-4 py-3 text-sm text-muted-foreground">No volunteer on the roll yet.</p> : null}
+            {directory.map((person) => {
                   const thread = canonicalThread(`dm:${meId}:${person.id}`);
                   const archived = prefs.archives.includes(thread);
                   if (archivesOn ? !archived : archived) return null;
@@ -1353,7 +1365,7 @@ function ChatPage() {
                     </button>
                   );
                 })
-              : null}
+            }
             {officer ? <p className="px-4 pt-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">NSS Community</p> : <p className="px-4 pt-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">Channel</p>}
             {allowedGroups.map((group) => threadButton(group.id))}
           </div>

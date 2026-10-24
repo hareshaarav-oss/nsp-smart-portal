@@ -1721,8 +1721,87 @@ export async function listChatPeople(opts?: { includeMobile?: boolean }): Promis
 
 let chatCache: { at: number; rows: ChatRow[] } | null = null;
 
+function rememberChat(row: ChatRow) {
+  const rows = [...(chatCache?.rows ?? []).filter((item) => item.id !== row.id), row]
+    .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+    .slice(-80);
+  chatCache = { at: Date.now(), rows };
+}
+
+function tailRows(value: unknown): ChatRow[] {
+  const list = Array.isArray(value) ? value : [];
+  const rows: ChatRow[] = [];
+  for (const item of list) {
+    if (typeof item !== "string" || !item.startsWith("{")) continue;
+    try {
+      const row = JSON.parse(item) as ChatRow;
+      if (!row?.id || !row.threadId) continue;
+      rows.push({
+        id: text(row.id),
+        threadId: text(row.threadId),
+        text: text(row.text).slice(0, 1000),
+        senderId: text(row.senderId),
+        senderName: text(row.senderName).slice(0, 80),
+        createdAt: text(row.createdAt),
+        replyName: text(row.replyName).slice(0, 80),
+        replyText: text(row.replyText).slice(0, 140),
+        media: "",
+        mediaType: row.mediaType === "video" || row.mediaType === "audio" || row.mediaType === "file" || row.mediaType === "image" ? row.mediaType : "",
+      });
+    } catch {
+      /* skip a bad line */
+    }
+  }
+  return rows.sort((a, b) => a.createdAt.localeCompare(b.createdAt)).slice(-80);
+}
+
+async function publishChatTail(row: ChatRow) {
+  const slim = JSON.stringify({
+    id: row.id,
+    threadId: row.threadId,
+    text: row.text.slice(0, 280),
+    senderId: row.senderId,
+    senderName: row.senderName,
+    createdAt: row.createdAt,
+    replyName: row.replyName || "",
+    replyText: row.replyText || "",
+    mediaType: row.mediaType || "",
+  });
+  const project = process.env.NSS_FIRESTORE_PROJECT_ID?.trim() || "studio-8504026975-1fdbc";
+  await fetch(`${FIRESTORE_BASE}:commit`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      writes: [
+        {
+          transform: {
+            document: `projects/${project}/databases/(default)/documents/portalSettings/chatlog`,
+            fieldTransforms: [{ fieldPath: "recent", appendMissingElements: { values: [{ stringValue: slim }] } }],
+          },
+        },
+      ],
+    }),
+  });
+}
+
 export async function listRecentChatMessages(limit = 60): Promise<ChatRow[]> {
-  if (chatCache && Date.now() - chatCache.at < 8 * 1000) return chatCache.rows.slice(-limit);
+  if (chatCache && Date.now() - chatCache.at < 8000 && chatCache.rows.length) return chatCache.rows.slice(-limit);
+  if (!collegeQuotaBlocked()) {
+    try {
+      const doc = await getDocument("portalSettings/chatlog");
+      const fromTail = tailRows(doc?.recent);
+      if (fromTail.length) {
+        const seen = new Set(fromTail.map((row) => row.id));
+        const merged = [...fromTail, ...(chatCache?.rows ?? []).filter((row) => !seen.has(row.id))]
+          .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+          .slice(-80);
+        chatCache = { at: Date.now(), rows: merged };
+        return merged.slice(-limit);
+      }
+    } catch {
+      return chatCache?.rows.slice(-limit) ?? [];
+    }
+  }
   if (collegeQuotaBlocked()) return chatCache?.rows.slice(-limit) ?? [];
   const mapRows = (docs: Record<string, unknown>[]) =>
     docs
@@ -1829,7 +1908,6 @@ export async function patchNotice(id: string, values: Record<string, unknown>) {
     }),
   });
   if (!res.ok) throw new Error("Could not update the chat.");
-  chatCache = null;
 }
 
 export async function readSide(id: string) {
@@ -1928,8 +2006,7 @@ export async function saveChatMessage(input: { threadId: string; text: string; s
     extra: packExtra(extra),
     createdAt,
   });
-  chatCache = null;
-  return {
+  const saved: ChatRow = {
     id,
     threadId: input.threadId,
     text: input.text.slice(0, 1000),
@@ -1942,6 +2019,9 @@ export async function saveChatMessage(input: { threadId: string; text: string; s
     mediaType: media ? mediaType : "",
     extra,
   };
+  rememberChat(saved);
+  void publishChatTail(saved).catch(() => undefined);
+  return saved;
 }
 
 async function deleteNoticeDoc(id: string) {

@@ -306,12 +306,12 @@ function validThread(threadId: string) {
 
 function canSeeThread(user: { id: string; role: string; unit: string }, threadId: string) {
   const officer = user.role === "po" || user.role === "admin";
-  if (threadId === "channel") return true;
-  if (threadId === "college" || threadId === "leaders" || threadId === "unit-1" || threadId === "unit-2") return officer;
+  if (threadId === "channel" || threadId === "college") return true;
+  if (threadId === "leaders") return officer || user.role === "leader";
+  if (threadId === "unit-1" || threadId === "unit-2") return officer || !user.unit || user.unit === (threadId === "unit-1" ? "Unit 1" : "Unit 2");
   if (!threadId.startsWith("dm:")) return false;
   const ids = threadId.slice(3).split(":");
-  if (officer) return ids.includes("po") || ids.includes("admin");
-  return ids.includes(user.id) && ids.includes("po");
+  return officer || ids.includes(user.id);
 }
 
 function officerRole(user: { role?: string } | null | undefined) {
@@ -744,11 +744,15 @@ export const Route = createFileRoute("/api/nss-cloud")({
               if (!validThread(threadId) || !canSeeThread(user, threadId) || (threadId === "channel" && !officer)) {
                 return Response.json({ ok: false, error: "You cannot send to that chat." }, { status: 403 });
               }
-              if (threadId.startsWith("dm:")) {
+              if (threadId.startsWith("dm:") && !collegeQuotaBlocked()) {
                 const ids = threadId.slice(3).split(":");
                 const other = ids.find((id) => id !== user.id) || "";
-                const mine = text((await readSide(sideDocId("blk", user.id)))?.ids).split(",");
-                const theirs = other ? text((await readSide(sideDocId("blk", other)))?.ids).split(",") : [];
+                const [mineDoc, theirDoc] = await Promise.all([
+                  readSide(sideDocId("blk", user.id)),
+                  other ? readSide(sideDocId("blk", other)) : Promise.resolve(null),
+                ]);
+                const mine = text(mineDoc?.ids).split(",");
+                const theirs = text(theirDoc?.ids).split(",");
                 if ((other && mine.includes(other)) || theirs.includes(user.id)) {
                   return Response.json({ ok: false, error: "This chat is blocked." }, { status: 403 });
                 }
