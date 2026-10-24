@@ -441,7 +441,7 @@ function ChatPage() {
       }
     }
     void pull();
-    const timer = window.setInterval(() => void pull(), 4000);
+    const timer = window.setInterval(() => void pull(), 2000);
     const wake = () => void pull();
     document.addEventListener("visibilitychange", wake);
     window.addEventListener("focus", wake);

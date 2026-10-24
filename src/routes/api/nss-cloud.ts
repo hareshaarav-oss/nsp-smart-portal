@@ -757,19 +757,6 @@ export const Route = createFileRoute("/api/nss-cloud")({
               if (!validThread(threadId) || !canSeeThread(user, threadId) || (threadId === "channel" && !officer)) {
                 return Response.json({ ok: false, error: "You cannot send to that chat." }, { status: 403 });
               }
-              if (threadId.startsWith("dm:") && !collegeQuotaBlocked()) {
-                const ids = threadId.slice(3).split(":");
-                const other = ids.find((id) => id !== user.id) || "";
-                const [mineDoc, theirDoc] = await Promise.all([
-                  readSide(sideDocId("blk", user.id)),
-                  other ? readSide(sideDocId("blk", other)) : Promise.resolve(null),
-                ]);
-                const mine = text(mineDoc?.ids).split(",");
-                const theirs = text(theirDoc?.ids).split(",");
-                if ((other && mine.includes(other)) || theirs.includes(user.id)) {
-                  return Response.json({ ok: false, error: "This chat is blocked." }, { status: 403 });
-                }
-              }
               const pollOptions = Array.isArray(body.pollOptions) ? body.pollOptions.map((item) => text(item).slice(0, 40)).filter(Boolean).slice(0, 4) : [];
               const kind = text(body.kind).slice(0, 16);
               if (!message && !mediaOk && kind !== "poll") return Response.json({ ok: false, error: "Type a message first." }, { status: 400 });
