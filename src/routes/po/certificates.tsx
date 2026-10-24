@@ -11,9 +11,33 @@ import {
 } from "@/lib/nss/certificates";
 import { formatLongDate } from "@/lib/nss/format";
 import { certificateOf, presentVolunteers, useNssStore } from "@/lib/nss/store";
-import type { NssEvent, Volunteer } from "@/lib/nss/types";
+import { useSessionStore } from "@/lib/nss/session";
+import type { IssuedCertificate, NssEvent, Volunteer } from "@/lib/nss/types";
 
 export const Route = createFileRoute("/po/certificates")({ component: CertificatesPage });
+
+function pushSent(certs: IssuedCertificate[]) {
+  const token = useSessionStore.getState().session?.chatToken || "";
+  const rows = certs.filter((cert) => cert.sentAt);
+  if (!token || !rows.length) return;
+  void fetch("/api/nss-cloud", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      action: "push-certificates",
+      chatToken: token,
+      certificates: rows.map((cert) => ({
+        id: cert.id,
+        volunteerId: cert.volunteerId,
+        eventId: cert.eventId,
+        generatedAt: cert.generatedAt,
+        sentAt: cert.sentAt,
+        certificateId: cert.certificateId || "",
+        printReady: true,
+      })),
+    }),
+  }).catch(() => undefined);
+}
 
 function bestEventId(
   events: NssEvent[],
@@ -46,6 +70,18 @@ function CertificatesPage() {
   const event = events.find((e) => e.id === eventId) ?? events[0];
   const present = event ? presentVolunteers(state, event.id) : [];
   const [picked, setPicked] = useState<Record<string, boolean>>({});
+
+  useEffect(() => {
+    try {
+      if (sessionStorage.getItem("nsp-cert-pushed")) return;
+      const sent = (useNssStore.getState().certificates ?? []).filter((cert) => cert.sentAt);
+      if (!sent.length) return;
+      sessionStorage.setItem("nsp-cert-pushed", "1");
+      pushSent(sent);
+    } catch {
+      /* ignore */
+    }
+  }, []);
 
   useEffect(() => {
     if (!events.length) return;
@@ -116,6 +152,7 @@ function CertificatesPage() {
       return;
     }
     const n = state.sendCertificates(ids);
+    pushSent(useNssStore.getState().certificates.filter((cert) => ids.includes(cert.id)));
     toast.success(`Sent ${n} certificate${n === 1 ? "" : "s"} to volunteer dashboards.`);
   }
 

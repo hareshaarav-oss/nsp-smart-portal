@@ -1,5 +1,5 @@
 import { createFileRoute, Navigate } from "@tanstack/react-router";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { BarChart, Bar, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { toast } from "sonner";
 import { Award, Cake, Fingerprint, KeyRound, Lock } from "lucide-react";
@@ -10,13 +10,14 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { htmlForCertificate, openPreparedCertificate } from "@/lib/nss/certificates";
+import { htmlForCertificate, openPreparedCertificate, preparedCertificate } from "@/lib/nss/certificates";
 import { daysUntilBirthday, formatLongDate, idCardName, parseDob, todayIso } from "@/lib/nss/format";
 import { openIdCard } from "@/lib/nss/id-card";
 import { blobToDataUrl, compressPassport, rememberPhoto } from "@/lib/nss/media";
 import { findSessionVolunteer, isOfficer, registerFingerprint, useSessionStore } from "@/lib/nss/session";
 import { attendanceOf, bestVolunteer, rsvpOf, useNssStore, volunteerHours } from "@/lib/nss/store";
 import { useUi } from "@/lib/nss/ui-prefs";
+import type { IssuedCertificate } from "@/lib/nss/types";
 
 export const Route = createFileRoute("/volunteer")({ component: VolunteerDash });
 
@@ -48,7 +49,30 @@ function VolunteerDash() {
   const [cur, setCur] = useState("");
   const [next, setNext] = useState("");
   const [confirm, setConfirm] = useState("");
+  const [cloudCerts, setCloudCerts] = useState<IssuedCertificate[]>([]);
   const meRef = useRef<typeof volunteers[number] | undefined>(undefined);
+
+  useEffect(() => {
+    if (!session || isOfficer(session) || !session.mobile) return;
+    let stop = false;
+    void fetch("/api/nss-cloud", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        action: "my-certificates",
+        username: session.volunteerId || session.name,
+        password: session.mobile,
+      }),
+    })
+      .then((res) => res.json())
+      .then((data: { certificates?: IssuedCertificate[] }) => {
+        if (!stop && Array.isArray(data.certificates)) setCloudCerts(data.certificates);
+      })
+      .catch(() => undefined);
+    return () => {
+      stop = true;
+    };
+  }, [session]);
 
   if (!session) return <Navigate to="/login" search={{ role: "volunteer" }} />;
   if (isOfficer(session)) return <Navigate to="/po" />;
@@ -94,14 +118,19 @@ function VolunteerDash() {
     })
     .sort((a, b) => a.date.localeCompare(b.date))
     .slice(0, 8);
-  const mine = certificates
-    .filter((c) => c.volunteerId === me.id && c.sentAt)
-    .map((c) => {
-      const event = events.find((e) => e.id === c.eventId);
-      return event ? { cert: c, event } : null;
-    })
-    .filter((row): row is { cert: (typeof certificates)[number]; event: (typeof events)[number] } => Boolean(row))
-    .sort((a, b) => b.event.date.localeCompare(a.event.date));
+  const official = new Map<string, IssuedCertificate>();
+  for (const cert of [...certificates, ...cloudCerts]) {
+    const mineId = cert.volunteerId === me.id || cert.volunteerId === me.volunteerId;
+    if (!mineId) continue;
+    official.set(cert.eventId, cert.sentAt ? cert : official.get(cert.eventId) ?? cert);
+  }
+  const earnedEvents = events
+    .filter((event) => official.has(event.id) || Boolean(attendanceOf(portalState, me.id, event.id)?.present))
+    .sort((a, b) => b.date.localeCompare(a.date));
+  const mine = earnedEvents.map((event) => ({
+    event,
+    cert: official.get(event.id) ?? preparedCertificate(me, event),
+  }));
   const isBest = bestId === me.id;
   const myBirthday = parseDob(me.dob);
   const birthdayDays = myBirthday ? daysUntilBirthday(myBirthday, todayIso()) : null;
@@ -178,6 +207,117 @@ function VolunteerDash() {
             <button type="button" className="underline-offset-4 hover:underline" onClick={() => setPanel(panel === "password" ? "none" : "password")}>Change password</button>
           </div>
         </div>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">MPIN, fingerprint and certificates</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <form
+              className="flex flex-wrap items-end gap-2"
+              onSubmit={(e) => {
+                e.preventDefault();
+                const pin = (document.getElementById("mpin-set") as HTMLInputElement | null)?.value ?? "";
+                if (!/^\d{4}$/.test(pin)) {
+                  toast.error("MPIN must be 4 digits.");
+                  return;
+                }
+                updateVolunteer(me.id, { mpin: pin });
+                const live = useSessionStore.getState().session;
+                void fetch("/api/nss-cloud", {
+                  method: "POST",
+                  headers: { "content-type": "application/json" },
+                  body: JSON.stringify({
+                    action: "update-profile",
+                    username: live?.volunteerId || me.volunteerId || me.id,
+                    password: live?.mobile || me.mobile,
+                    volunteerId: me.id,
+                    mpin: pin,
+                  }),
+                })
+                  .then(async (res) => {
+                    const data = (await res.json()) as { ok?: boolean; error?: string };
+                    if (!res.ok || !data.ok) {
+                      toast.error(data.error || "MPIN stayed on this phone only.");
+                      return;
+                    }
+                    toast.success("MPIN saved. Use it on the student login.");
+                  })
+                  .catch(() => toast.error("Could not reach the college server."));
+                const el = document.getElementById("mpin-set") as HTMLInputElement | null;
+                if (el) el.value = "";
+              }}
+            >
+              <div className="space-y-1.5">
+                <Label htmlFor="mpin-set">4-digit MPIN {me.mpin ? "· saved" : ""}</Label>
+                <Input id="mpin-set" inputMode="numeric" maxLength={4} placeholder={me.mpin ? "••••" : "4 digits"} />
+              </div>
+              <Button type="submit">
+                <KeyRound />
+                Save MPIN
+              </Button>
+            </form>
+            <Button
+              type="button"
+              onClick={() => {
+                void registerFingerprint(me)
+                  .then(async (id) => {
+                    updateVolunteer(me.id, { webauthnId: id });
+                    const live = useSessionStore.getState().session;
+                    const res = await fetch("/api/nss-cloud", {
+                      method: "POST",
+                      headers: { "content-type": "application/json" },
+                      body: JSON.stringify({
+                        action: "update-profile",
+                        username: live?.volunteerId || me.volunteerId || me.id,
+                        password: live?.mobile || me.mobile,
+                        volunteerId: me.id,
+                        webauthnId: id,
+                      }),
+                    });
+                    const data = (await res.json()) as { ok?: boolean; error?: string };
+                    if (!res.ok || !data.ok) {
+                      toast.error(data.error || "Fingerprint stayed on this phone only.");
+                      return;
+                    }
+                    toast.success("Fingerprint saved. Sign in with it on this phone.");
+                  })
+                  .catch((error: unknown) => {
+                    toast.error(error instanceof Error ? error.message : "Fingerprint not available.");
+                  });
+              }}
+            >
+              <Fingerprint />
+              {me.webauthnId ? "Fingerprint on" : "Enable fingerprint"}
+            </Button>
+            <div className="space-y-2 border-t border-border pt-3">
+              <p className="flex items-center gap-2 text-sm font-medium">
+                <Award className="size-4 text-saffron" />
+                Certificates
+              </p>
+              {mine.length === 0 ? (
+                <p className="text-sm text-muted-foreground">None yet. A certificate appears when your attendance is marked present.</p>
+              ) : (
+                mine.map(({ cert, event }) => (
+                  <div key={cert.id} className="flex flex-wrap items-center justify-between gap-2 border border-border px-3 py-2">
+                    <div>
+                      <p className="font-medium">{event.name}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {formatLongDate(event.date)} · {cert.certificateId || "Certificate"} · {event.hours} hrs
+                      </p>
+                    </div>
+                    <Button
+                      size="sm"
+                      onClick={() => void openPreparedCertificate(() => htmlForCertificate(cert, me, event, settings))}
+                    >
+                      View / Print
+                    </Button>
+                  </div>
+                ))
+              )}
+            </div>
+          </CardContent>
+        </Card>
         <Card>
           <CardHeader><CardTitle>{t("recent")}</CardTitle></CardHeader>
           <CardContent className="space-y-2">
@@ -360,64 +500,6 @@ function VolunteerDash() {
           </CardContent>
         </Card>
 
-        <Card>
-          <CardContent className="space-y-3">
-            <form
-              className="flex flex-wrap items-end gap-2"
-              onSubmit={(e) => {
-                e.preventDefault();
-                const pin = (document.getElementById("mpin-set") as HTMLInputElement | null)?.value ?? "";
-                if (!/^\d{4}$/.test(pin)) {
-                  toast.error("MPIN must be 4 digits.");
-                  return;
-                }
-                updateVolunteer(me.id, { mpin: pin });
-                const session = useSessionStore.getState().session;
-                void fetch("/api/nss-cloud", {
-                  method: "POST",
-                  headers: { "content-type": "application/json" },
-                  body: JSON.stringify({
-                    action: "update-profile",
-                    username: session?.volunteerId || me.volunteerId || me.id,
-                    password: session?.mobile || me.mobile,
-                    volunteerId: me.id,
-                    mpin: pin,
-                  }),
-                });
-                toast.success("MPIN saved.");
-                const el = document.getElementById("mpin-set") as HTMLInputElement | null;
-                if (el) el.value = "";
-              }}
-            >
-              <div className="space-y-1.5">
-                <Label htmlFor="mpin-set">Set 4-digit MPIN</Label>
-                <Input id="mpin-set" inputMode="numeric" placeholder={me.mpin ? "••••" : ""} />
-              </div>
-              <Button type="submit">
-                <KeyRound />
-                Save MPIN
-              </Button>
-            </form>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => {
-                void registerFingerprint(me)
-                  .then((id) => {
-                    updateVolunteer(me.id, { webauthnId: id });
-                    toast.success("Fingerprint saved.");
-                  })
-                  .catch((error: unknown) => {
-                    toast.error(error instanceof Error ? error.message : "Fingerprint not available.");
-                  });
-              }}
-            >
-              <Fingerprint />
-              {me.webauthnId ? "Fingerprint on" : "Enable fingerprint"}
-            </Button>
-          </CardContent>
-        </Card>
-
         <div className="grid gap-4 lg:grid-cols-2">
           <Card>
             <CardHeader>
@@ -466,43 +548,6 @@ function VolunteerDash() {
             <CardContent><p className="text-sm">{formatLongDate(myBirthday)}</p><p className="mt-1 text-sm font-medium">{birthdayDays === 0 ? "🎉 Today is your birthday!" : `🎂 ${birthdayDays} day${birthdayDays === 1 ? "" : "s"} to go`}</p></CardContent>
           </Card>
         ) : null}
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Award className="size-4 text-saffron" />
-              My earned certificates
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            {mine.length === 0 ? (
-              <p className="text-sm text-muted-foreground">None yet.</p>
-            ) : (
-              mine.map(({ cert, event }) => (
-                <div
-                  key={cert.id}
-                  className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border px-3 py-2"
-                >
-                  <div>
-                    <p className="font-medium">{event.name}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {formatLongDate(event.date)} · {cert.certificateId || "Certificate"} · {event.hours} hrs · {event.location}
-                    </p>
-                  </div>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() =>
-                      void openPreparedCertificate(() => htmlForCertificate(cert, me, event, settings))
-                    }
-                  >
-                    View / Print
-                  </Button>
-                </div>
-              ))
-            )}
-          </CardContent>
-        </Card>
 
         <Card>
           <CardHeader>

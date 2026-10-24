@@ -4,6 +4,7 @@ import { attendanceDocId as sealedAttendanceId, openText, passwordRecord, sealTe
 import type {
   AttendanceRecord,
   GalleryItem,
+  IssuedCertificate,
   Notice,
   NssEvent,
   PortalState,
@@ -339,6 +340,7 @@ async function loadCollegeCloudFresh(opts: { gallery?: boolean; photos?: boolean
       photoUrl: safePhoto(s.photoUrl),
       loginPassword: text(s.password),
       mpin: text(s.mpin) || undefined,
+      webauthnId: text(s.webauthnId) || undefined,
       createdAt: isoDate(s.createdAt) || isoDate(s.updatedAt),
       status: isAlumni ? "alumni" : "active",
     };
@@ -559,6 +561,7 @@ function publicBoardShape(data: CloudPortal): CloudPortal {
       email: "",
       loginPassword: "",
       mpin: "",
+      webauthnId: "",
       address: "",
       bloodGroup: "",
       parentMobile: "",
@@ -1002,6 +1005,35 @@ function rollNumbers(sorted: Record<string, unknown>[]) {
     cursor += 1;
   }
   return numbers;
+}
+
+export async function readStudentCerts(docId: string): Promise<IssuedCertificate[]> {
+  const id = text(docId);
+  if (!id) return [];
+  const row = await getDocument(`students/${id}`);
+  if (!row) return [];
+  const raw = openText(text(row.certPack));
+  if (!raw.startsWith("[")) return [];
+  try {
+    const parsed = JSON.parse(raw) as IssuedCertificate[];
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((item) => item && text(item.id) && text(item.eventId)).slice(0, 40);
+  } catch {
+    return [];
+  }
+}
+
+export async function saveStudentCerts(docId: string, rows: IssuedCertificate[]) {
+  const packed = rows.slice(0, 40).map((item) => ({
+    id: text(item.id),
+    volunteerId: text(item.volunteerId),
+    eventId: text(item.eventId),
+    generatedAt: text(item.generatedAt),
+    sentAt: text(item.sentAt),
+    certificateId: text(item.certificateId),
+    printReady: true,
+  }));
+  await patchStudent(docId, { certPack: sealText(JSON.stringify(packed)) });
 }
 
 export async function patchStudent(docId: string, values: Record<string, unknown>, opts?: { quiet?: boolean }) {

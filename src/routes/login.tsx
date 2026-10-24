@@ -65,6 +65,41 @@ function LoginPage() {
     void navigate({ to: dashboardPath(session) });
   }
 
+  function acceptCloud(data: {
+    session?: { role: "po" | "admin" | "volunteer" | "leader"; name: string; volunteerId?: string; enrollment?: string; mobile?: string };
+    volunteer?: Parameters<typeof rememberVolunteer>[0];
+    volunteers?: unknown[];
+    attendance?: unknown[];
+    events?: unknown[];
+    serviceHours?: number;
+    certificates?: { id: string; volunteerId: string; eventId: string; generatedAt: string; sentAt: string | null; certificateId?: string; printReady?: boolean }[];
+  }) {
+    if (!data.session) return;
+    setSession(data.session);
+    if (Array.isArray(data.volunteers) && data.volunteers.length) {
+      useNssStore.getState().applyCloud({
+        volunteers: data.volunteers as never,
+        attendance: Array.isArray(data.attendance) ? (data.attendance as never) : undefined,
+        events: Array.isArray(data.events) ? (data.events as never) : undefined,
+        serviceHours: data.serviceHours,
+        keepPrivate: true,
+      });
+    } else if (data.volunteer) {
+      rememberVolunteer({
+        ...data.volunteer,
+        mobile: data.session.mobile || data.volunteer.mobile || "",
+      });
+    }
+    if (Array.isArray(data.certificates) && data.certificates.length) {
+      const current = useNssStore.getState().certificates ?? [];
+      const seen = new Set(current.map((item) => item.id));
+      const extra = data.certificates.filter((item) => item?.id && !seen.has(item.id));
+      if (extra.length) useNssStore.setState({ certificates: [...current, ...extra] });
+    }
+    toast.success(`Welcome, ${data.session.name}`);
+    void navigate({ to: dashboardPath(data.session) });
+  }
+
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!captcha || captchaIn.trim().toUpperCase() !== captcha) {
@@ -72,22 +107,13 @@ function LoginPage() {
       refreshCaptcha();
       return;
     }
-    if (role === "volunteer" && mode === "mpin") {
-      const result = loginWithMpin(id, password, volunteers);
-      if (!result.ok) {
-        toast.error(result.error);
-        refreshCaptcha();
-        return;
-      }
-      enter(result.session);
-      return;
-    }
+    const action = role === "volunteer" && mode === "mpin" ? "mpin-login" : role === "volunteer" ? "login" : "staff-login";
     try {
       const res = await fetch("/api/nss-cloud", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          action: role === "volunteer" ? "login" : "staff-login",
+          action,
           role,
           username: id,
           password,
@@ -102,10 +128,11 @@ function LoginPage() {
         attendance?: unknown[];
         events?: unknown[];
         serviceHours?: number;
+        certificates?: { id: string; volunteerId: string; eventId: string; generatedAt: string; sentAt: string | null; certificateId?: string; printReady?: boolean }[];
       };
       if (!res.ok || !data.ok || !data.session) {
         if (role === "volunteer") {
-          const local = loginVolunteer(id, password, volunteers);
+          const local = mode === "mpin" ? loginWithMpin(id, password, volunteers) : loginVolunteer(id, password, volunteers);
           if (local.ok) {
             enter(local.session);
             return;
@@ -115,29 +142,13 @@ function LoginPage() {
         refreshCaptcha();
         return;
       }
-      setSession(data.session);
-      if (Array.isArray(data.volunteers) && data.volunteers.length) {
-        useNssStore.getState().applyCloud({
-          volunteers: data.volunteers as never,
-          attendance: Array.isArray(data.attendance) ? (data.attendance as never) : undefined,
-          events: Array.isArray(data.events) ? (data.events as never) : undefined,
-          serviceHours: data.serviceHours,
-          keepPrivate: true,
-        });
-      } else if (data.volunteer) {
-        rememberVolunteer({
-          ...data.volunteer,
-          mobile: data.session.mobile || data.volunteer.mobile || "",
-        });
-      }
-      toast.success(`Welcome, ${data.session.name}`);
-      void navigate({ to: dashboardPath(data.session) });
+      acceptCloud(data);
     } catch {
       if (role !== "volunteer") {
         toast.error("Could not reach the college server.");
         return;
       }
-      const result = loginVolunteer(id, password, volunteers);
+      const result = mode === "mpin" ? loginWithMpin(id, password, volunteers) : loginVolunteer(id, password, volunteers);
       if (!result.ok) {
         toast.error(result.error);
         refreshCaptcha();
@@ -148,12 +159,51 @@ function LoginPage() {
   }
 
   async function onFingerprint() {
-    const result = await loginWithFingerprint(volunteers);
-    if (!result.ok) {
-      toast.error(result.error);
+    if (!window.PublicKeyCredential) {
+      toast.error("Fingerprint login is not available on this phone.");
       return;
     }
-    enter(result.session);
+    try {
+      const cred = (await navigator.credentials.get({
+        publicKey: {
+          challenge: crypto.getRandomValues(new Uint8Array(32)),
+          timeout: 60_000,
+          userVerification: "required",
+          rpId: location.hostname,
+        },
+      })) as PublicKeyCredential | null;
+      if (!cred) {
+        toast.error("Fingerprint was cancelled.");
+        return;
+      }
+      const res = await fetch("/api/nss-cloud", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ action: "finger-login", credentialId: cred.id }),
+      });
+      const data = (await res.json()) as {
+        ok?: boolean;
+        error?: string;
+        session?: { role: "po" | "admin" | "volunteer" | "leader"; name: string };
+      };
+      if (res.ok && data.ok && data.session) {
+        acceptCloud(data);
+        return;
+      }
+      const local = await loginWithFingerprint(volunteers);
+      if (local.ok) {
+        enter(local.session);
+        return;
+      }
+      toast.error(data.error || local.error || "Turn fingerprint on from the student dashboard first.");
+    } catch (error) {
+      const local = await loginWithFingerprint(volunteers).catch(() => null);
+      if (local?.ok) {
+        enter(local.session);
+        return;
+      }
+      toast.error(error instanceof Error ? error.message : "Fingerprint login failed.");
+    }
   }
 
   async function recoverUsername() {
@@ -270,7 +320,7 @@ function LoginPage() {
                 <Button
                   type="button"
                   size="sm"
-                  variant={mode === "mpin" ? "default" : "outline"}
+                  variant="default"
                   onClick={() => {
                     setMode(mode === "mpin" ? "password" : "mpin");
                     setPassword("");
@@ -279,7 +329,7 @@ function LoginPage() {
                   <KeyRound />
                   {mode === "mpin" ? "Use mobile password" : "Login with MPIN"}
                 </Button>
-                <Button type="button" size="sm" variant="outline" onClick={() => void onFingerprint()}>
+                <Button type="button" size="sm" variant="default" onClick={() => void onFingerprint()}>
                   <Fingerprint />
                   Login with fingerprint
                 </Button>

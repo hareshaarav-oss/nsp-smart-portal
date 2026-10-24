@@ -1,4 +1,4 @@
-import { loadCollegeCloud, loadPublicBoard, loadOfficerRoll, collegeQuotaBlocked, saveStudentToCloud, incrementVisitors, readVisitorCount, knownVisitorCount, patchStudent, safePhoto, knownRole, issueChatPass, readChatPass, listRecentChatMessages, saveChatMessage, listChatPeople, clearAttendanceCloud, readBrandPhotos, saveBrandPhotos, listPhotoRoster, readPhotoBatch, saveAttendanceMarks, readLive, publishBestVolunteer, publishServiceHours, purgeCloudIds, deleteChatMessages, chatIdsInThread, readChatMedia, readOneChat, patchNotice, upsertNotice, sideDocId, listChatStatuses, readSide, type ChatExtra } from "@/lib/nss/firestore";
+import { loadCollegeCloud, loadPublicBoard, loadOfficerRoll, collegeQuotaBlocked, saveStudentToCloud, incrementVisitors, readVisitorCount, knownVisitorCount, patchStudent, safePhoto, knownRole, issueChatPass, readChatPass, listRecentChatMessages, saveChatMessage, listChatPeople, clearAttendanceCloud, readBrandPhotos, saveBrandPhotos, listPhotoRoster, readPhotoBatch, saveAttendanceMarks, readLive, publishBestVolunteer, publishServiceHours, purgeCloudIds, deleteChatMessages, chatIdsInThread, readChatMedia, readOneChat, patchNotice, upsertNotice, sideDocId, listChatStatuses, readSide, readStudentCerts, saveStudentCerts, type ChatExtra } from "@/lib/nss/firestore";
 import { passwordOk, sealText } from "@/lib/nss/seal.server";
 import { createFileRoute } from "@tanstack/react-router";
 
@@ -110,6 +110,7 @@ function selfVolunteer(row: Row) {
     abcId: text(row.abcId),
     myBharatId: text(row.myBharatId),
     mpin: text(row.mpin),
+    webauthnId: text(row.webauthnId),
   };
 }
 
@@ -151,10 +152,10 @@ function publicPayload(data: Row, includeGallery: boolean) {
   };
 }
 
-function matchVolunteer(volunteers: Row[], username: string, password: string) {
+function usernameHits(volunteers: Row[], username: string) {
   const key = username.trim().toLowerCase();
   const keyDigits = digits(username);
-  const hits = volunteers.filter((row) => {
+  return volunteers.filter((row) => {
     const tokens = text(row.fullName)
       .toLowerCase()
       .split(/[^a-z0-9\u0a80-\u0aff]+/i)
@@ -174,12 +175,82 @@ function matchVolunteer(volunteers: Row[], username: string, password: string) {
       (keyDigits.length >= 8 && phone.endsWith(keyDigits))
     );
   });
+}
+
+function matchVolunteer(volunteers: Row[], username: string, password: string) {
+  const hits = usernameHits(volunteers, username);
   if (!hits.length) {
     return { error: "Username not found." };
   }
   const matched = hits.filter((row) => passwordOk(text(row.loginPassword), password, digits(row.mobile)));
   if (matched[0]) return { row: matched[0] };
   return { error: "Wrong password." };
+}
+
+function matchMpin(volunteers: Row[], username: string, mpin: string) {
+  const pin = text(mpin);
+  if (!/^\d{4}$/.test(pin)) return { error: "MPIN must be 4 digits." };
+  const hits = usernameHits(volunteers, username);
+  if (!hits.length) return { error: "Username not found." };
+  const matched = hits.filter((row) => text(row.mpin) === pin);
+  if (matched[0]) return { row: matched[0] };
+  return { error: "MPIN does not match. Set a 4-digit MPIN from the student dashboard." };
+}
+
+function wireCert(raw: unknown) {
+  const row = raw && typeof raw === "object" ? (raw as Row) : null;
+  if (!row) return null;
+  const id = text(row.id);
+  const eventId = text(row.eventId);
+  const volunteerId = text(row.volunteerId);
+  if (!id || !eventId || !volunteerId) return null;
+  return {
+    id,
+    volunteerId,
+    eventId,
+    generatedAt: text(row.generatedAt),
+    sentAt: text(row.sentAt) || new Date().toISOString(),
+    certificateId: text(row.certificateId),
+    printReady: true,
+  };
+}
+
+async function studentLoginResponse(found: Row) {
+  const role = text(found.nssRole) === "Leader" || knownRole(found.nssRole) !== "Volunteer" ? "leader" : "volunteer";
+  const volunteer = selfVolunteer(found);
+  let chatToken = "";
+  try {
+    chatToken = newChatToken();
+    await issueChatPass({
+      token: chatToken,
+      senderId: volunteer.id,
+      senderName: text(found.fullName),
+      role,
+      unit: text(found.unit),
+      docId: text(found.id),
+    });
+  } catch {
+    chatToken = "";
+  }
+  let certificates: unknown[] = [];
+  try {
+    certificates = await readStudentCerts(text(found.id));
+  } catch {
+    certificates = [];
+  }
+  return {
+    ok: true as const,
+    session: {
+      role,
+      name: text(found.fullName),
+      volunteerId: volunteer.id,
+      enrollment: text(found.enrollment),
+      mobile: digits(found.mobile),
+      chatToken,
+    },
+    volunteer,
+    certificates,
+  };
 }
 
 function newChatToken() {
@@ -269,6 +340,9 @@ export const Route = createFileRoute("/api/nss-cloud")({
             emergencyContact?: string;
             fatherName?: string;
             mpin?: string;
+            webauthnId?: string;
+            credentialId?: string;
+            certificates?: unknown[];
             chatToken?: string;
             threadId?: string;
             text?: string;
@@ -802,6 +876,13 @@ export const Route = createFileRoute("/api/nss-cloud")({
               }
               patch.mpin = pin;
             }
+            if (typeof body.webauthnId === "string" && text(body.webauthnId)) {
+              const finger = text(body.webauthnId);
+              if (finger.length < 8 || finger.length > 256) {
+                return Response.json({ ok: false, error: "Fingerprint could not be saved." }, { status: 400 });
+              }
+              patch.webauthnId = finger;
+            }
             if (photo) patch.photoUrl = photo;
             await patchStudent(text(found.id), patch);
             return Response.json({ ok: true, volunteer: selfVolunteer({ ...found, ...patch }) });
@@ -813,6 +894,58 @@ export const Route = createFileRoute("/api/nss-cloud")({
             if (!found) return Response.json({ ok: false, error: "This mobile is not on the NSS roll." }, { status: 404 });
             const first = text(found.fullName).split(/\s+/)[0] ?? "";
             return Response.json({ ok: true, username: first.toUpperCase() });
+          }
+          if (body.action === "mpin-login" || body.action === "finger-login" || body.action === "my-certificates") {
+            const data = await loadCollegeCloud({ gallery: false, photos: false });
+            const volunteers = (data?.volunteers ?? []) as unknown as Row[];
+            if (!data || volunteers.length === 0) {
+              return Response.json({ ok: false, error: "The college roll is busy. Wait a moment and sign in again." }, { status: 503 });
+            }
+            if (body.action === "finger-login") {
+              const finger = text(body.credentialId);
+              const found = volunteers.find((row) => finger && text(row.webauthnId) === finger);
+              if (!found) {
+                return Response.json({ ok: false, error: "This fingerprint is not saved. Turn it on from the student dashboard on this phone." }, { status: 401 });
+              }
+              return Response.json(await studentLoginResponse(found));
+            }
+            const matched = body.action === "mpin-login"
+              ? matchMpin(volunteers, body.username ?? "", body.password ?? "")
+              : matchVolunteer(volunteers, body.username ?? body.volunteerId ?? "", body.password ?? "");
+            if (!matched.row) return Response.json({ ok: false, error: matched.error }, { status: 401 });
+            if (body.action === "my-certificates") {
+              const certificates = await readStudentCerts(text(matched.row.id)).catch(() => []);
+              return Response.json({ ok: true, certificates });
+            }
+            return Response.json(await studentLoginResponse(matched.row));
+          }
+          if (body.action === "push-certificates") {
+            const officer = await signedOfficer(body.chatToken);
+            if (!officer) return Response.json({ ok: false, error: "Open the officer desk and sign in again." }, { status: 401 });
+            const data = await loadCollegeCloud({ gallery: false, photos: false });
+            const volunteers = (data?.volunteers ?? []) as unknown as Row[];
+            const incoming = (Array.isArray(body.certificates) ? body.certificates : []).slice(0, 200);
+            const grouped = new Map<string, NonNullable<ReturnType<typeof wireCert>>[]>();
+            for (const raw of incoming) {
+              const cert = wireCert(raw);
+              if (!cert) continue;
+              const key = cert.volunteerId.toLowerCase();
+              const found = volunteers.find(
+                (row) => text(row.id).toLowerCase() === key || text(row.volunteerId).toLowerCase() === key,
+              );
+              if (!found) continue;
+              const docId = text(found.id);
+              const list = grouped.get(docId) ?? [];
+              list.push({ ...cert, volunteerId: text(found.volunteerId) || docId });
+              grouped.set(docId, list);
+            }
+            for (const [docId, rows] of grouped) {
+              const existing = await readStudentCerts(docId).catch(() => []);
+              const byId = new Map(existing.map((item) => [item.id, item]));
+              for (const row of rows) byId.set(row.id, row);
+              await saveStudentCerts(docId, [...byId.values()].slice(0, 40));
+            }
+            return Response.json({ ok: true, saved: grouped.size });
           }
           if (body.action === "staff-login") {
             const { staffSession } = await import("@/lib/nss/staff-auth.server");
@@ -853,34 +986,7 @@ export const Route = createFileRoute("/api/nss-cloud")({
           const matched = matchVolunteer(volunteers, body.username ?? "", body.password ?? "");
           if (!matched.row) return Response.json({ ok: false, error: matched.error }, { status: 401 });
           const found = matched.row;
-          const role = text(found.nssRole) === "Leader" || knownRole(found.nssRole) !== "Volunteer" ? "leader" : "volunteer";
-          const volunteer = selfVolunteer(found);
-          let chatToken = "";
-          try {
-            chatToken = newChatToken();
-            await issueChatPass({
-              token: chatToken,
-              senderId: volunteer.id,
-              senderName: text(found.fullName),
-              role,
-              unit: text(found.unit),
-              docId: text(found.id),
-            });
-          } catch {
-            chatToken = "";
-          }
-          return Response.json({
-            ok: true,
-            session: {
-              role,
-              name: text(found.fullName),
-              volunteerId: volunteer.id,
-              enrollment: text(found.enrollment),
-              mobile: digits(found.mobile),
-              chatToken,
-            },
-            volunteer,
-          });
+          return Response.json(await studentLoginResponse(found));
         } catch (error) {
           const message = error instanceof Error ? error.message : "request failed";
           const status = /already on the NSS roll/i.test(message) ? 409 : /busy|quota|429/i.test(message) ? 503 : 500;

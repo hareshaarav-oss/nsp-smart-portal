@@ -238,27 +238,34 @@ export async function registerFingerprint(volunteer: Volunteer) {
   if (!window.PublicKeyCredential) {
     throw new Error("This device does not support fingerprint / Windows Hello.");
   }
-  const cred = (await navigator.credentials.create({
-    publicKey: {
-      challenge: crypto.getRandomValues(new Uint8Array(32)),
-      rp: { name: "NSS Smart Portal", id: window.location.hostname },
-      user: {
-        id: new TextEncoder().encode(volunteer.id).slice(0, 32),
-        name: firstNameOf(volunteer.fullName),
-        displayName: volunteer.fullName,
+  const make = (residentKey: ResidentKeyRequirement) =>
+    navigator.credentials.create({
+      publicKey: {
+        challenge: crypto.getRandomValues(new Uint8Array(32)),
+        rp: { name: "NSS Smart Portal", id: window.location.hostname },
+        user: {
+          id: new TextEncoder().encode(volunteer.id).slice(0, 32),
+          name: firstNameOf(volunteer.fullName),
+          displayName: volunteer.fullName,
+        },
+        pubKeyCredParams: [
+          { type: "public-key", alg: -7 },
+          { type: "public-key", alg: -257 },
+        ],
+        authenticatorSelection: {
+          authenticatorAttachment: "platform",
+          userVerification: "required",
+          residentKey,
+        },
+        timeout: 60_000,
       },
-      pubKeyCredParams: [
-        { type: "public-key", alg: -7 },
-        { type: "public-key", alg: -257 },
-      ],
-      authenticatorSelection: {
-        authenticatorAttachment: "platform",
-        userVerification: "required",
-        residentKey: "preferred",
-      },
-      timeout: 60_000,
-    },
-  })) as PublicKeyCredential | null;
+    });
+  let cred: PublicKeyCredential | null = null;
+  try {
+    cred = (await make("required")) as PublicKeyCredential | null;
+  } catch {
+    cred = (await make("preferred")) as PublicKeyCredential | null;
+  }
   if (!cred) throw new Error("Fingerprint was cancelled.");
   return cred.id;
 }
