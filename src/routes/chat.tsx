@@ -241,6 +241,7 @@ function ChatPage() {
   const [unlocked, setUnlocked] = useState(false);
   const [pinDraft, setPinDraft] = useState("");
   const [recording, setRecording] = useState(false);
+  const [slideCancel, setSlideCancel] = useState(false);
   const [recordSec, setRecordSec] = useState(0);
   const [infoOn, setInfoOn] = useState(false);
   const [link, setLink] = useState<"online" | "offline" | "reconnect">("online");
@@ -271,6 +272,9 @@ function ChatPage() {
   const heardReady = useRef(false);
   const hiddenPull = useRef(0);
   const recordTimer = useRef(0);
+  const voiceHold = useRef(false);
+  const voiceMode = useRef<"send" | "cancel">("send");
+  const voiceX = useRef(0);
   const typingOn = useRef(false);
   const liveRef = useRef({ active: "college", mobileList: true, mutes: [] as string[], meId: "", hideSeen: false });
   const token = session?.chatToken || "";
@@ -827,15 +831,15 @@ function ChatPage() {
     }
   }
 
-  async function send(e?: React.FormEvent, threadId = active) {
+  async function send(e?: React.FormEvent, threadId = active, forced?: { media: string; mediaType: "image" | "video" | "audio" | "file"; name?: string } | null) {
     e?.preventDefault();
     if (sendLock.current) return;
-    const text = draft.trim();
-    const attachment = pending;
+    const text = forced ? "" : draft.trim();
+    const attachment = forced === undefined ? pending : forced;
     if (!text && !attachment && !pollOn) return;
-    const student = session?.role !== "po" && session?.role !== "admin";
-    const mine = me?.id || session?.volunteerId || (student ? "" : session?.role === "admin" ? "admin" : "po");
-    const thread = student ? (mine ? canonicalThread(`dm:${mine}:po`) : "") : canonicalThread(threadId);
+    const desk = session?.role === "po" || session?.role === "admin";
+    const mine = me?.id || session?.volunteerId || (desk ? (session?.role === "admin" ? "admin" : "po") : "");
+    const thread = canonicalThread(threadId);
     if (!thread || !mine) {
       toast.error("Open a chat, then send.");
       return;
@@ -966,13 +970,18 @@ function ChatPage() {
       rec.onstop = () => {
         window.clearInterval(recordTimer.current);
         stream.getTracks().forEach((track) => track.stop());
+        setRecording(false);
+        const sendIt = voiceMode.current !== "cancel";
+        voiceMode.current = "send";
+        setSlideCancel(false);
         const blob = new Blob(bits, { type: rec.mimeType || "audio/webm" });
+        if (!sendIt) return;
         if (blob.size > 1200000) {
           toast.error("Voice message is too long.");
           return;
         }
         void readData(new File([blob], "voice.webm", { type: blob.type })).then((media) => {
-          if (media.startsWith("data:") && media.length < 1800000) setPending({ media, mediaType: "audio", name: "Voice message" });
+          if (media.startsWith("data:") && media.length < 1800000) void send(undefined, active, { media, mediaType: "audio", name: "Voice message" });
         });
       };
       recorder.current = rec;
@@ -981,6 +990,7 @@ function ChatPage() {
       window.clearInterval(recordTimer.current);
       recordTimer.current = window.setInterval(() => setRecordSec((value) => value + 1), 1000);
       setRecording(true);
+      if (!voiceHold.current) rec.stop();
     } catch {
       toast.error("Microphone is not available.");
     }
@@ -988,9 +998,9 @@ function ChatPage() {
 
   async function postChat(fields: Record<string, unknown>, threadId = active) {
     const desk = session?.role === "po" || session?.role === "admin";
-    const mine = me?.id || session?.volunteerId || "";
-    const thread = desk ? canonicalThread(threadId) : mine ? canonicalThread(`dm:${mine}:po`) : "";
-    if (!thread || (!desk && !thread.includes(":po"))) return;
+    const mine = me?.id || session?.volunteerId || (desk ? (session?.role === "admin" ? "admin" : "po") : "");
+    const thread = canonicalThread(threadId);
+    if (!thread || !mine) return;
     const res = await fetch("/api/nss-cloud", {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -1188,6 +1198,10 @@ function ChatPage() {
           style={{ backgroundColor: prefs.wallpaper }}
           className="min-h-0 flex-1 space-y-1 overflow-y-auto bg-[radial-gradient(#d9d0c3_0.6px,transparent_0.6px)] bg-[length:16px_16px] px-3 py-3"
         >
+          <p className="mx-auto mb-2 flex max-w-[92%] items-start gap-1.5 rounded-lg bg-[#fff4c4] px-3 py-2 text-center text-[12px] leading-snug text-[#54656f]">
+            <Lock className="mt-0.5 size-3.5 shrink-0" />
+            <span>{tr("Messages are encrypted. Only people in this chat can read them.", "સંદેશ એન્ક્રિપ્ટ થયેલા છે. આ ચેટના લોકો જ વાંચી શકે.")}</span>
+          </p>
           {shown.length === 0 ? <p className="mx-auto my-8 w-fit rounded-full bg-white/80 px-3 py-1 text-[12px] text-[#54656f]">{tr("No messages yet", "હજી કોઈ સંદેશ નથી")}</p> : null}
           {shown.map((message, index) => {
             const mine = message.senderId === me?.id || message.senderId === meId;
@@ -1432,6 +1446,7 @@ function ChatPage() {
               </div>
             </div>
           ) : null}
+          {recording ? <p className="px-3 py-1 text-center text-xs text-red-700">{recordSec}s · {slideCancel ? tr("Release to cancel", "છોડો, રદ થશે") : tr("Slide left to cancel", "રદ કરવા ડાબી બાજુ ખસેડો")}</p> : null}
           {pollOn ? <input value={pollOptions} onChange={(e) => setPollOptions(e.target.value)} className="mb-1 w-full rounded-full px-4 py-2 text-sm" placeholder="Yes, No, Maybe" /> : null}
           {(() => {
             const mention = draft.match(/(^|\s)@([^\n@]{0,24})$/);
@@ -1482,7 +1497,38 @@ function ChatPage() {
                 <SendHorizonal />
               </Button>
             ) : (
-              <button type="button" className={`flex size-12 items-center justify-center rounded-full text-white ${recording ? "bg-red-600" : "bg-[#00a884]"}`} aria-label="Voice message" onClick={() => void toggleVoice()}>
+              <button
+                type="button"
+                className={`flex size-12 items-center justify-center rounded-full text-white ${recording ? "bg-red-600" : "bg-[#00a884]"}`}
+                aria-label="Voice message"
+                onPointerDown={(event) => {
+                  voiceHold.current = true;
+                  voiceMode.current = "send";
+                  voiceX.current = event.clientX;
+                  setSlideCancel(false);
+                  event.currentTarget.setPointerCapture(event.pointerId);
+                  void toggleVoice();
+                }}
+                onPointerMove={(event) => {
+                  if (!voiceHold.current) return;
+                  const cancel = voiceX.current - event.clientX > 72;
+                  voiceMode.current = cancel ? "cancel" : "send";
+                  setSlideCancel(cancel);
+                }}
+                onPointerUp={() => {
+                  voiceHold.current = false;
+                  if (recorder.current && recorder.current.state === "recording") {
+                    recorder.current.stop();
+                    setRecording(false);
+                    window.clearInterval(recordTimer.current);
+                  }
+                }}
+                onPointerCancel={() => {
+                  voiceHold.current = false;
+                  voiceMode.current = "cancel";
+                  if (recorder.current && recorder.current.state === "recording") recorder.current.stop();
+                }}
+              >
                 {recording ? <span className="text-xs font-semibold">{recordSec}s</span> : <Mic className="size-5" />}
               </button>
             )}
@@ -1652,7 +1698,7 @@ function ChatPage() {
             </button>
             <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-white/20 text-sm font-semibold">{threadTitle(active).slice(0, 1)}</span>
             <button type="button" className="min-w-0 flex-1 text-left" onClick={() => setInfoOn(true)}>
-              <p className="truncate font-medium">{threadTitle(active)}</p>
+              <p className="truncate font-medium"><Lock className="mr-1 inline size-3 opacity-80" />{threadTitle(active)}</p>
               <p className="truncate text-xs text-white/70">
                 {peer?.typingThread === canonicalThread(active) && peer.typingAt && Date.now() - new Date(peer.typingAt).getTime() < 25000
                   ? tr("typing...", "લખે છે...")
@@ -1660,11 +1706,7 @@ function ChatPage() {
                     ? tr("online", "ઓનલાઇન")
                     : peer?.lastSeen
                       ? `${tr("last seen", "છેલ્લે")} ${clock(peer.lastSeen)}`
-                      : active.startsWith("dm:")
-                        ? tr("private", "ખાનગી")
-                        : active.startsWith("event:")
-                          ? tr("Event group", "કાર્યક્રમ ગ્રુપ")
-                          : GROUPS.find((group) => group.id === active)?.subtitle}
+                      : tr("encrypted", "એન્ક્રિપ્ટેડ")}
               </p>
             </button>
             <button type="button" className="rounded-full p-2 hover:bg-white/10" aria-label="Menu" onClick={() => { setMenuMore(false); setMenu((on) => !on); }}>
