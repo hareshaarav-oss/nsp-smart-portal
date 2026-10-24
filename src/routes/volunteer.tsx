@@ -208,6 +208,36 @@ function VolunteerDash() {
           </div>
         </div>
 
+        {panel === "edit" ? <EditProfile volunteerId={me.id} /> : null}
+
+        {panel === "password" ? (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Lock className="size-4" />
+                Change password
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <form className="grid gap-3 sm:max-w-md" onSubmit={changePassword}>
+                <div className="space-y-1.5">
+                  <Label>Current password</Label>
+                  <Input type="password" value={cur} onChange={(e) => setCur(e.target.value)} required />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>New password</Label>
+                  <Input type="password" value={next} onChange={(e) => setNext(e.target.value)} required />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Confirm new password</Label>
+                  <Input type="password" value={confirm} onChange={(e) => setConfirm(e.target.value)} required />
+                </div>
+                <Button type="submit">Update password</Button>
+              </form>
+            </CardContent>
+          </Card>
+        ) : null}
+
         <Card>
           <CardHeader>
             <CardTitle className="text-base">MPIN, fingerprint and certificates</CardTitle>
@@ -409,36 +439,6 @@ function VolunteerDash() {
           <Card><CardHeader><CardTitle>Upcoming Events & RSVP</CardTitle></CardHeader><CardContent className="space-y-3">{upcoming.length?upcoming.map((e)=>{const rsvp=rsvpOf(portalState,me.id,e.id);return <div key={e.id} className="rounded-xl border border-border p-3"><div className="flex flex-wrap justify-between gap-2"><strong>{e.name}</strong><Badge tone="saffron">Upcoming</Badge></div><p className="mt-1 text-xs text-muted-foreground">{formatLongDate(e.date)}{e.endDate&&e.endDate!==e.date?` – ${formatLongDate(e.endDate)}`:""} · {e.location}</p>{e.description ? <p className="mt-1 text-sm text-muted-foreground">{e.description}</p> : null}<div className="mt-3 flex flex-wrap gap-2"><Button size="sm" variant={rsvp?.status === "will_attend" ? "forest" : "outline"} onClick={()=>setEventRSVP(me.id,e.id,"will_attend")}>હા, હું હાજર રહીશ</Button><Button size="sm" variant={rsvp?.status === "will_not_attend" ? "danger" : "outline"} onClick={()=>setEventRSVP(me.id,e.id,"will_not_attend")}>ના, હું હાજર રહીશ નહીં</Button></div></div>}):<p className="text-sm text-muted-foreground">No upcoming events.</p>}</CardContent></Card>
         </div>
 
-        {panel === "edit" ? <EditProfile volunteerId={me.id} /> : null}
-
-        {panel === "password" ? (
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Lock className="size-4" />
-                Change password
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <form className="grid gap-3 sm:max-w-md" onSubmit={changePassword}>
-                <div className="space-y-1.5">
-                  <Label>Current password</Label>
-                  <Input type="password" value={cur} onChange={(e) => setCur(e.target.value)} required />
-                </div>
-                <div className="space-y-1.5">
-                  <Label>New password</Label>
-                  <Input type="password" value={next} onChange={(e) => setNext(e.target.value)} required />
-                </div>
-                <div className="space-y-1.5">
-                  <Label>Confirm new password</Label>
-                  <Input type="password" value={confirm} onChange={(e) => setConfirm(e.target.value)} required />
-                </div>
-                <Button type="submit">Update password</Button>
-              </form>
-            </CardContent>
-          </Card>
-        ) : null}
-
         <Card>
           <CardHeader>
             <CardTitle className="text-base">Photo, mobile and MPIN</CardTitle>
@@ -583,25 +583,36 @@ function VolunteerDash() {
 }
 
 function EditProfile({ volunteerId }: { volunteerId: string }) {
-  const volunteer = useNssStore.getState().volunteers.find((v) => v.id === volunteerId);
-  const update = useNssStore.getState().updateVolunteer;
+  const volunteer = useNssStore((s) =>
+    (s.volunteers ?? []).find((v) => v.id === volunteerId || v.volunteerId === volunteerId),
+  );
+  const update = useNssStore((s) => s.updateVolunteer);
+  const [photoDirty, setPhotoDirty] = useState(false);
   const [form, setForm] = useState({
     mobile: volunteer?.mobile ?? "",
     email: volunteer?.email ?? "",
     address: volunteer?.address ?? "",
     bloodGroup: volunteer?.bloodGroup ?? "",
+    fatherName: volunteer?.fatherName ?? "",
     abcId: volunteer?.abcId ?? "",
     myBharatId: volunteer?.myBharatId ?? "",
     emergencyContact: volunteer?.emergencyContact ?? "",
     photoUrl: volunteer?.photoUrl ?? "",
   });
-  if (!volunteer) return null;
+  if (!volunteer) {
+    return (
+      <Card>
+        <CardContent className="p-5 text-sm text-muted-foreground">Opening your profile…</CardContent>
+      </Card>
+    );
+  }
 
   async function onPhoto(file: File | undefined) {
-    if (!file) return;
+    if (!file || !volunteer) return;
     try {
       const { blob } = await compressPassport(file);
       const url = await blobToDataUrl(blob);
+      setPhotoDirty(true);
       setForm((f) => ({ ...f, photoUrl: url }));
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not read that photograph.");
@@ -610,25 +621,33 @@ function EditProfile({ volunteerId }: { volunteerId: string }) {
 
   async function save(e: React.FormEvent) {
     e.preventDefault();
+    if (!volunteer) return;
     const session = useSessionStore.getState().session;
+    const password = session?.mobile || volunteer.mobile;
+    if (!password) {
+      toast.error("Sign in again, then save the profile.");
+      return;
+    }
+    const payload: Record<string, string> = {
+      action: "update-profile",
+      username: volunteer.volunteerId || session?.volunteerId || volunteer.fullName.split(/\s+/)[0] || volunteer.id,
+      password,
+      volunteerId: volunteer.id,
+    };
+    const fields = ["mobile", "email", "address", "bloodGroup", "fatherName", "abcId", "myBharatId", "emergencyContact"] as const;
+    for (const key of fields) {
+      if (form[key] !== (volunteer[key] ?? "")) payload[key] = form[key];
+    }
+    if (photoDirty && form.photoUrl.startsWith("data:image/")) payload.photoUrl = form.photoUrl;
+    if (Object.keys(payload).length <= 4 && !payload.photoUrl) {
+      toast.success("Profile saved.");
+      return;
+    }
     try {
       const res = await fetch("/api/nss-cloud", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          action: "update-profile",
-          username: session?.volunteerId || volunteerId,
-          password: session?.mobile || form.mobile,
-          volunteerId,
-          mobile: form.mobile,
-          email: form.email,
-          address: form.address,
-          bloodGroup: form.bloodGroup,
-          abcId: form.abcId,
-          myBharatId: form.myBharatId,
-          emergencyContact: form.emergencyContact,
-          photoUrl: form.photoUrl,
-        }),
+        body: JSON.stringify(payload),
       });
       const data = (await res.json()) as { ok?: boolean; error?: string; volunteer?: { photoUrl?: string; mobile?: string; email?: string } };
       if (!res.ok || !data.ok) {
@@ -636,22 +655,28 @@ function EditProfile({ volunteerId }: { volunteerId: string }) {
         return;
       }
       const photoUrl = data.volunteer?.photoUrl || form.photoUrl;
-      update(volunteerId, {
-        ...form,
+      update(volunteer.id, {
+        mobile: form.mobile,
+        email: form.email,
+        address: form.address,
+        bloodGroup: form.bloodGroup,
+        fatherName: form.fatherName,
+        abcId: form.abcId,
+        myBharatId: form.myBharatId,
+        emergencyContact: form.emergencyContact,
         photoUrl,
-        mobile: form.mobile || data.volunteer?.mobile || session?.mobile || "",
-        email: form.email || data.volunteer?.email || "",
       });
       rememberPhoto(
-        [volunteer?.volunteerId || "", volunteer?.id || "", (volunteer?.fullName || "").toLowerCase(), session?.volunteerId || ""],
+        [volunteer.volunteerId || "", volunteer.id || "", (volunteer.fullName || "").toLowerCase(), session?.volunteerId || ""],
         photoUrl,
       );
-      if (session) {
+      if (session && form.mobile.replace(/\D/g, "").length >= 10) {
         useSessionStore.getState().setSession({
           ...session,
-          mobile: form.mobile.replace(/\D/g, "").slice(-10) || session.mobile,
+          mobile: form.mobile.replace(/\D/g, "").slice(-10),
         });
       }
+      setPhotoDirty(false);
       toast.success("Profile saved.");
     } catch {
       toast.error("Could not reach the college server.");
@@ -670,16 +695,19 @@ function EditProfile({ volunteerId }: { volunteerId: string }) {
             <input type="file" accept="image/*" onChange={(e) => void onPhoto(e.target.files?.[0])} />
           </div>
           <Field label="Mobile">
-            <Input value={form.mobile} onChange={(e) => setForm({ ...form, mobile: e.target.value })} />
+            <Input value={form.mobile} inputMode="tel" onChange={(e) => setForm({ ...form, mobile: e.target.value })} />
           </Field>
           <Field label="Email">
             <Input value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
           </Field>
-          <Field label="Address" wide>
-            <Input value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} />
+          <Field label="Father's name">
+            <Input value={form.fatherName} onChange={(e) => setForm({ ...form, fatherName: e.target.value })} />
           </Field>
           <Field label="Blood group">
             <Input value={form.bloodGroup} onChange={(e) => setForm({ ...form, bloodGroup: e.target.value })} />
+          </Field>
+          <Field label="Address" wide>
+            <Input value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} />
           </Field>
           <Field label="ABC ID">
             <Input value={form.abcId} onChange={(e) => setForm({ ...form, abcId: e.target.value })} />
@@ -690,6 +718,7 @@ function EditProfile({ volunteerId }: { volunteerId: string }) {
           <Field label="Emergency contact">
             <Input
               value={form.emergencyContact}
+              inputMode="tel"
               onChange={(e) => setForm({ ...form, emergencyContact: e.target.value })}
             />
           </Field>

@@ -849,7 +849,7 @@ export const Route = createFileRoute("/api/nss-cloud")({
               return Response.json({ ok: true });
             }
             const photo = text(body.photoUrl);
-            if (photo && (!photo.startsWith("data:image/") || photo.length >= 1200000)) {
+            if (photo.startsWith("data:image/") && photo.length >= 1200000) {
               return Response.json({ ok: false, error: "Photograph is too large. Use a smaller JPG or PNG." }, { status: 400 });
             }
             const patch: Record<string, unknown> = { updatedAt: new Date().toISOString() };
@@ -883,7 +883,7 @@ export const Route = createFileRoute("/api/nss-cloud")({
               }
               patch.webauthnId = finger;
             }
-            if (photo) patch.photoUrl = photo;
+            if (photo.startsWith("data:image/")) patch.photoUrl = photo;
             await patchStudent(text(found.id), patch);
             return Response.json({ ok: true, volunteer: selfVolunteer({ ...found, ...patch }) });
           }
