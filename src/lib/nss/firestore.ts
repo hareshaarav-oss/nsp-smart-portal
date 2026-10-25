@@ -3,6 +3,7 @@ import { nssHourRule } from "./hours";
 import { attendanceDocId as sealedAttendanceId, openChatPass, openText, passwordRecord, sealText, tokenDocId } from "./seal.server";
 import type {
   AttendanceRecord,
+  EventRSVP,
   GalleryItem,
   IssuedCertificate,
   Notice,
@@ -859,6 +860,7 @@ export async function loadOfficerRoll(): Promise<CloudPortal | null> {
         const byVid = new Map(students.map((s) => [text(s.volunteerId).toLowerCase(), s]));
         const byName = new Map(students.map((s) => [text(s.fullName).toLowerCase(), s]));
         const known = new Set<string>();
+        const rsvps: EventRSVP[] = [];
         const volunteers = board.volunteers.map((v) => {
           for (const key of [v.volunteerId, v.fullName, v.id]) {
             const clean = key.toLowerCase();
@@ -872,6 +874,7 @@ export async function loadOfficerRoll(): Promise<CloudPortal | null> {
           }
           const mobile = digits(raw.mobile);
           const thumb = smallPublicPhoto(raw.thumbUrl);
+          rsvps.push(...readStoredRsvps(text(raw.rsvp), v.id));
           return {
             ...v,
             photoUrl: thumb || v.photoUrl,
@@ -896,7 +899,11 @@ export async function loadOfficerRoll(): Promise<CloudPortal | null> {
             return keys.length > 0 && keys.every((key) => !known.has(key));
           })
           .map((s) => briefVolunteer(s, numbers.get(s) ?? students.length));
-        const merged = { ...board, volunteers: [...volunteers, ...extras] };
+        for (const extra of extras) {
+          const raw = byVid.get(extra.volunteerId.toLowerCase()) || byName.get(extra.fullName.toLowerCase());
+          if (raw) rsvps.push(...readStoredRsvps(text(raw.rsvp), extra.id));
+        }
+        const merged = { ...board, volunteers: [...volunteers, ...extras], eventRsvps: rsvps };
         officerCache = { at: Date.now(), data: merged };
         return merged;
       }
@@ -1714,6 +1721,55 @@ export async function saveAttendanceMarks(rows: { mobile: string; name: string; 
   }
   if (saved > 0) void markBoardStale();
   return saved;
+}
+
+const ownMarkCache = new Map<string, { at: number; rows: { eventId: string; present: boolean }[] }>();
+
+export async function readOwnMarks(mobile: string, events: { id: string; name: string }[]) {
+  const phone = digits(mobile).slice(-10);
+  const list = events.filter((event) => event.id && event.name).slice(0, 16);
+  if (phone.length < 10 || !list.length) return [];
+  const hit = ownMarkCache.get(phone);
+  if (hit && Date.now() - hit.at < 10 * 60 * 1000) return hit.rows;
+  const rows: { eventId: string; present: boolean }[] = [];
+  for (let i = 0; i < list.length; i += 8) {
+    const slice = list.slice(i, i + 8);
+    const found = await Promise.all(
+      slice.map(async (event) => {
+        const id = attendanceDocId(phone, event.name);
+        if (!id) return null;
+        try {
+          const doc = await getDocument(`attendance/${id}`);
+          if (!doc) return null;
+          return { eventId: event.id, present: isPresent(doc) };
+        } catch {
+          return null;
+        }
+      }),
+    );
+    for (const row of found) if (row) rows.push(row);
+  }
+  ownMarkCache.set(phone, { at: Date.now(), rows });
+  return rows;
+}
+
+export function readStoredRsvps(raw: string, volunteerId: string): EventRSVP[] {
+  if (!volunteerId || !raw) return [];
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return [];
+  }
+  if (!parsed || typeof parsed !== "object") return [];
+  const rows: EventRSVP[] = [];
+  for (const [eventId, status] of Object.entries(parsed as Record<string, unknown>)) {
+    if (status !== "will_attend" && status !== "will_not_attend") continue;
+    if (!/^[A-Za-z0-9_-]{2,48}$/.test(eventId)) continue;
+    rows.push({ volunteerId, eventId, status, updatedAt: "" });
+    if (rows.length >= 20) break;
+  }
+  return rows;
 }
 
 export function computeServiceHours(events: { id: string; hours?: number }[], attendance: { eventId: string; present: boolean }[]) {

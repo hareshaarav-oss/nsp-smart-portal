@@ -1,4 +1,4 @@
-import { loadCollegeCloud, loadStudentRoll, readOneStudent, loadPublicBoard, loadOfficerRoll, collegeQuotaBlocked, saveStudentToCloud, incrementVisitors, readVisitorCount, knownVisitorCount, patchStudent, safePhoto, knownRole, readChatPass, listRecentChatMessages, saveChatMessage, listChatPeople, clearAttendanceCloud, readBrandPhotos, saveBrandPhotos, listPhotoRoster, readPhotoBatch, saveAttendanceMarks, readLive, publishBestVolunteer, publishServiceHours, purgeCloudIds, deleteChatMessages, readChatMedia, readOneChat, patchNotice, upsertNotice, sideDocId, listChatStatuses, readSide, readStudentCerts, saveStudentCerts, markChatRead, chatReads, markThreadCleared, reviseChatMessage, chatBlocked, readHomeSlides, type ChatExtra } from "@/lib/nss/firestore";
+import { loadCollegeCloud, loadStudentRoll, readOneStudent, loadPublicBoard, loadOfficerRoll, collegeQuotaBlocked, saveStudentToCloud, incrementVisitors, readVisitorCount, knownVisitorCount, patchStudent, safePhoto, knownRole, readChatPass, listRecentChatMessages, saveChatMessage, listChatPeople, clearAttendanceCloud, readBrandPhotos, saveBrandPhotos, listPhotoRoster, readPhotoBatch, saveAttendanceMarks, readLive, publishBestVolunteer, publishServiceHours, purgeCloudIds, deleteChatMessages, readChatMedia, readOneChat, patchNotice, upsertNotice, sideDocId, listChatStatuses, readSide, readStudentCerts, saveStudentCerts, markChatRead, chatReads, markThreadCleared, reviseChatMessage, chatBlocked, readHomeSlides, readOwnMarks, type ChatExtra } from "@/lib/nss/firestore";
 import { passwordOk, sealText, signChatPass } from "@/lib/nss/seal.server";
 import { createFileRoute } from "@tanstack/react-router";
 
@@ -443,6 +443,7 @@ export const Route = createFileRoute("/api/nss-cloud")({
             forwarded?: boolean;
             nssRole?: string;
             status?: string;
+            eventId?: string;
             eventName?: string;
             poPhoto?: string;
             principalPhoto?: string;
@@ -902,18 +903,52 @@ export const Route = createFileRoute("/api/nss-cloud")({
             });
             const attendance = publicAttendance(rows, (data.attendance ?? []) as unknown as Row[]);
             const brand = await readBrandPhotos();
+            const bag = data as unknown as { eventRsvps?: unknown };
+            const replies = officer && Array.isArray(bag.eventRsvps) ? bag.eventRsvps : undefined;
             return Response.json({
               ok: true,
               private: officer,
               volunteers,
               events: data.events,
-              attendance,
+              ...(officer || attendance.length ? { attendance } : {}),
+              ...(replies ? { eventRsvps: replies } : {}),
               notices: data.notices,
               serviceHours: data.serviceHours,
               visitors: data.visitors,
               build: appBuild(),
               brand,
             });
+          }
+          if (body.action === "my-marks") {
+            const located = await locateOwnStudent(body);
+            if (!located.row) return Response.json({ ok: false, error: located.error || "Sign in again." }, { status: located.blindId ? 503 : 401 });
+            const board = await loadPublicBoard({ gallery: false });
+            const events = (board?.events ?? []).map((event) => ({ id: event.id, name: event.name }));
+            const attendance = await readOwnMarks(digits(located.row.mobile), events);
+            return Response.json({ ok: true, attendance });
+          }
+          if (body.action === "save-rsvp") {
+            const located = await locateOwnStudent(body);
+            if (!located.row) return Response.json({ ok: false, error: located.error || "Sign in again." }, { status: located.blindId ? 503 : 401 });
+            const eventId = text(body.eventId);
+            const status = body.status === "will_attend" || body.status === "will_not_attend" ? body.status : "";
+            if (!/^[A-Za-z0-9_-]{2,48}$/.test(eventId) || !status) return Response.json({ ok: false, error: "Choose an event first." }, { status: 400 });
+            let current: Record<string, string> = {};
+            try {
+              const parsed = JSON.parse(text(located.row.rsvp) || "{}") as unknown;
+              if (parsed && typeof parsed === "object") {
+                for (const [key, value] of Object.entries(parsed as Record<string, unknown>)) {
+                  if ((value === "will_attend" || value === "will_not_attend") && /^[A-Za-z0-9_-]{2,48}$/.test(key)) current[key] = value;
+                }
+              }
+            } catch {
+              current = {};
+            }
+            current[eventId] = status;
+            const keys = Object.keys(current).slice(-20);
+            const compact = JSON.stringify(Object.fromEntries(keys.map((key) => [key, current[key]])));
+            await patchStudent(text(located.row.id), { rsvp: compact }, { quiet: true });
+            return Response.json({ ok: true });
           }
           if (body.action === "reset-password") {
             const volunteers = await studentRows();

@@ -77,6 +77,7 @@ type CloudSlice =
     serviceHours?: number;
     keepPrivate?: boolean;
     degraded?: boolean;
+    eventRsvps?: EventRSVP[];
     brand?: { poPhoto?: string; principalPhoto?: string; poQuote?: string; principalQuote?: string };
   };
 
@@ -959,6 +960,10 @@ export const useNssStore =
 
           if (Array.isArray(cloud.attendance)) {
             next.attendance = dedupeAttendance(cloud.attendance);
+          }
+
+          if (Array.isArray(cloud.eventRsvps) && cloud.eventRsvps.length) {
+            next.eventRsvps = cloud.eventRsvps;
           }
 
           if (Array.isArray(cloud.notices)) {

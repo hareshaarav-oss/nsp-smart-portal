@@ -82,19 +82,12 @@ export function PageNav({
               </Link>
             </>
           ) : null}
+          <Link to="/install" className={cn(item, on("/install") && "is-on")}>
+            {t("install")}
+          </Link>
         </div>
         <div className="flex shrink-0 items-center gap-1">
-          <Button
-            size="sm"
-            variant="ghost"
-            className="min-h-11 px-2 text-paper hover:text-paper"
-            asChild
-          >
-            <Link to="/install" aria-label={t("install")}>
-              {t("install")}
-            </Link>
-          </Button>
-          <button type="button" className="px-2 text-xs" onClick={() => setLang(lang === "gu" ? "en" : "gu")}>{lang === "gu" ? "EN" : "ગુ"}</button>
+          <button type="button" className="min-h-11 px-2 text-xs" onClick={() => setLang(lang === "gu" ? "en" : "gu")}>{lang === "gu" ? "EN" : "ગુ"}</button>
           <button type="button" className="px-2 text-xs" onClick={toggleDark}>{dark ? "Light" : "Dark"}</button>
           {session ? (
             <>

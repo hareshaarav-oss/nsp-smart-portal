@@ -290,6 +290,7 @@ type CloudBody = {
   visitors?: number;
   alumniCount?: number;
   serviceHours?: number;
+  eventRsvps?: { volunteerId: string; eventId: string; status: "will_attend" | "will_not_attend"; updatedAt: string }[];
   brand?: { poPhoto?: string; principalPhoto?: string };
   degraded?: boolean;
 };
@@ -306,6 +307,7 @@ function applyBody(cloud: CloudBody) {
     visitors: cloud.visitors,
     alumniCount: cloud.alumniCount,
     serviceHours: cloud.serviceHours,
+    eventRsvps: Array.isArray(cloud.eventRsvps) ? cloud.eventRsvps : undefined,
     keepPrivate: Boolean(cloud.private),
     degraded: Boolean(cloud.degraded),
     brand: cloud.brand,

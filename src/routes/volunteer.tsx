@@ -1,6 +1,5 @@
 import { createFileRoute, Navigate } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
-import { BarChart, Bar, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { toast } from "sonner";
 import { Award, Cake, Fingerprint, KeyRound, Lock } from "lucide-react";
 import { TomorrowBanner } from "@/components/nss/tomorrow";
@@ -62,7 +61,8 @@ function VolunteerDash() {
   const portalState = useNssStore();
 
   const [panel, setPanel] = useState<"none" | "edit" | "password">("none");
-  const { t } = useUi();
+  const { t, lang } = useUi();
+  const tr = (en: string, gu: string) => (lang === "gu" ? gu : en);
   const [readNotes, setReadNotes] = useState<string[]>(() => {
     if (typeof window === "undefined") return [];
     try {
@@ -93,6 +93,36 @@ function VolunteerDash() {
       .then((res) => res.json())
       .then((data: { certificates?: IssuedCertificate[] }) => {
         if (!stop && Array.isArray(data.certificates)) setCloudCerts(data.certificates);
+      })
+      .catch(() => undefined);
+    return () => {
+      stop = true;
+    };
+  }, [session]);
+
+  useEffect(() => {
+    if (!session || isOfficer(session) || !session.mobile) return;
+    let stop = false;
+    void fetch("/api/nss-cloud", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        action: "my-marks",
+        username: session.volunteerId || session.name,
+        password: session.mobile,
+        volunteerId: session.volunteerId || "",
+      }),
+    })
+      .then((res) => res.json())
+      .then((data: { ok?: boolean; attendance?: { eventId: string; present: boolean }[] }) => {
+        if (stop || !data.ok || !Array.isArray(data.attendance)) return;
+        const person = findSessionVolunteer(useNssStore.getState().volunteers, session);
+        const who = person?.id || session.volunteerId || "";
+        if (!who) return;
+        useNssStore.getState().applyCloud({
+          attendance: data.attendance.map((row) => ({ volunteerId: who, eventId: row.eventId, present: row.present })),
+          keepPrivate: true,
+        });
       })
       .catch(() => undefined);
     return () => {
@@ -150,8 +180,32 @@ function VolunteerDash() {
     );
   }
 
+  function replyTo(eventId: string, status: "will_attend" | "will_not_attend") {
+    if (!me) return;
+    setEventRSVP(me.id, eventId, status);
+    const live = useSessionStore.getState().session;
+    void fetch("/api/nss-cloud", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        action: "save-rsvp",
+        username: live?.volunteerId || me.volunteerId || me.id,
+        password: live?.mobile || me.mobile,
+        volunteerId: me.id,
+        eventId,
+        status,
+      }),
+    })
+      .then(async (res) => {
+        const data = (await res.json().catch(() => null)) as { ok?: boolean } | null;
+        if (!res.ok || data?.ok === false) toast.error(tr("The reply stayed on this phone.", "જવાબ ફક્ત આ ફોનમાં રહ્યો."));
+      })
+      .catch(() => toast.error(tr("Could not reach the college server.", "કૉલેજ સર્વર સુધી પહોંચી શક્યા નહીં.")));
+  }
+
+  const yearTarget = settings.serviceHourTarget || 120;
   const hours = volunteerHours(portalState, me.id);
-  const myAtt = attendance.filter((a) => a.volunteerId === me.id);
+  const myAtt = attendance.filter((a) => a.volunteerId === me.id || a.volunteerId === me.volunteerId);
   const present = myAtt.filter((a) => a.present).length;
   const attPct = myAtt.length ? Math.round((present / myAtt.length) * 100) : 0;
   const myNotices = notices.filter((n) => {
@@ -260,18 +314,18 @@ function VolunteerDash() {
             <div className="relative size-24 shrink-0">
               <svg viewBox="0 0 36 36" className="size-24 -rotate-90">
                 <path d="M18 2.1 a 15.9 15.9 0 0 1 0 31.8 a 15.9 15.9 0 0 1 0 -31.8" fill="none" stroke="rgba(255,255,255,.25)" strokeWidth="3" />
-                <path d="M18 2.1 a 15.9 15.9 0 0 1 0 31.8 a 15.9 15.9 0 0 1 0 -31.8" fill="none" stroke="#ff9933" strokeWidth="3" strokeDasharray={`${Math.min(100, Math.round((hours / 240) * 100))} 100`} />
+                <path d="M18 2.1 a 15.9 15.9 0 0 1 0 31.8 a 15.9 15.9 0 0 1 0 -31.8" fill="none" stroke="#ff9933" strokeWidth="3" strokeDasharray={`${Math.min(100, Math.round((hours / yearTarget) * 100))} 100`} />
               </svg>
               <div className="absolute inset-0 flex flex-col items-center justify-center">
                 <span className="font-display text-lg leading-none">{hours}</span>
-                <span className="text-[10px] text-paper/70">/ 240</span>
+                <span className="text-[10px] text-paper/70">/ {yearTarget}</span>
               </div>
             </div>
           </div>
           <div className="mt-5 flex flex-wrap justify-center gap-x-6 gap-y-2 text-sm text-paper sm:justify-start">
             <button type="button" className="underline-offset-4 hover:underline" onClick={() => void openIdCard(me, settings)}>{t("id")}</button>
-            <button type="button" className="underline-offset-4 hover:underline" onClick={() => setPanel(panel === "edit" ? "none" : "edit")}>Edit profile</button>
-            <button type="button" className="underline-offset-4 hover:underline" onClick={() => setPanel(panel === "password" ? "none" : "password")}>Change password</button>
+            <button type="button" className="underline-offset-4 hover:underline" onClick={() => setPanel(panel === "edit" ? "none" : "edit")}>{tr("Edit profile", "પ્રોફાઇલ સુધારો")}</button>
+            <button type="button" className="underline-offset-4 hover:underline" onClick={() => setPanel(panel === "password" ? "none" : "password")}>{tr("Change password", "પાસવર્ડ બદલો")}</button>
           </div>
         </div>
 
@@ -307,7 +361,7 @@ function VolunteerDash() {
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">MPIN, fingerprint and certificates</CardTitle>
+            <CardTitle className="text-base">{tr("MPIN, fingerprint and certificates", "MPIN, ફિંગરપ્રિન્ટ અને પ્રમાણપત્ર")}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <form
@@ -430,7 +484,7 @@ function VolunteerDash() {
         <Card>
           <CardHeader><CardTitle>{t("noticesTitle")}</CardTitle></CardHeader>
           <CardContent className="space-y-2">
-            {notices.map((notice) => {
+            {myNotices.map((notice) => {
               const unread = !readNotes.includes(notice.id);
               return (
                 <button key={notice.id} type="button" className="flex w-full items-start gap-2 rounded-xl border border-border px-3 py-3 text-left" onClick={() => {
@@ -443,39 +497,21 @@ function VolunteerDash() {
                 </button>
               );
             })}
-            {notices.length === 0 ? <p className="text-sm text-muted-foreground">{t("emptyNotice")}</p> : null}
+            {myNotices.length === 0 ? <p className="text-sm text-muted-foreground">{t("emptyNotice")}</p> : null}
           </CardContent>
         </Card>
 
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <Stat label="Attendance" value={`${attPct}%`} />
-          <Stat label="NSS hours" value={String(hours)} />
-          <Stat label="Certificates" value={String(mine.length)} />
-          <Stat label="Activities present" value={String(present)} />
+          <Stat label={tr("Attendance", "હાજરી")} value={`${attPct}%`} />
+          <Stat label={tr("NSS hours", "સેવા કલાક")} value={String(hours)} />
+          <Stat label={tr("Certificates", "પ્રમાણપત્ર")} value={String(mine.length)} />
+          <Stat label={tr("Activities present", "હાજર કાર્યક્રમ")} value={String(present)} />
         </div>
 
-        <div className="grid gap-4 lg:grid-cols-[1.35fr_1fr]">
-          <Card>
-            <CardHeader><CardTitle>My Attendance & Service Progress</CardTitle></CardHeader>
-            <CardContent>
-              <div className="h-64">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={events.filter((e) => myAtt.some((a) => a.eventId === e.id)).map((e) => ({ name: e.name, attendance: attendanceOf(portalState, me.id, e.id)?.present ? 100 : 0, hours: attendanceOf(portalState, me.id, e.id)?.present ? e.hours : 0 }))}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="name" hide />
-                    <YAxis />
-                    <Tooltip />
-                    <Bar dataKey="attendance" name="Attendance %" />
-                    <Bar dataKey="hours" name="Hours" />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader>
-              <CardTitle>Progress</CardTitle>
-            </CardHeader>
+        <Card>
+          <CardHeader>
+            <CardTitle>{tr("Progress", "પ્રગતિ")}</CardTitle>
+          </CardHeader>
             <CardContent className="space-y-5">
               <div className="grid grid-cols-2 gap-3">
                 <div className="rounded-xl bg-navy px-3 py-3 text-paper">
@@ -499,28 +535,22 @@ function VolunteerDash() {
               </div>
             </CardContent>
           </Card>
-        </div>
 
         <div className="grid gap-4 lg:grid-cols-2">
           <Card><CardHeader><CardTitle>Recent Activity Table</CardTitle></CardHeader><CardContent className="overflow-x-auto"><table className="w-full min-w-[520px] text-sm"><thead className="border-b border-border text-left text-muted-foreground"><tr><th className="py-2">Activity</th><th>Date</th><th>Attendance</th><th>Hours</th></tr></thead><tbody>{events.filter((e)=>myAtt.some((a)=>a.eventId===e.id)).sort((a,b)=>b.date.localeCompare(a.date)).map((e)=>{const r=attendanceOf(portalState,me.id,e.id);return <tr key={e.id} className="border-b border-border"><td className="py-2 font-medium">{e.name}</td><td>{formatLongDate(e.date)}</td><td><Badge tone={r?.present?"forest":"danger"}>{r?.present?"Present":"Absent"}</Badge></td><td>{r?.present?e.hours:0}</td></tr>})}</tbody></table></CardContent></Card>
-          <Card><CardHeader><CardTitle>Upcoming Events & RSVP</CardTitle></CardHeader><CardContent className="space-y-3">{upcoming.length?upcoming.map((e)=>{const rsvp=rsvpOf(portalState,me.id,e.id);return <div key={e.id} className="rounded-xl border border-border p-3"><div className="flex flex-wrap justify-between gap-2"><strong>{e.name}</strong><Badge tone="saffron">Upcoming</Badge></div><p className="mt-1 text-xs text-muted-foreground">{formatLongDate(e.date)}{e.endDate&&e.endDate!==e.date?` – ${formatLongDate(e.endDate)}`:""} · {e.location}</p>{e.description ? <p className="mt-1 text-sm text-muted-foreground">{e.description}</p> : null}<div className="mt-3 flex flex-wrap gap-2"><Button size="sm" variant={rsvp?.status === "will_attend" ? "forest" : "outline"} onClick={()=>setEventRSVP(me.id,e.id,"will_attend")}>હા, હું હાજર રહીશ</Button><Button size="sm" variant={rsvp?.status === "will_not_attend" ? "danger" : "outline"} onClick={()=>setEventRSVP(me.id,e.id,"will_not_attend")}>ના, હું હાજર રહીશ નહીં</Button></div></div>}):<p className="text-sm text-muted-foreground">No upcoming events.</p>}</CardContent></Card>
+          <Card><CardHeader><CardTitle>Upcoming Events & RSVP</CardTitle></CardHeader><CardContent className="space-y-3">{upcoming.length?upcoming.map((e)=>{const rsvp=rsvpOf(portalState,me.id,e.id);return <div key={e.id} className="rounded-xl border border-border p-3"><div className="flex flex-wrap justify-between gap-2"><strong>{e.name}</strong><Badge tone="saffron">Upcoming</Badge></div><p className="mt-1 text-xs text-muted-foreground">{formatLongDate(e.date)}{e.endDate&&e.endDate!==e.date?` – ${formatLongDate(e.endDate)}`:""} · {e.location}</p>{e.description ? <p className="mt-1 text-sm text-muted-foreground">{e.description}</p> : null}<div className="mt-3 flex flex-wrap gap-2"><Button size="sm" variant={rsvp?.status === "will_attend" ? "forest" : "outline"} onClick={() => replyTo(e.id, "will_attend")}>હા, હું હાજર રહીશ</Button><Button size="sm" variant={rsvp?.status === "will_not_attend" ? "danger" : "outline"} onClick={() => replyTo(e.id, "will_not_attend")}>ના, હું હાજર રહીશ નહીં</Button></div></div>}):<p className="text-sm text-muted-foreground">No upcoming events.</p>}</CardContent></Card>
         </div>
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Photo, mobile and MPIN</CardTitle>
+            <CardTitle className="text-base">{tr("Photo and mobile", "ફોટો અને મોબાઇલ")}</CardTitle>
           </CardHeader>
           <CardContent>
             <form
-              className="grid gap-3 sm:grid-cols-[auto_1fr_auto] sm:items-end"
+              className="grid gap-3 sm:grid-cols-[auto_1fr] sm:items-end"
               onSubmit={(e) => {
                 e.preventDefault();
-                const pin = (document.getElementById("quick-mpin") as HTMLInputElement | null)?.value ?? "";
                 const mobile = (document.getElementById("quick-mobile") as HTMLInputElement | null)?.value ?? me.mobile;
-                if (pin && !/^\d{4}$/.test(pin)) {
-                  toast.error("MPIN must be 4 digits.");
-                  return;
-                }
                 const session = useSessionStore.getState().session;
                 void fetch("/api/nss-cloud", {
                   method: "POST",
@@ -531,14 +561,13 @@ function VolunteerDash() {
                     password: session?.mobile || me.mobile,
                     volunteerId: me.id,
                     mobile,
-                    mpin: pin || undefined,
                   }),
                 }).then(async (res) => {
                   const data = (await res.json().catch(() => null)) as { ok?: boolean } | null;
                   if (!res.ok || data?.ok === false) throw new Error("save");
                   toast.success("Saved.");
                 }).catch(() => toast.error("Could not save."));
-                updateVolunteer(me.id, { mobile, ...(pin ? { mpin: pin } : {}) });
+                updateVolunteer(me.id, { mobile });
               }}
             >
               <label className="text-sm">
@@ -575,56 +604,10 @@ function VolunteerDash() {
                 Mobile
                 <Input id="quick-mobile" className="mt-1" defaultValue={me.mobile} inputMode="tel" />
               </label>
-              <label className="text-sm">
-                MPIN
-                <Input id="quick-mpin" className="mt-1 w-28" inputMode="numeric" placeholder={me.mpin ? "••••" : "4 digits"} />
-              </label>
-              <Button type="submit" className="sm:col-span-3 w-fit">Save</Button>
+              <Button type="submit" className="w-fit">{tr("Save", "સાચવો")}</Button>
             </form>
           </CardContent>
         </Card>
-
-        <div className="grid gap-4 lg:grid-cols-2">
-          <Card>
-            <CardHeader>
-              <CardTitle>Latest notices</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {myNotices.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No notices yet.</p>
-              ) : (
-                myNotices.map((n) => (
-                  <div key={n.id}>
-                    <p className="font-medium">{n.title}</p>
-                    <p className="gu text-sm text-muted-foreground">{n.body}</p>
-                  </div>
-                ))
-              )}
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader>
-              <CardTitle>Upcoming events</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              {upcoming.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No upcoming event.</p>
-              ) : (
-                upcoming.map((e) => (
-                  <div key={e.id} className="flex items-center justify-between rounded-md border border-border px-3 py-2">
-                    <div>
-                      <p className="font-medium">{e.name}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {formatLongDate(e.date)} · {e.location}
-                      </p>
-                    </div>
-                    <Badge tone="saffron">Upcoming</Badge>
-                  </div>
-                ))
-              )}
-            </CardContent>
-          </Card>
-        </div>
 
         {settings.birthdayShowOnDashboard !== false && myBirthday ? (
           <Card className="border-saffron/40">
