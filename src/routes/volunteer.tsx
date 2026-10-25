@@ -533,7 +533,11 @@ function VolunteerDash() {
                     mobile,
                     mpin: pin || undefined,
                   }),
-                }).then(() => toast.success("Saved."));
+                }).then(async (res) => {
+                  const data = (await res.json().catch(() => null)) as { ok?: boolean } | null;
+                  if (!res.ok || data?.ok === false) throw new Error("save");
+                  toast.success("Saved.");
+                }).catch(() => toast.error("Could not save."));
                 updateVolunteer(me.id, { mobile, ...(pin ? { mpin: pin } : {}) });
               }}
             >

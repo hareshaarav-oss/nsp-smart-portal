@@ -3,12 +3,13 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react
 import { Star } from "lucide-react";
 import { AppShell } from "@/components/nss/shell";
 import { PhotoCarousel } from "@/components/nss/photo-carousel";
+import { SevaChakra } from "@/components/nss/seva-chakra";
 import { SplashScreen } from "@/components/nss/splash";
 import { Badge } from "@/components/ui/badge";
 import { DEFAULT_SETTINGS } from "@/lib/nss/constants";
 import { daysUntilBirthday, formatLongDate, isBirthdayOn, todayIso } from "@/lib/nss/format";
+import { ensurePublicGallery } from "@/lib/nss/public-gallery";
 import { activeVolunteers, alumniVolunteers, bestVolunteer, liveServiceHours, useNssStore, volunteerHours } from "@/lib/nss/store";
-import type { GalleryItem } from "@/lib/nss/types";
 import { useUi } from "@/lib/nss/ui-prefs";
 
 export const Route = createFileRoute("/")({ component: Home });
@@ -83,27 +84,15 @@ function Home() {
     [volunteers, today],
   );
 
-  const { t } = useUi();
+  const { t, lang } = useUi();
+  const tr = (en: string, gu: string) => (lang === "gu" ? gu : en);
   const gallery = useNssStore((s) => s.gallery) ?? [];
   const slides = useMemo(
     () => gallery.filter((item) => item.src.startsWith("data:image/") && !SEED_IDS.has(item.id)).slice(0, 12),
     [gallery],
   );
   useEffect(() => {
-    let stop = false;
-    void fetch("/api/nss-cloud?gallery=1")
-      .then((res) => res.json())
-      .then((data: { ok?: boolean; gallery?: unknown; brand?: { poPhoto?: string; principalPhoto?: string; poQuote?: string; principalQuote?: string } }) => {
-        if (stop || !data.ok) return;
-        useNssStore.getState().applyCloud({
-          gallery: asHomeSlides(data.gallery),
-          brand: data.brand,
-        });
-      })
-      .catch(() => undefined);
-    return () => {
-      stop = true;
-    };
+    void ensurePublicGallery();
   }, []);
   const collegeReady = shownVolunteers > 0;
   const collegeEvents = collegeReady ? events.filter((event) => !SEED_IDS.has(event.id)) : events;
@@ -147,6 +136,14 @@ function Home() {
             <Link to="/verify" search={{ id: "" }} className="underline-offset-4 hover:underline">{t("verify")}</Link>
           </nav>
 
+          <SevaChakra
+            hours={hours}
+            volunteers={shownVolunteers}
+            target={settings.serviceHourTarget || 120}
+            camps={collegeEvents.length}
+            gu={lang === "gu"}
+          />
+
           {settings.showHomeGallery !== false && slides.length ? (
             <div className="mt-6">
               <PhotoCarousel items={slides} auto={settings.heroAutoPlay !== false} seconds={settings.heroIntervalSeconds || 5} />
@@ -155,15 +152,15 @@ function Home() {
 
           {settings.showHomeOfficers !== false ? (
             <div className="mt-6 grid gap-6 sm:grid-cols-2">
-              <HomeOfficer role="Programme Officer" name={settings.poName || DEFAULT_SETTINGS.poName} photo={settings.poPhoto} quote={settings.poQuote?.trim() || DEFAULT_SETTINGS.poQuote} />
-              <HomeOfficer role="Principal" name={settings.principalName || DEFAULT_SETTINGS.principalName} photo={settings.principalPhoto} quote={settings.principalQuote?.trim() || DEFAULT_SETTINGS.principalQuote} />
+              <HomeOfficer role={tr("Programme Officer", "કાર્યક્રમ અધિકારી")} name={settings.poName || DEFAULT_SETTINGS.poName} photo={settings.poPhoto} quote={settings.poQuote?.trim() || DEFAULT_SETTINGS.poQuote} />
+              <HomeOfficer role={tr("Principal", "આચાર્ય")} name={settings.principalName || DEFAULT_SETTINGS.principalName} photo={settings.principalPhoto} quote={settings.principalQuote?.trim() || DEFAULT_SETTINGS.principalQuote} />
             </div>
           ) : null}
 
           <div className="mt-6 space-y-3">
             {settings.showHomeNotices !== false ? (
               <RunBanner
-                label="Notice"
+                label={tr("Notice", "નોટિસ")}
                 items={latestNotices.map((notice) => {
                   const body = notice.body.replace(/\s+/g, " ").trim();
                   return body ? `${notice.title} — ${body}` : notice.title;
@@ -174,26 +171,26 @@ function Home() {
 
             {settings.showHomeEvents !== false ? (
               <RunBanner
-                label="Upcoming"
+                label={tr("Upcoming", "આગામી")}
                 items={upcoming.map((event) => {
                   const when = `${formatLongDate(event.date)}${event.endDate && event.endDate !== event.date ? ` – ${formatLongDate(event.endDate)}` : ""}`;
                   const place = event.location ? ` · ${event.location}` : "";
                   const note = event.description ? ` — ${event.description.replace(/\s+/g, " ").trim()}` : "";
                   return `${event.name} · ${when}${place}${note}`;
                 })}
-                empty="No upcoming event."
+                empty={tr("No upcoming event.", "આગામી કાર્યક્રમ નથી.")}
               />
             ) : null}
           </div>
 
           <div className="mt-8 grid grid-cols-2 gap-6 sm:grid-cols-4">
-            <MiniStat label="Volunteers" value={shownVolunteers} />
-            <MiniStat label="Service hours" value={hours} />
-            <MiniStat label="Alumni" value={alumniCount} />
-            <MiniStat label="Portal visitors" value={visitors} />
+            <MiniStat label={tr("Volunteers", "સ્વયંસેવકો")} value={shownVolunteers} />
+            <MiniStat label={tr("Service hours", "સેવા કલાક")} value={hours} />
+            <MiniStat label={tr("Alumni", "ભૂતપૂર્વ")} value={alumniCount} />
+            <MiniStat label={tr("Portal visitors", "મુલાકાતીઓ")} value={visitors} />
           </div>
 
-          <OpenTab id="volunteers" title="Volunteers">
+          <OpenTab id="volunteers" title={tr("Volunteers", "સ્વયંસેવકો")}>
             {rollCards.length ? (
               <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8">
                 {rollCards.map((v) => (
@@ -211,12 +208,12 @@ function Home() {
                 ))}
               </div>
             ) : (
-              <p className="text-sm text-muted-foreground">No volunteers yet.</p>
+              <p className="text-sm text-muted-foreground">{tr("No volunteers yet.", "હજી સ્વયંસેવક નથી.")}</p>
             )}
           </OpenTab>
 
           {completed.length ? (
-            <OpenTab id="activities" title="Completed programmes">
+            <OpenTab id="activities" title={tr("Completed programmes", "પૂર્ણ કાર્યક્રમ")}>
               <div className="divide-y divide-saffron/20">
                 {completed.map((event) => (
                   <div key={event.id} className="press flex items-start justify-between gap-3 py-3">
@@ -227,7 +224,7 @@ function Home() {
                         {formatLongDate(event.date)}{event.endDate && event.endDate !== event.date ? ` – ${formatLongDate(event.endDate)}` : ""} · {event.location}
                       </p>
                     </div>
-                    <Badge tone="forest">Completed</Badge>
+                    <Badge tone="forest">{tr("Completed", "પૂર્ણ")}</Badge>
                   </div>
                 ))}
               </div>
@@ -235,7 +232,7 @@ function Home() {
           ) : null}
 
           {settings.birthdayEnabled !== false ? (
-            <OpenTab id="birthdays" title="NSS Birthday Wishes">
+            <OpenTab id="birthdays" title={tr("NSS Birthday Wishes", "જન્મદિવસની શુભેચ્છા")}>
               {birthdayVolunteers.length ? (
                 <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                   {birthdayVolunteers.map((v) => {
@@ -245,55 +242,35 @@ function Home() {
                         {v.photoUrl ? <img src={v.photoUrl} alt="" className="h-12 w-12 object-cover" /> : <div className="h-12 w-12 bg-muted" />}
                         <div>
                           <p className="font-medium text-navy">{v.fullName}</p>
-                          <p className="text-xs text-muted-foreground">{days === 0 ? "Today" : `${days} day${days === 1 ? "" : "s"} to go`}</p>
+                          <p className="text-xs text-muted-foreground">{days === 0 ? tr("Today", "આજે") : tr(`${days} day${days === 1 ? "" : "s"} to go`, `${days} દિવસ બાકી`)}</p>
                         </div>
                       </div>
                     );
                   })}
                 </div>
               ) : (
-                <p className="text-sm text-muted-foreground">No birthday this week.</p>
+                <p className="text-sm text-muted-foreground">{tr("No birthday this week.", "આ અઠવાડિયે જન્મદિવસ નથી.")}</p>
               )}
             </OpenTab>
           ) : null}
 
-          <OpenTab id="best" title="Best volunteer">
+          <OpenTab id="best" title={tr("Best volunteer", "શ્રેષ્ઠ સ્વયંસેવક")}>
             {bestId || liveBest ? (
               <div className="flex flex-wrap items-center gap-3">
                 {bestPhoto && !showLiveBest ? <img src={bestPhoto} alt="" className="h-16 w-14 object-cover" /> : <Star className="size-6 text-saffron" />}
                 <div>
                   <p className="font-display text-lg text-navy">{cardName}</p>
-                  <p className="text-sm text-muted-foreground">{cardVid} · {cardUnit} · {cardHours} service hours</p>
+                  <p className="text-sm text-muted-foreground">{cardVid} · {cardUnit} · {cardHours} {tr("service hours", "સેવા કલાક")}</p>
                 </div>
               </div>
             ) : (
-              <p className="text-sm text-muted-foreground">Not marked yet.</p>
+              <p className="text-sm text-muted-foreground">{tr("Not marked yet.", "હજી નોંધાયું નથી.")}</p>
             )}
           </OpenTab>
         </section>
       </AppShell>
     </>
   );
-}
-
-function asHomeSlides(value: unknown): GalleryItem[] | undefined {
-  if (!Array.isArray(value)) return undefined;
-  const rows: GalleryItem[] = [];
-  for (const row of value) {
-    if (!row || typeof row !== "object") continue;
-    const item = row as Partial<GalleryItem>;
-    if (typeof item.id !== "string" || typeof item.src !== "string" || !item.src.startsWith("data:image/")) continue;
-    rows.push({
-      id: item.id,
-      src: item.src,
-      caption: typeof item.caption === "string" ? item.caption : "NSS activity",
-      date: typeof item.date === "string" ? item.date : "",
-      eventName: typeof item.eventName === "string" ? item.eventName : "",
-      folder: typeof item.folder === "string" ? item.folder : "",
-      kind: "photo",
-    });
-  }
-  return rows.length ? rows : undefined;
 }
 
 function HomeOfficer({ role, name, photo, quote }: { role: string; name: string; photo?: string; quote: string }) {

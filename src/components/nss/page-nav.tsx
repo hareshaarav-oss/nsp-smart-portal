@@ -69,7 +69,7 @@ export function PageNav({
           {session ? (
             <Link to="/chat" className={cn(item, "relative", on("/chat") && "is-on")}>
               {t("chat")}
-              {unread > 0 ? <span className="ml-1 rounded-full bg-[#25d366] px-1.5 text-[10px] font-semibold text-[#111b21]">{unread > 9 ? "9+" : unread}</span> : null}
+              {unread > 0 ? <span className="ml-1 rounded-full bg-saffron px-1.5 text-[10px] font-semibold text-navy">{unread > 9 ? "9+" : unread}</span> : null}
             </Link>
           ) : null}
           {officer ? (

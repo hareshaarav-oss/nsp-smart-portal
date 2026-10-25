@@ -19,7 +19,6 @@ type Section = "college" | "home" | "birthday" | "certificate" | "whatsapp" | "s
 function SettingsPage() {
   const settings = useNssStore((s) => s.settings);
   const update = useNssStore((s) => s.updateSettings);
-  const resetDemo = useNssStore((s) => s.resetDemo);
   const [section, setSection] = useState<Section>("college");
   const [draft, setDraft] = useState(settings);
   useEffect(() => setDraft(settings), [settings]);
@@ -117,15 +116,6 @@ function SettingsPage() {
           {section === "system" && <SystemSection settings={draft} update={updateDraft} />}
 
           <div className="flex justify-end"><Button onClick={saveSettings}>Save all changes</Button></div>
-
-          <Card className="border-danger/30">
-            <CardHeader><CardTitle className="text-base">Danger zone</CardTitle></CardHeader>
-            <CardContent>
-              <Button variant="outline" onClick={() => { if (confirm("Reset portal data to the seeded college roll?")) { resetDemo(); setDraft(useNssStore.getState().settings); toast.success("Restored sample data"); } }}>
-                Restore sample roll
-              </Button>
-            </CardContent>
-          </Card>
         </div>
       </div>
     </div>

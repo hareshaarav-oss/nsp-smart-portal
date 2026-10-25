@@ -1,31 +1,38 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AppShell } from "@/components/nss/shell";
 import { OfficialLetterhead } from "@/components/nss/official-letterhead";
 import { MediaThumb } from "@/components/nss/media-thumb";
 import { Button } from "@/components/ui/button";
 import { formatLongDate } from "@/lib/nss/format";
+import { ensurePublicGallery } from "@/lib/nss/public-gallery";
 import { useNssStore } from "@/lib/nss/store";
+import { useUi } from "@/lib/nss/ui-prefs";
 
 export const Route = createFileRoute("/gallery")({ component: GalleryPage });
 
 function GalleryPage() {
   const gallerySource = useNssStore((s) => s.gallery);
   const gallery = useMemo(() => gallerySource ?? [], [gallerySource]);
+  const { lang } = useUi();
+  const tr = (en: string, gu: string) => (lang === "gu" ? gu : en);
+  useEffect(() => {
+    void ensurePublicGallery();
+  }, []);
   const folders = useMemo(() => {
     const set = new Set(gallery.map((g) => g.folder || g.eventName || "General"));
     return [...set].sort();
   }, [gallery]);
   const [folder, setFolder] = useState("all");
-  const shown = gallery.filter((g) => folder === "all" || (g.folder || g.eventName || "General") === folder);
+  const shown = gallery.filter((g) => (g.src || g.mediaKey) && (folder === "all" || (g.folder || g.eventName || "General") === folder));
 
   return (
     <AppShell>
       <div className="mx-auto max-w-6xl px-4 pb-16">
-        <OfficialLetterhead title="Activity photographs" compact className="mb-6" />
+        <OfficialLetterhead title={tr("Activity photographs", "પ્રવૃત્તિના ફોટા")} compact className="mb-6" />
         <div className="mt-4 flex flex-wrap gap-2">
           <Button size="sm" variant={folder === "all" ? "default" : "outline"} onClick={() => setFolder("all")}>
-            All
+            {tr("All", "બધા")}
           </Button>
           {folders.map((name) => (
             <Button key={name} size="sm" variant={folder === name ? "default" : "outline"} onClick={() => setFolder(name)}>
@@ -34,7 +41,7 @@ function GalleryPage() {
           ))}
         </div>
         {shown.length === 0 ? (
-          <p className="mt-8 text-sm text-muted-foreground">No photographs yet.</p>
+          <p className="mt-8 text-sm text-muted-foreground">{tr("No photographs yet.", "હજી ફોટા નથી.")}</p>
         ) : null}
         <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {shown.map((item) => (
