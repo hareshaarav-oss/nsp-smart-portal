@@ -670,6 +670,7 @@ function ChatPage() {
     });
   }, [messages, active, mobileList]);
 
+  const meId = me?.id || (session?.role === "po" ? "po" : session?.role === "admin" ? "admin" : session?.volunteerId || "");
   const roleNow = me?.role || session?.role || "";
   const unitNow = me?.unit || roll.find((row) => row.id === meId || row.volunteerId === meId)?.unit || "";
   const deskNow = roleNow === "po" || roleNow === "admin";
@@ -1160,7 +1161,6 @@ function ChatPage() {
   if (!session) return <Navigate to="/login" search={{ role: "volunteer" }} />;
 
   const officer = (session.role === "po" || session.role === "admin") && (!me || me.role === "po" || me.role === "admin");
-  const meId = me?.id || (session.role === "po" ? "po" : session.role === "admin" ? "admin" : session.volunteerId || "");
   const poThread = meId && meId !== "po" ? canonicalThread(`dm:${meId}:po`) : "";
 
   function talk(list: ChatMessage[], threadId: string, showNames: boolean) {
@@ -1180,7 +1180,7 @@ function ChatPage() {
         >
           <p className="mx-auto mb-2 flex max-w-[92%] items-start gap-1.5 rounded-lg bg-[#fff4c4] px-3 py-2 text-center text-[12px] leading-snug text-[#54656f]">
             <Lock className="mt-0.5 size-3.5 shrink-0" />
-            <span>{tr("Messages are encrypted. Only people in this chat can read them.", "સંદેશ એન્ક્રિપ્ટ થયેલા છે. આ ચેટના લોકો જ વાંચી શકે.")}</span>
+            <span>{tr("Messages are stored encrypted on the college cloud.", "સંદેશ કોલેજ ક્લાઉડ પર એન્ક્રિપ્ટ થઈને સચવાય છે.")}</span>
           </p>
           {shown.length === 0 ? <p className="mx-auto my-8 w-fit rounded-full bg-white/80 px-3 py-1 text-[12px] text-[#54656f]">{tr("No messages yet", "હજી કોઈ સંદેશ નથી")}</p> : null}
           {shown.map((message, index) => {
@@ -1685,7 +1685,7 @@ function ChatPage() {
                     ? tr("online", "ઓનલાઇન")
                     : peer?.lastSeen
                       ? `${tr("last seen", "છેલ્લે")} ${clock(peer.lastSeen)}`
-                      : tr("encrypted", "એન્ક્રિપ્ટેડ")}
+                      : tr("NSS chat", "NSS ચેટ")}
               </p>
             </button>
             <button type="button" className="rounded-full p-2 hover:bg-white/10" aria-label="Menu" onClick={() => { setMenuMore(false); setMenu((on) => !on); }}>
