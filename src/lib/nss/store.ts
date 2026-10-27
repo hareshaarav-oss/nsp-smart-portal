@@ -2247,13 +2247,14 @@ export function rsvpOf(
   volunteerId: string,
   eventId: string,
 ) {
+  const person = (state.volunteers ?? []).find((v) => v.id === volunteerId || v.volunteerId === volunteerId);
+  const keys = new Set([volunteerId, person?.id || "", person?.volunteerId || ""].filter(Boolean));
   return (
     state.eventRsvps ?? []
   ).find(
     (r) =>
-      r.volunteerId ===
-        volunteerId &&
-      r.eventId === eventId,
+      r.eventId === eventId &&
+      keys.has(r.volunteerId),
   );
 }
 

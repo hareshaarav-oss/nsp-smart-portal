@@ -516,16 +516,16 @@ function VolunteerDash() {
               <div className="grid grid-cols-2 gap-3">
                 <div className="rounded-xl bg-navy px-3 py-3 text-paper">
                   <p className="font-display text-3xl tabular-nums">{hours}</p>
-                  <p className="text-xs text-paper/70">Hours done</p>
+                  <p className="text-xs text-paper/70">{tr("Hours done", "પૂરા થયેલા કલાક")}</p>
                 </div>
                 <div className="rounded-xl bg-forest px-3 py-3 text-paper">
                   <p className="font-display text-3xl tabular-nums">{attPct}%</p>
-                  <p className="text-xs text-paper/70">Attendance</p>
+                  <p className="text-xs text-paper/70">{tr("Attendance", "હાજરી")}</p>
                 </div>
               </div>
               <ProgressRow label="Attendance" value={attPct} suffix={`${present} activities marked present`} />
               <ProgressRow label="Service hours" value={Math.min(100, Math.round((hours / Math.max(1, settings.serviceHourTarget)) * 100))} suffix={`${hours} of ${settings.serviceHourTarget} hours`} />
-              <ProgressRow label="NSS 240 hours" value={Math.min(100, Math.round((hours / 240) * 100))} suffix={`${hours} / 240`} />
+              <ProgressRow label={tr("Two-year NSS hours", "બે વર્ષના ૨૪૦ કલાક")} value={Math.min(100, Math.round((hours / 240) * 100))} suffix={`${hours} / 240`} />
               <ProgressRow label="Certificates" value={Math.min(100, mine.length * 20)} suffix={`${mine.length} earned`} />
               <div className="flex flex-wrap gap-2">
                 {present >= 5 ? <Badge tone="forest">Attendance</Badge> : null}
@@ -537,7 +537,7 @@ function VolunteerDash() {
           </Card>
 
         <div className="grid gap-4 lg:grid-cols-2">
-          <Card><CardHeader><CardTitle>Recent Activity Table</CardTitle></CardHeader><CardContent className="overflow-x-auto"><table className="w-full min-w-[520px] text-sm"><thead className="border-b border-border text-left text-muted-foreground"><tr><th className="py-2">Activity</th><th>Date</th><th>Attendance</th><th>Hours</th></tr></thead><tbody>{events.filter((e)=>myAtt.some((a)=>a.eventId===e.id)).sort((a,b)=>b.date.localeCompare(a.date)).map((e)=>{const r=attendanceOf(portalState,me.id,e.id);return <tr key={e.id} className="border-b border-border"><td className="py-2 font-medium">{e.name}</td><td>{formatLongDate(e.date)}</td><td><Badge tone={r?.present?"forest":"danger"}>{r?.present?"Present":"Absent"}</Badge></td><td>{r?.present?e.hours:0}</td></tr>})}</tbody></table></CardContent></Card>
+          <Card><CardHeader><CardTitle>{tr("Recent activity", "તાજેતરની હાજરી")}</CardTitle></CardHeader><CardContent className="overflow-x-auto"><table className="w-full min-w-[520px] text-sm"><thead className="border-b border-border text-left text-muted-foreground"><tr><th className="py-2">{tr("Activity", "કાર્યક્રમ")}</th><th>{tr("Date", "તારીખ")}</th><th>{tr("Attendance", "હાજરી")}</th><th>{tr("Hours", "કલાક")}</th></tr></thead><tbody>{events.filter((e)=>myAtt.some((a)=>a.eventId===e.id)).sort((a,b)=>b.date.localeCompare(a.date)).map((e)=>{const r=myAtt.find((a)=>a.eventId===e.id);return <tr key={e.id} className="border-b border-border"><td className="py-2 font-medium">{e.name}</td><td>{formatLongDate(e.date)}</td><td><Badge tone={r?.present?"forest":"danger"}>{r?.present?tr("Present","હાજર"):tr("Absent","ગેરહાજર")}</Badge></td><td>{r?.present?e.hours:0}</td></tr>})}</tbody></table></CardContent></Card>
           <Card><CardHeader><CardTitle>Upcoming Events & RSVP</CardTitle></CardHeader><CardContent className="space-y-3">{upcoming.length?upcoming.map((e)=>{const rsvp=rsvpOf(portalState,me.id,e.id);return <div key={e.id} className="rounded-xl border border-border p-3"><div className="flex flex-wrap justify-between gap-2"><strong>{e.name}</strong><Badge tone="saffron">Upcoming</Badge></div><p className="mt-1 text-xs text-muted-foreground">{formatLongDate(e.date)}{e.endDate&&e.endDate!==e.date?` – ${formatLongDate(e.endDate)}`:""} · {e.location}</p>{e.description ? <p className="mt-1 text-sm text-muted-foreground">{e.description}</p> : null}<div className="mt-3 flex flex-wrap gap-2"><Button size="sm" variant={rsvp?.status === "will_attend" ? "forest" : "outline"} onClick={() => replyTo(e.id, "will_attend")}>હા, હું હાજર રહીશ</Button><Button size="sm" variant={rsvp?.status === "will_not_attend" ? "danger" : "outline"} onClick={() => replyTo(e.id, "will_not_attend")}>ના, હું હાજર રહીશ નહીં</Button></div></div>}):<p className="text-sm text-muted-foreground">No upcoming events.</p>}</CardContent></Card>
         </div>
 

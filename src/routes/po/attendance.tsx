@@ -969,9 +969,9 @@ function AttendancePage() {
                     const needle = rollQuery.trim().toLowerCase();
                     return !needle || `${v.fullName} ${v.volunteerId}`.toLowerCase().includes(needle);
                   }).map((v) => {
-                    const present = markIndex.att.get(v.id) === true;
-                    const rec = markIndex.att.has(v.id);
-                    const rsvpStatus = markIndex.rsvp.get(v.id);
+                    const present = markIndex.att.get(v.id) === true || markIndex.att.get(v.volunteerId) === true;
+                    const rec = markIndex.att.has(v.id) || Boolean(v.volunteerId && markIndex.att.has(v.volunteerId));
+                    const rsvpStatus = markIndex.rsvp.get(v.id) || (v.volunteerId ? markIndex.rsvp.get(v.volunteerId) : undefined);
 
                     return (
                       <tr

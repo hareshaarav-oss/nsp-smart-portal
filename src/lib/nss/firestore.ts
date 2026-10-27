@@ -849,6 +849,76 @@ function briefVolunteer(s: Record<string, unknown>, n: number): Volunteer {
   };
 }
 
+const OFFICER_MARKS_MS = 10 * 60 * 1000;
+let officerMarksCache: { at: number; rows: AttendanceRecord[] } | null = null;
+
+function forgetOfficerMarks() {
+  officerMarksCache = null;
+  officerCache = null;
+}
+
+function eventNameKey(value: string) {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9\u0a80-\u0aff]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+async function officerAttendance(volunteers: Volunteer[], events: { id: string; name: string }[]) {
+  if (officerMarksCache && Date.now() - officerMarksCache.at < OFFICER_MARKS_MS) return officerMarksCache.rows;
+  if (collegeQuotaBlocked() || volunteers.length < 1 || events.length < 1) return officerMarksCache?.rows ?? [];
+  let docs: Record<string, unknown>[] = [];
+  try {
+    docs = await listCollection("attendance", { maxDocs: 400 });
+  } catch {
+    return officerMarksCache?.rows ?? [];
+  }
+  const byMobile = new Map<string, Volunteer>();
+  const byName = new Map<string, Volunteer>();
+  for (const volunteer of volunteers) {
+    const phone = mobileKey(volunteer.mobile) || mobileKey(volunteer.id);
+    if (phone.length >= 10) byMobile.set(phone, volunteer);
+    const nameKey = volunteer.fullName.toLowerCase();
+    if (nameKey) byName.set(nameKey, volunteer);
+    const compact = nameKey.replace(/[^a-z]/g, "");
+    if (compact.length > 2) byName.set(compact, volunteer);
+  }
+  const byEvent = new Map<string, string>();
+  for (const event of events) {
+    const key = eventNameKey(event.name);
+    if (key && event.id && !byEvent.has(key)) byEvent.set(key, event.id);
+  }
+  const attendance: AttendanceRecord[] = [];
+  const seen = new Set<string>();
+  for (const row of docs) {
+    reveal(row, ["studentMobile", "mobile", "studentName", "name"]);
+    const name = text(row.eventName) || text(row.title);
+    const eventId = byEvent.get(eventNameKey(name));
+    if (!eventId) continue;
+    const person =
+      byMobile.get(mobileKey(row.studentMobile) || mobileKey(row.mobile)) ||
+      byName.get(text(row.studentName || row.name).toLowerCase()) ||
+      byName.get(text(row.studentName || row.name).toLowerCase().replace(/[^a-z]/g, ""));
+    if (!person) continue;
+    const volunteerId = publicVolunteerId(person);
+    if (!volunteerId || digits(volunteerId).length >= 8) continue;
+    const key = `${volunteerId}::${eventId}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    attendance.push({ volunteerId, eventId, present: isPresent(row) });
+  }
+  officerMarksCache = { at: Date.now(), rows: attendance };
+  return attendance;
+}
+
+async function withOfficerMarks(data: CloudPortal): Promise<CloudPortal> {
+  const marks = await officerAttendance(data.volunteers, data.events);
+  if (!marks.length) return data;
+  return { ...data, attendance: marks };
+}
+
 export async function loadOfficerRoll(): Promise<CloudPortal | null> {
   if (officerCache && Date.now() - officerCache.at < OFFICER_ROLL_MS) return officerCache.data;
   const board = await loadPublicBoard({ gallery: false });
@@ -904,8 +974,9 @@ export async function loadOfficerRoll(): Promise<CloudPortal | null> {
           if (raw) rsvps.push(...readStoredRsvps(text(raw.rsvp), extra.id));
         }
         const merged = { ...board, volunteers: [...volunteers, ...extras], eventRsvps: rsvps };
-        officerCache = { at: Date.now(), data: merged };
-        return merged;
+        const marked = await withOfficerMarks(merged);
+        officerCache = { at: Date.now(), data: marked };
+        return marked;
       }
     } catch (error) {
       if (!collegeQuotaBlocked() && !(error instanceof Error && /busy|quota|429/i.test(error.message))) throw error;
@@ -1628,6 +1699,7 @@ export async function publishBestVolunteer(best: {
 
 export async function clearAttendanceCloud(eventName = "", opts?: { all?: boolean }) {
   invalidateCollegeCache();
+  forgetOfficerMarks();
   const want = text(eventName).trim().toLowerCase();
   const wipeAll = Boolean(opts?.all) || !want;
   const docs = await listCollection("attendance", { strict: true });
@@ -1711,8 +1783,12 @@ export async function saveAttendanceMark(input: { mobile: string; name: string; 
   return create.ok || create.status === 409;
 }
 
+const ownMarkCache = new Map<string, { at: number; rows: { eventId: string; present: boolean }[] }>();
+
 export async function saveAttendanceMarks(rows: { mobile: string; name: string; eventName: string; present: boolean; date?: string }[]) {
   invalidateCollegeCache();
+  forgetOfficerMarks();
+  ownMarkCache.clear();
   let saved = 0;
   for (let i = 0; i < rows.length; i += 20) {
     const batch = rows.slice(i, i + 20);
@@ -1722,8 +1798,6 @@ export async function saveAttendanceMarks(rows: { mobile: string; name: string; 
   if (saved > 0) void markBoardStale();
   return saved;
 }
-
-const ownMarkCache = new Map<string, { at: number; rows: { eventId: string; present: boolean }[] }>();
 
 export async function readOwnMarks(mobile: string, events: { id: string; name: string }[]) {
   const phone = digits(mobile).slice(-10);
