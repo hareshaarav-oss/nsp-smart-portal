@@ -2053,8 +2053,29 @@ function visibleChats(rows: ChatRow[]) {
   return kept;
 }
 
-async function markChatField(field: "reads" | "gone" | "cleared" | "edits", value: string) {
+const CHAT_LOG_ID = "nspchatlog";
+
+function chatLogName() {
   const project = process.env.NSS_FIRESTORE_PROJECT_ID?.trim() || "studio-8504026975-1fdbc";
+  return `projects/${project}/databases/(default)/documents/notices/${CHAT_LOG_ID}`;
+}
+
+async function ensureChatLog() {
+  const row = await getDocument(`notices/${CHAT_LOG_ID}`);
+  if (row) return;
+  try {
+    await createDocument("notices", CHAT_LOG_ID, {
+      kind: "chatlog",
+      title: "NSS_CHAT_INTERNAL",
+      createdAt: new Date().toISOString(),
+    });
+  } catch {
+    /* another send created the log */
+  }
+}
+
+async function markChatField(field: "reads" | "gone" | "cleared" | "edits", value: string) {
+  await ensureChatLog();
   await fetch(`${FIRESTORE_BASE}:commit`, {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -2062,7 +2083,7 @@ async function markChatField(field: "reads" | "gone" | "cleared" | "edits", valu
       writes: [
         {
           transform: {
-            document: `projects/${project}/databases/(default)/documents/portalSettings/chatlog`,
+            document: chatLogName(),
             fieldTransforms: [{ fieldPath: field, appendMissingElements: { values: [{ stringValue: value }] } }],
           },
         },
@@ -2201,7 +2222,7 @@ async function publishChatTail(row: ChatRow) {
     mediaType: row.mediaType || "",
     extra: packed ? sealText(JSON.stringify(packed).slice(0, 700)) : "",
   });
-  const project = process.env.NSS_FIRESTORE_PROJECT_ID?.trim() || "studio-8504026975-1fdbc";
+  await ensureChatLog();
   const res = await fetch(`${FIRESTORE_BASE}:commit`, {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -2209,7 +2230,7 @@ async function publishChatTail(row: ChatRow) {
       writes: [
         {
           transform: {
-            document: `projects/${project}/databases/(default)/documents/portalSettings/chatlog`,
+            document: chatLogName(),
             fieldTransforms: [{ fieldPath: "recent", appendMissingElements: { values: [{ stringValue: slim }] } }],
           },
         },
@@ -2217,6 +2238,21 @@ async function publishChatTail(row: ChatRow) {
     }),
   });
   if (!res.ok) throw new Error("Could not save the message.");
+  void trimChatLog();
+}
+
+async function trimChatLog() {
+  const doc = await getDocument(`notices/${CHAT_LOG_ID}`);
+  const recent = Array.isArray(doc?.recent) ? doc.recent.filter((item) => typeof item === "string") : [];
+  if (recent.length <= 120) return;
+  const kept = recent.slice(-80);
+  await fetch(`${FIRESTORE_BASE}/notices/${CHAT_LOG_ID}?updateMask.fieldPaths=recent`, {
+    method: "PATCH",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      fields: { recent: { arrayValue: { values: kept.map((item) => ({ stringValue: item })) } } },
+    }),
+  });
 }
 
 export async function reviseChatMessage(id: string, next: { text?: string; extra?: ChatExtra }) {
@@ -2261,7 +2297,7 @@ export async function listRecentChatMessages(limit = 60): Promise<ChatRow[]> {
   if (chatCache && Date.now() - chatCache.at < 12_000 && chatCache.rows.length) return visibleChats(chatCache.rows).slice(-limit);
   if (!collegeQuotaBlocked()) {
     try {
-      const doc = await getDocument("portalSettings/chatlog");
+      const doc = await getDocument(`notices/${CHAT_LOG_ID}`);
       const gone = Array.isArray(doc?.gone) ? doc.gone : [];
       for (const id of gone) if (typeof id === "string" && id.startsWith("chat")) goneCache.add(id);
       const reads = Array.isArray(doc?.reads) ? doc.reads : [];
@@ -2425,7 +2461,7 @@ export async function saveChatMessage(input: { threadId: string; text: string; s
   if (twin && !input.media) return twin;
   if (!twin && !collegeQuotaBlocked()) {
     try {
-      const doc = await getDocument("portalSettings/chatlog");
+      const doc = await getDocument(`notices/${CHAT_LOG_ID}`);
       const storedRows = visibleChats(applyChatEdits(tailRows(doc?.recent), doc?.edits));
       const storedClient = clientId
         ? storedRows.find((row) => row.senderId === input.senderId && row.extra?.clientId === clientId)

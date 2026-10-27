@@ -1186,7 +1186,7 @@ function ChatPage() {
           {shown.map((message, index) => {
             const mine = message.senderId === me?.id || message.senderId === meId;
             const previous = shown[index - 1];
-            const showDay = !previous || previous.createdAt.slice(0, 10) !== message.createdAt.slice(0, 10);
+            const showDay = !previous || (previous.createdAt || "").slice(0, 10) !== (message.createdAt || "").slice(0, 10);
             const extra = message.extra || {};
             const link = firstLink(message.text);
             const read = Boolean(
@@ -1252,7 +1252,7 @@ function ChatPage() {
                     {message.mediaType === "audio" && message.media ? <audio src={message.media} controls className="mb-1 w-56" onClick={(e) => e.stopPropagation()} /> : null}
                     {message.mediaType === "file" && message.media ? <a href={message.media} download={extra.fileName || "file"} className="mb-1 flex items-center gap-1 px-1 text-sm underline" onClick={(e) => e.stopPropagation()}><FileText className="size-4" />{extra.fileName || "Document"}</a> : null}
                     {message.mediaType && !message.media && !extra.opened ? <p className="px-1 text-xs text-[#667781]">Loading…</p> : null}
-                    {extra.poll ? (
+                    {extra.poll && Array.isArray(extra.poll.options) ? (
                       <div className="px-1 py-1">
                         <p className="text-sm font-medium">{extra.poll.q}</p>
                         {extra.poll.options.map((option, optionIndex) => {
@@ -1571,11 +1571,11 @@ function ChatPage() {
         <span className="min-w-0 flex-1">
           <span className="flex items-center justify-between gap-2">
             <span className="truncate font-medium text-navy">{threadTitle(id)}</span>
-            <span className={`shrink-0 text-[11px] ${count > 0 ? "text-[#25d366]" : "text-[#667781]"}`}>{last ? clock(last.createdAt) : ""}</span>
+            <span className={`shrink-0 text-[11px] ${count > 0 ? "text-saffron" : "text-[#667781]"}`}>{last ? clock(last.createdAt) : ""}</span>
           </span>
           <span className="mt-0.5 flex items-center justify-between gap-2">
             <span className="truncate text-xs text-muted-foreground">{last ? previewLine(last) : group?.subtitle || ""}</span>
-            {count > 0 ? <span className="min-w-5 rounded-full bg-[#25d366] px-1.5 text-center text-[11px] font-semibold text-white">{count}</span> : null}
+            {count > 0 ? <span className="min-w-5 rounded-full bg-saffron px-1.5 text-center text-[11px] font-semibold text-navy">{count}</span> : null}
           </span>
         </span>
       </button>
