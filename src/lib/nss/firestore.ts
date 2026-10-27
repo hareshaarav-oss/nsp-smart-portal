@@ -2003,7 +2003,7 @@ export async function listChatPeople(opts?: { includeMobile?: boolean }): Promis
       const assembled = [s.firstName, s.middleName, s.surname].map(text).filter(Boolean).join(" ");
       const unit = text(s.unit) === "Unit 2" ? "Unit 2" : "Unit 1";
       const person: ChatPerson = {
-        id: text(s.volunteerId) || `NSS${padId(n)}`,
+        id: publicVolunteerId({ id: text(s._id), volunteerId: text(s.volunteerId) }) || text(s.volunteerId) || `NSS${padId(n)}`,
         name: titleFirstName(cleanPersonName(text(s.fullName) || assembled)),
         unit,
         role: knownRole(s.nssRole),
@@ -2023,7 +2023,7 @@ let chatCache: { at: number; rows: ChatRow[] } | null = null;
 let readCache: { id: string; thread: string; at: string }[] = [];
 const goneCache = new Set<string>();
 const clearedAt = new Map<string, string>();
-const CHAT_LIFE_MS = 24 * 60 * 60 * 1000;
+const CHAT_LIFE_MS = 7 * 24 * 60 * 60 * 1000;
 
 function chatStillLive(createdAt: string) {
   const at = new Date(createdAt).getTime();

@@ -256,7 +256,6 @@ function ChatPage() {
   const [statuses, setStatuses] = useState<{ id: string; text: string; senderId: string; senderName: string; createdAt: string }[]>([]);
   const [viewOnce, setViewOnce] = useState(false);
   const [forwarded, setForwarded] = useState(false);
-  const [away, setAway] = useState(false);
   const { t: say, lang } = useUi();
   const tr = (en: string, gu: string) => (lang === "gu" ? gu : en);
   const scroller = useRef<HTMLDivElement>(null);
@@ -267,7 +266,6 @@ function ChatPage() {
   const mediaBag = useRef(new Map<string, { media: string; mediaType: "image" | "video" | "audio" | "file" }>());
   const recorder = useRef<MediaRecorder | null>(null);
   const draftRef = useRef("");
-  const volunteerHome = useRef(false);
   const heard = useRef(new Set<string>());
   const heardReady = useRef(false);
   const hiddenPull = useRef(0);
@@ -386,12 +384,6 @@ function ChatPage() {
   }, [token]);
 
   useEffect(() => {
-    const onVis = () => setAway(document.hidden);
-    document.addEventListener("visibilitychange", onVis);
-    return () => document.removeEventListener("visibilitychange", onVis);
-  }, []);
-
-  useEffect(() => {
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => {
@@ -441,7 +433,7 @@ function ChatPage() {
     const id = me?.id || session.volunteerId || "";
     if (!id) return;
     const home = canonicalThread(`dm:${id}:po`);
-    const unit = me?.unit || "";
+    const unit = me?.unit || roll.find((row) => row.id === (me?.id || session.volunteerId) || row.volunteerId === (me?.id || session.volunteerId))?.unit || "";
     const role = me?.role || session.role;
     const allowed = (threadId: string) => {
       if (threadId === home || threadId === "college" || threadId === "channel") return true;
@@ -451,19 +443,11 @@ function ChatPage() {
       if (threadId === "unit-1") return !/unit\s*2/i.test(unit);
       return false;
     };
-    if (!volunteerHome.current) {
-      volunteerHome.current = true;
-      if (!window.location.hash.startsWith("#c=") && active !== home) {
-        setActive(home);
-        setMobileList(false);
-        return;
-      }
+    if (!allowed(canonicalThread(active))) {
+      setActive("college");
+      setMobileList(true);
     }
-    if (!allowed(active)) {
-      setActive(home);
-      setMobileList(false);
-    }
-  }, [session, me?.id, me?.unit, me?.role, active]);
+  }, [session, me?.id, me?.unit, me?.role, active, roll]);
 
   useEffect(() => {
     if (!session || session.chatToken) return;
@@ -477,7 +461,7 @@ function ChatPage() {
         name: session.name,
         volunteerId: session.volunteerId || "",
         docId: session.docId || "",
-        unit: "",
+        unit: roll.find((row) => row.id === session.volunteerId || row.volunteerId === session.volunteerId)?.unit || "",
       }),
     })
       .then((res) => res.json())
@@ -687,7 +671,7 @@ function ChatPage() {
   }, [messages, active, mobileList]);
 
   const roleNow = me?.role || session?.role || "";
-  const unitNow = me?.unit || "";
+  const unitNow = me?.unit || roll.find((row) => row.id === meId || row.volunteerId === meId)?.unit || "";
   const deskNow = roleNow === "po" || roleNow === "admin";
   const allowedGroups = GROUPS.filter((group) => {
     if (!session) return false;
@@ -766,12 +750,8 @@ function ChatPage() {
 
   function closeThread() {
     setInfoOn(false);
-    if (router.history.canGoBack()) {
-      router.history.back();
-      return;
-    }
     setMobileList(true);
-    router.history.push("/chat");
+    void router.history.push("/chat");
   }
 
   function leaveChats() {
@@ -1540,7 +1520,7 @@ function ChatPage() {
   }
 
 
-  const threadMessages = messages.filter((message) => canonicalThread(message.threadId) === canonicalThread(active) && Date.now() - new Date(message.createdAt).getTime() < 24 * 60 * 60 * 1000);
+  const threadMessages = messages.filter((message) => canonicalThread(message.threadId) === canonicalThread(active) && Date.now() - new Date(message.createdAt).getTime() < 7 * 24 * 60 * 60 * 1000);
   const directory = (() => {
     const map = new Map<string, Person>();
     for (const volunteer of roll) {
@@ -1617,7 +1597,6 @@ function ChatPage() {
   return (
     <AppShell eyebrow="NSS CHAT" current="page">
       <div className={`fixed inset-0 z-50 flex ${prefs.dark ? "bg-[#0b141a]" : "bg-[#efeae2]"}`} onContextMenu={(event) => event.preventDefault()}>
-        {away ? <div className="absolute inset-0 z-[60] bg-[#075e54]" /> : null}
         <aside className={`${mobileList ? "flex" : "hidden"} h-full w-full flex-col min-[1280px]:flex min-[1280px]:w-96 min-[1280px]:border-r min-[1280px]:border-[#d1d7db] ${prefs.dark ? "bg-[#111b21] text-white" : "bg-white"}`}>
           <div className="flex items-center gap-3 bg-[#075e54] px-3 py-3 text-white">
             <button type="button" className="rounded-full p-1 hover:bg-white/10" aria-label="Back" onClick={leaveChats}>
@@ -1651,7 +1630,7 @@ function ChatPage() {
                   </span>
                   <span className="block truncate text-xs text-muted-foreground">{lastMessage(canonicalThread(`dm:${meId}:po`)) ? previewLine(lastMessage(canonicalThread(`dm:${meId}:po`))!) : "Personal chat"}</span>
                 </span>
-                {unreadCount(canonicalThread(`dm:${meId}:po`)) > 0 ? <span className="min-w-5 rounded-full bg-[#25d366] px-1.5 text-center text-[11px] font-semibold text-white">{unreadCount(canonicalThread(`dm:${meId}:po`))}</span> : null}
+                {unreadCount(canonicalThread(`dm:${meId}:po`)) > 0 ? <span className="min-w-5 rounded-full bg-saffron px-1.5 text-center text-[11px] font-semibold text-navy">{unreadCount(canonicalThread(`dm:${meId}:po`))}</span> : null}
               </button>
             ) : null}
             {officer && meId !== "admin" ? (

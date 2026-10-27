@@ -309,14 +309,14 @@ function canonicalThread(threadId: string) {
 function validThread(threadId: string) {
   if (threadId === "college" || threadId === "unit-1" || threadId === "unit-2" || threadId === "leaders" || threadId === "channel") return true;
   if (/^event:[A-Za-z0-9_-]{4,48}$/.test(threadId)) return true;
-  return /^dm:[A-Za-z0-9-]{1,24}:[A-Za-z0-9-]{1,24}$/.test(threadId);
+  return /^dm:[A-Za-z0-9_-]{1,40}:[A-Za-z0-9_-]{1,40}$/.test(threadId);
 }
 
 function isUnit2(unit: string) {
   return /unit\s*2/i.test(unit);
 }
 
-function canSeeThread(user: { id: string; role: string; unit: string }, threadId: string) {
+function canSeeThread(user: { id: string; role: string; unit: string; docId?: string }, threadId: string) {
   const officer = user.role === "po" || user.role === "admin";
   if (threadId === "channel" || threadId === "college") return true;
   if (threadId === "leaders") return officer || user.role === "leader";
@@ -325,8 +325,9 @@ function canSeeThread(user: { id: string; role: string; unit: string }, threadId
   if (/^event:[A-Za-z0-9_-]{4,48}$/.test(threadId)) return true;
   if (!threadId.startsWith("dm:")) return false;
   const ids = threadId.slice(3).split(":");
-  if (officer) return ids.includes("po") || ids.includes("admin") || ids.includes(user.id);
-  return ids.includes(user.id) && ids.includes("po");
+  const mine = [user.id, user.docId || ""].filter(Boolean);
+  if (officer) return ids.includes("po") || ids.includes("admin") || ids.some((id) => mine.includes(id));
+  return ids.includes("po") && ids.some((id) => mine.includes(id));
 }
 
 const chatSendTimes = new Map<string, number[]>();
@@ -859,7 +860,7 @@ export const Route = createFileRoute("/api/nss-cloud")({
               });
               return Response.json({ ok: true, message: saved });
             }
-            const messages = (await listRecentChatMessages().catch(() => [])).filter((row) => canSeeThread(user, canonicalThread(row.threadId)) && Date.now() - new Date(row.createdAt).getTime() < 24 * 60 * 60 * 1000);
+            const messages = (await listRecentChatMessages().catch(() => [])).filter((row) => canSeeThread(user, canonicalThread(row.threadId)) && Date.now() - new Date(row.createdAt).getTime() < 7 * 24 * 60 * 60 * 1000);
             const officer = user.role === "po" || user.role === "admin";
             const people = officer ? await listChatPeople({ includeMobile: false }).catch(() => []) : [];
             return Response.json({

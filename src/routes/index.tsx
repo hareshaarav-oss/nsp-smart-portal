@@ -1,6 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
-import { Star } from "lucide-react";
 import { AppShell } from "@/components/nss/shell";
 import { PhotoCarousel } from "@/components/nss/photo-carousel";
 import { SevaChakra } from "@/components/nss/seva-chakra";
@@ -9,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { DEFAULT_SETTINGS } from "@/lib/nss/constants";
 import { daysUntilBirthday, formatLongDate, isBirthdayOn, todayIso } from "@/lib/nss/format";
 import { ensurePublicGallery } from "@/lib/nss/public-gallery";
-import { activeVolunteers, alumniVolunteers, bestVolunteer, liveServiceHours, useNssStore, volunteerHours } from "@/lib/nss/store";
+import { activeVolunteers, alumniVolunteers, liveServiceHours, useNssStore, volunteerHours } from "@/lib/nss/store";
 import { useUi } from "@/lib/nss/ui-prefs";
 
 export const Route = createFileRoute("/")({ component: Home });
@@ -40,20 +39,6 @@ function Home() {
   const shownVolunteers = Math.max(volunteerCount, liveVolunteerCount);
   const alumniCount = useNssStore((s) => Math.max(alumniVolunteers(s).length, s.settings.alumniCount));
   const liveBest = useNssStore((s) => s.liveBest);
-  const bestId = useNssStore((s) => bestVolunteer(s)?.id ?? "");
-  const bestName = useNssStore((s) => bestVolunteer(s)?.fullName ?? "");
-  const bestUnit = useNssStore((s) => bestVolunteer(s)?.unit ?? "");
-  const bestVid = useNssStore((s) => bestVolunteer(s)?.volunteerId ?? "");
-  const bestPhoto = useNssStore((s) => bestVolunteer(s)?.photoUrl ?? "");
-  const bestHours = useNssStore((s) => {
-    const v = bestVolunteer(s);
-    return v ? volunteerHours(s, v.id) : 0;
-  });
-  const showLiveBest = Boolean(liveBest && liveBest.hours > bestHours);
-  const cardName = showLiveBest && liveBest ? liveBest.fullName : bestName;
-  const cardUnit = showLiveBest && liveBest ? liveBest.unit : bestUnit;
-  const cardVid = showLiveBest && liveBest ? liveBest.volunteerId : bestVid;
-  const cardHours = showLiveBest && liveBest ? liveBest.hours : bestHours;
   const today = todayIso();
   const volunteerSource = useNssStore((s) => s.volunteers);
   const volunteers = useMemo(() => volunteerSource ?? [], [volunteerSource]);
@@ -62,9 +47,29 @@ function Home() {
       volunteers
         .filter((v) => v.status !== "alumni" && v.fullName)
         .slice()
-        .sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || "") || a.fullName.localeCompare(b.fullName, "en")),
+        .sort((a, b) => {
+          const photo = Number(Boolean(b.photoUrl)) - Number(Boolean(a.photoUrl));
+          if (photo) return photo;
+          return a.fullName.localeCompare(b.fullName, "en");
+        }),
     [volunteers],
   );
+  const attendance = useNssStore((s) => s.attendance);
+  const featured = useMemo(() => {
+    const state = useNssStore.getState();
+    const people = volunteers.filter((v) => v.status !== "alumni" && v.fullName);
+    const photos = people.filter((v) => v.photoUrl);
+    return (photos.length ? photos : people)
+      .slice()
+      .sort((a, b) => volunteerHours(state, b.id) - volunteerHours(state, a.id) || a.fullName.localeCompare(b.fullName, "en"));
+  }, [volunteers, attendance]);
+  const [spot, setSpot] = useState(0);
+  useEffect(() => {
+    if (featured.length < 2) return;
+    const timer = window.setInterval(() => setSpot((n) => n + 1), 10000);
+    return () => window.clearInterval(timer);
+  }, [featured.length]);
+  const featuredPerson = featured.length ? featured[spot % featured.length] : undefined;
   const birthdayVolunteers = useMemo(
     () =>
       volunteers
@@ -255,12 +260,19 @@ function Home() {
           ) : null}
 
           <OpenTab id="best" title={tr("Best volunteer", "શ્રેષ્ઠ સ્વયંસેવક")}>
-            {bestId || liveBest ? (
-              <div className="flex flex-wrap items-center gap-3">
-                {bestPhoto && !showLiveBest ? <img src={bestPhoto} alt="" className="h-16 w-14 object-cover" /> : <Star className="size-6 text-saffron" />}
+            {featuredPerson ? (
+              <div className="flex items-center gap-4">
+                {featuredPerson.photoUrl ? (
+                  <img src={featuredPerson.photoUrl} alt="" className="h-24 w-20 object-cover ring-1 ring-saffron/40" />
+                ) : (
+                  <span className="flex h-24 w-20 items-center justify-center bg-navy text-lg font-semibold text-paper">{featuredPerson.fullName.slice(0, 1)}</span>
+                )}
                 <div>
-                  <p className="font-display text-lg text-navy">{cardName}</p>
-                  <p className="text-sm text-muted-foreground">{cardVid} · {cardUnit} · {cardHours} {tr("service hours", "સેવા કલાક")}</p>
+                  <p className="font-display text-lg text-navy">{featuredPerson.fullName}</p>
+                  <p className="text-sm text-muted-foreground">
+                    {featuredPerson.volunteerId} · {featuredPerson.unit} · {Math.max(volunteerHours(useNssStore.getState(), featuredPerson.id), liveBest && (liveBest.id === featuredPerson.id || liveBest.volunteerId === featuredPerson.volunteerId) ? liveBest.hours : 0)} {tr("service hours", "સેવા કલાક")}
+                  </p>
+                  {featured.length > 1 ? <p className="mt-1 text-xs text-saffron">{tr("Changes every 10 seconds", "દર 10 સેકન્ડે બદલાય")}</p> : null}
                 </div>
               </div>
             ) : (
