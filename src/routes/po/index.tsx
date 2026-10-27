@@ -27,8 +27,13 @@ function PoHome() {
   const upcoming = [...state.events].filter((e) => e.status === "upcoming" || e.date >= today).filter((e) => e.status !== "cancelled").sort((a,b)=>a.date.localeCompare(b.date)).slice(0,5);
   const completed = state.events.filter((e) => e.status === "completed").length;
   const presentRows = state.attendance.filter((a) => a.present).length;
-  const totalRows = state.attendance.length;
-  const attendancePct = totalRows ? Math.round((presentRows / totalRows) * 100) : 0;
+  const markedProgrammes = state.events.filter((event) => state.attendance.some((row) => row.eventId === event.id));
+  const attendancePct = markedProgrammes.length && volunteers.length
+    ? Math.round(markedProgrammes.reduce((sum, event) => {
+        const present = new Set(state.attendance.filter((row) => row.eventId === event.id && row.present).map((row) => row.volunteerId)).size;
+        return sum + present / volunteers.length;
+      }, 0) / markedProgrammes.length * 100)
+    : 0;
   const monthly = useMemo(() => {
     const map = new Map<string, { month: string; events: number; hours: number }>();
     state.events.forEach((e) => {

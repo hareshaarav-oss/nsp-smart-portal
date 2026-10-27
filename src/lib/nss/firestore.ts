@@ -850,7 +850,7 @@ function briefVolunteer(s: Record<string, unknown>, n: number): Volunteer {
 }
 
 const OFFICER_MARKS_MS = 10 * 60 * 1000;
-let officerMarksCache: { at: number; rows: AttendanceRecord[] } | null = null;
+let officerMarksCache: { at: number; attendance: AttendanceRecord[]; events: NssEvent[] } | null = null;
 
 function forgetOfficerMarks() {
   officerMarksCache = null;
@@ -866,14 +866,20 @@ function eventNameKey(value: string) {
     .trim();
 }
 
+function emptyOfficerMarks() {
+  return { attendance: [] as AttendanceRecord[], events: [] as NssEvent[] };
+}
+
 async function officerAttendance(volunteers: Volunteer[], events: { id: string; name: string }[]) {
-  if (officerMarksCache && Date.now() - officerMarksCache.at < OFFICER_MARKS_MS) return officerMarksCache.rows;
-  if (collegeQuotaBlocked() || volunteers.length < 1 || events.length < 1) return officerMarksCache?.rows ?? [];
+  if (officerMarksCache && Date.now() - officerMarksCache.at < OFFICER_MARKS_MS) {
+    return { attendance: officerMarksCache.attendance, events: officerMarksCache.events };
+  }
+  if (collegeQuotaBlocked() || volunteers.length < 1) return officerMarksCache ? { attendance: officerMarksCache.attendance, events: officerMarksCache.events } : emptyOfficerMarks();
   let docs: Record<string, unknown>[] = [];
   try {
     docs = await listCollection("attendance", { maxDocs: 400 });
   } catch {
-    return officerMarksCache?.rows ?? [];
+    return officerMarksCache ? { attendance: officerMarksCache.attendance, events: officerMarksCache.events } : emptyOfficerMarks();
   }
   const byMobile = new Map<string, Volunteer>();
   const byName = new Map<string, Volunteer>();
@@ -891,12 +897,30 @@ async function officerAttendance(volunteers: Volunteer[], events: { id: string; 
     if (key && event.id && !byEvent.has(key)) byEvent.set(key, event.id);
   }
   const attendance: AttendanceRecord[] = [];
+  const extraEvents: NssEvent[] = [];
   const seen = new Set<string>();
   for (const row of docs) {
     reveal(row, ["studentMobile", "mobile", "studentName", "name"]);
     const name = text(row.eventName) || text(row.title);
-    const eventId = byEvent.get(eventNameKey(name));
-    if (!eventId) continue;
+    const keyName = eventNameKey(name);
+    if (!keyName) continue;
+    let eventId = byEvent.get(keyName);
+    if (!eventId) {
+      const slug = keyName.replace(/\s+/g, "-").slice(0, 36);
+      eventId = `att-${slug}`;
+      byEvent.set(keyName, eventId);
+      const date = isoDate(row.date);
+      extraEvents.push({
+        id: eventId,
+        name: name.trim().slice(0, 80),
+        date,
+        location: "Mansa",
+        hours: nssHourRule({ name, date }).hours,
+        status: "completed",
+        description: "",
+        createdAt: date,
+      });
+    }
     const person =
       byMobile.get(mobileKey(row.studentMobile) || mobileKey(row.mobile)) ||
       byName.get(text(row.studentName || row.name).toLowerCase()) ||
@@ -909,14 +933,21 @@ async function officerAttendance(volunteers: Volunteer[], events: { id: string; 
     seen.add(key);
     attendance.push({ volunteerId, eventId, present: isPresent(row) });
   }
-  officerMarksCache = { at: Date.now(), rows: attendance };
-  return attendance;
+  officerMarksCache = { at: Date.now(), attendance, events: extraEvents };
+  return { attendance, events: extraEvents };
 }
 
 async function withOfficerMarks(data: CloudPortal): Promise<CloudPortal> {
   const marks = await officerAttendance(data.volunteers, data.events);
-  if (!marks.length) return data;
-  return { ...data, attendance: marks };
+  if (!marks.attendance.length) return data;
+  const seen = new Set(data.events.map((event) => event.id));
+  const events = [...data.events];
+  for (const event of marks.events) {
+    if (seen.has(event.id)) continue;
+    seen.add(event.id);
+    events.push(event);
+  }
+  return { ...data, attendance: marks.attendance, events };
 }
 
 export async function loadOfficerRoll(): Promise<CloudPortal | null> {
