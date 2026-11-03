@@ -97,10 +97,7 @@ function RegisterPage() {
         /* the saved volunteer stays in the local roll */
       }
       addLog("Student registration", `Registered ${data.volunteer.fullName} (${data.volunteer.enrollment}).`);
-      rememberPhoto(
-        [data.volunteer.volunteerId, data.volunteer.id, data.volunteer.fullName.toLowerCase()],
-        photoUrl,
-      );
+      rememberPhoto([data.volunteer.volunteerId, data.volunteer.id], photoUrl, data.volunteer.fullName);
       toast.success("Registration saved on the college cloud.");
       setDone({
         name: data.volunteer.fullName,

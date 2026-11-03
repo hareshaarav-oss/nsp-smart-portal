@@ -581,7 +581,7 @@ function VolunteerDash() {
                     const photoUrl = await blobToDataUrl(full.blob);
                     const thumbUrl = await blobToDataUrl(card.blob);
                     updateVolunteer(me.id, { photoUrl });
-                    rememberPhoto([me.volunteerId, me.id], photoUrl);
+                    rememberPhoto([me.volunteerId, me.id], photoUrl, me.fullName);
                     const session = useSessionStore.getState().session;
                     const res = await fetch("/api/nss-cloud", {
                       method: "POST",
@@ -771,10 +771,7 @@ function EditProfile({ volunteerId }: { volunteerId: string }) {
         volunteerId: volunteer.volunteerId || saved?.volunteerId,
         ...next,
       });
-      rememberPhoto(
-        [volunteer.volunteerId || "", volunteer.id || "", (volunteer.fullName || "").toLowerCase(), session?.volunteerId || ""],
-        next.photoUrl,
-      );
+      rememberPhoto([volunteer.volunteerId || "", volunteer.id || "", session?.volunteerId || ""], next.photoUrl, volunteer.fullName);
       if (session && (next.mobile.replace(/\D/g, "").length >= 10 || data.docId)) {
         useSessionStore.getState().setSession({
           ...session,

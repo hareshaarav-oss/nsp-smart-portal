@@ -662,18 +662,11 @@ export const useNssStore =
                 ),
               );
 
-            const localByMobile =
-              new Map(
-                current.volunteers.map(
-                  (v) =>
-                    [
-                      digits(v.mobile).slice(
-                        -10,
-                      ),
-                      v,
-                    ] as const,
-                ),
-              );
+            const localByMobile = new Map<string, (typeof current.volunteers)[number]>();
+            for (const v of current.volunteers) {
+              const key = digits(v.mobile).slice(-10);
+              if (key.length === 10 && !localByMobile.has(key)) localByMobile.set(key, v);
+            }
 
             const localByVid =
               new Map(
@@ -683,6 +676,17 @@ export const useNssStore =
                 ),
               );
 
+            const localByName = new Map<string, (typeof current.volunteers)[number]>();
+            const repeatedNames = new Set<string>();
+            for (const v of current.volunteers) {
+              const key = v.fullName.toLowerCase().replace(/[^a-z]/g, "");
+              if (!key) continue;
+              if (localByName.has(key)) {
+                localByName.delete(key);
+                repeatedNames.add(key);
+              } else if (!repeatedNames.has(key)) localByName.set(key, v);
+            }
+
             const session =
               useSessionStore.getState()
                 .session;
@@ -691,18 +695,18 @@ export const useNssStore =
               dedupeVolunteers(
                 cloud.volunteers
                   .map((row) => {
-                    const prev =
-                      localById.get(
-                        row.id,
-                      ) ||
-                      localByVid.get(
-                        row.volunteerId,
-                      ) ||
-                      localByMobile.get(
-                        digits(
-                          row.mobile,
-                        ).slice(-10),
-                      );
+                    const rowName = (row.fullName || "").toLowerCase().replace(/[^a-z]/g, "");
+                    const mobileKey = digits(row.mobile).slice(-10);
+                    const prev = [
+                      localById.get(row.id),
+                      localByVid.get(row.volunteerId),
+                      mobileKey.length === 10 ? localByMobile.get(mobileKey) : undefined,
+                      rowName ? localByName.get(rowName) : undefined,
+                    ].find((person) => {
+                      if (!person) return false;
+                      const prevName = person.fullName.toLowerCase().replace(/[^a-z]/g, "");
+                      return !rowName || !prevName || rowName === prevName;
+                    });
 
                     const sessionMobile = digits(session?.mobile || "").slice(-10);
                     const prevMobile = digits(prev?.mobile || "").slice(-10);

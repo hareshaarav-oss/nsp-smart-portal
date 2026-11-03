@@ -127,19 +127,28 @@ function markPhotoMiss(id: string) {
 
 function readPhotoCache() {
   try {
-    const raw = localStorage.getItem("nsp-photo-map-v3");
+    const raw = localStorage.getItem("nsp-photo-map-v4");
     if (!raw) return {};
-    const parsed = JSON.parse(raw) as Record<string, string>;
-    return Object.fromEntries(Object.entries(parsed).filter(([, photo]) => photo.startsWith("data:image/") || photo.startsWith("https://")));
+    const parsed = JSON.parse(raw) as Record<string, { url?: string; name?: string }>;
+    return Object.fromEntries(
+      Object.entries(parsed).filter(([, photo]) => (photo?.url || "").startsWith("data:image/") || (photo?.url || "").startsWith("https://")),
+    );
   } catch {
     return {};
   }
 }
 
-function writePhotoCache(map: Record<string, string>) {
+function writePhotoCache(map: Record<string, { url?: string; name?: string }>) {
   try {
-    const photos = Object.fromEntries(Object.entries(map).filter(([, photo]) => photo.startsWith("data:image/") || photo.startsWith("https://")));
-    localStorage.setItem("nsp-photo-map-v3", JSON.stringify(photos));
+    const photos = Object.fromEntries(
+      Object.entries(map).flatMap(([key, photo]) => {
+        const url = photo?.url || "";
+        const name = personKey(photo?.name);
+        if (!name || (!url.startsWith("data:image/") && !url.startsWith("https://"))) return [];
+        return [[key, { url, name }]];
+      }),
+    );
+    localStorage.setItem("nsp-photo-map-v4", JSON.stringify(photos));
   } catch {
     /* storage full */
   }
@@ -147,6 +156,7 @@ function writePhotoCache(map: Record<string, string>) {
 
 function forgetMismatchedPhotoCache() {
   try {
+    localStorage.removeItem("nsp-photo-map-v3");
     localStorage.removeItem("nsp-photo-map-v2");
     localStorage.removeItem("nsp-photo-map");
   } catch {
@@ -154,27 +164,33 @@ function forgetMismatchedPhotoCache() {
   }
 }
 
-function applyPhotoMap(map: Map<string, string>, replace: boolean) {
+function personKey(name: string | undefined) {
+  return (name || "").toLowerCase().replace(/[^a-z]/g, "");
+}
+
+function applyPhotoMap(map: Map<string, { url: string; name: string }>, replace: boolean) {
   if (!map.size) return;
   const state = useNssStore.getState();
   useNssStore.setState({
     volunteers: state.volunteers.map((volunteer) => {
-      const photo = map.get(volunteer.volunteerId) || map.get(volunteer.id) || "";
-      if (!photo) return volunteer;
+      const hit = map.get(volunteer.volunteerId) || map.get(volunteer.id);
+      if (!hit?.url) return volunteer;
+      const volName = personKey(volunteer.fullName);
+      if (!hit.name || (volName && hit.name !== volName)) return volunteer;
       if (!replace && volunteer.photoUrl) return volunteer;
-      return photo === volunteer.photoUrl ? volunteer : { ...volunteer, photoUrl: photo };
+      return hit.url === volunteer.photoUrl ? volunteer : { ...volunteer, photoUrl: hit.url };
     }),
   });
 }
 
 function applyCachedPhotos() {
   const cached = readPhotoCache();
-  applyPhotoMap(new Map(Object.entries(cached)), false);
+  applyPhotoMap(new Map(Object.entries(cached).map(([key, photo]) => [key, { url: photo.url || "", name: personKey(photo.name) }])), false);
 }
 
 async function pullPhotos() {
   const cached = readPhotoCache();
-  applyPhotoMap(new Map(Object.entries(cached)), false);
+  applyCachedPhotos();
   const res = await fetch("/api/nss-cloud", {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -200,7 +216,7 @@ async function pullPhotos() {
   }
   const seen = new Set<string>();
   if (Array.isArray(data.photos) && data.photos.length) {
-    const map = new Map<string, string>();
+    const map = new Map<string, { url: string; name: string }>();
     for (const photo of data.photos) rememberPhoto(photo, data.roster, cached, map);
     applyPhotoMap(map, true);
     writePhotoCache(cached);
@@ -208,8 +224,9 @@ async function pullPhotos() {
   }
   const misses = readMisses();
   const pending = data.roster.filter((row) => {
-    const known = cached[row.docId] || cached[row.volunteerId] || "";
-    return row.docId && !seen.has(row.docId) && !misses.has(row.docId) && !known.startsWith("data:image/") && !known.startsWith("https://");
+    const known = cached[row.docId] || cached[row.volunteerId];
+    const knownUrl = known?.url || "";
+    return row.docId && !seen.has(row.docId) && !misses.has(row.docId) && !knownUrl.startsWith("data:image/") && !knownUrl.startsWith("https://");
   });
   let failed = false;
   for (let i = 0; i < pending.length; i += 8) {
@@ -227,7 +244,7 @@ async function pullPhotos() {
         failed = true;
         continue;
       }
-      const map = new Map<string, string>();
+      const map = new Map<string, { url: string; name: string }>();
       const found = new Set(batch.photos.map((photo) => photo.docId));
       for (const row of slice) {
         if (!found.has(row.docId)) markPhotoMiss(row.docId);
@@ -245,15 +262,17 @@ async function pullPhotos() {
 function rememberPhoto(
   photo: { id?: string; docId: string; photoUrl?: string; name?: string },
   roster: { docId: string; volunteerId: string; name?: string }[],
-  cached: Record<string, string>,
-  map: Map<string, string>,
+  cached: Record<string, { url?: string; name?: string }>,
+  map: Map<string, { url: string; name: string }>,
 ) {
   if (!photo.photoUrl) return;
   const rosterRow = roster.find((row) => row.docId === photo.docId);
+  const name = personKey(photo.name || rosterRow?.name);
+  if (!name) return;
   const keys = [photo.docId, rosterRow?.volunteerId || ""].filter((key) => key.length > 1 && !key.includes(" "));
   for (const key of keys) {
-    cached[key] = photo.photoUrl;
-    map.set(key, photo.photoUrl);
+    cached[key] = { url: photo.photoUrl, name };
+    map.set(key, { url: photo.photoUrl, name });
   }
 }
 

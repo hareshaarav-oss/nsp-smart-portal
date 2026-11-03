@@ -145,10 +145,12 @@ async function recoverStudentPhoto(volunteer: Volunteer) {
     return volunteer.photoUrl;
   }
   try {
-    const raw = localStorage.getItem("nsp-photo-map-v3");
-    const map = raw ? (JSON.parse(raw) as Record<string, string>) : {};
-    const cached = map[volunteer.volunteerId] || map[volunteer.id] || "";
-    if (cached.startsWith("data:image/") || cached.startsWith("https://")) return cached;
+    const raw = localStorage.getItem("nsp-photo-map-v4");
+    const map = raw ? (JSON.parse(raw) as Record<string, { url?: string; name?: string }>) : {};
+    const hit = map[volunteer.volunteerId] || map[volunteer.id];
+    const person = (volunteer.fullName || "").toLowerCase().replace(/[^a-z]/g, "");
+    const cached = hit?.url || "";
+    if ((cached.startsWith("data:image/") || cached.startsWith("https://")) && hit?.name && person && hit.name === person) return cached;
   } catch {
     /* try the college roll */
   }

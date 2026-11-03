@@ -967,7 +967,11 @@ export async function loadOfficerRoll(): Promise<CloudPortal | null> {
             const clean = key.toLowerCase();
             if (clean) known.add(clean);
           }
-          const raw = byVid.get(v.volunteerId.toLowerCase()) || byName.get(v.fullName.toLowerCase());
+          const byIdHit = byVid.get(v.volunteerId.toLowerCase());
+          const byNameHit = byName.get(v.fullName.toLowerCase());
+          const wanted = v.fullName.toLowerCase().replace(/[^a-z]/g, "");
+          const idName = text(byIdHit?.fullName).toLowerCase().replace(/[^a-z]/g, "");
+          const raw = byIdHit && wanted && idName && wanted !== idName ? byNameHit : byIdHit || byNameHit;
           if (!raw) return v;
           for (const key of [text(raw._id), text(raw.volunteerId), text(raw.fullName)]) {
             const clean = key.toLowerCase();
