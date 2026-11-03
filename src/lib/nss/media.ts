@@ -134,13 +134,14 @@ export async function compressHdPhoto(file: File, maxEdge = 1080) {
 export function rememberPhoto(keys: string[], photoUrl: string) {
   if (!photoUrl.startsWith("data:image/") && !photoUrl.startsWith("https://")) return;
   try {
-    const raw = localStorage.getItem("nsp-photo-map-v2");
+    const raw = localStorage.getItem("nsp-photo-map-v3");
     const map = raw ? (JSON.parse(raw) as Record<string, string>) : {};
     for (const key of keys) {
       const id = key.trim();
-      if (id) map[id] = photoUrl;
+      if (!id || id.includes(" ")) continue;
+      map[id] = photoUrl;
     }
-    localStorage.setItem("nsp-photo-map-v2", JSON.stringify(map));
+    localStorage.setItem("nsp-photo-map-v3", JSON.stringify(map));
   } catch {
     /* the phone is full; the college roll still keeps the photograph */
   }

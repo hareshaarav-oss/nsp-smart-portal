@@ -461,12 +461,10 @@ export const Route = createFileRoute("/api/nss-cloud")({
             const roster = await listPhotoRoster();
             const wantId = text(body.volunteerId).toLowerCase();
             const wantName = text(body.name).toLowerCase();
-            const found = roster.find(
-              (row) =>
-                row.docId.toLowerCase() === wantId ||
-                row.volunteerId.toLowerCase() === wantId ||
-                (wantName.length > 2 && row.name === wantName),
-            );
+            const named = roster.filter((row) => wantName.length > 2 && row.name === wantName);
+            const found =
+              roster.find((row) => row.docId.toLowerCase() === wantId || row.volunteerId.toLowerCase() === wantId) ||
+              (named.length === 1 ? named[0] : undefined);
             if (!found) return Response.json({ ok: false, photoUrl: "" });
             const photos = await readPhotoBatch([found.docId]);
             const photoUrl = photos[0]?.photoUrl || "";

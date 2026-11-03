@@ -145,9 +145,9 @@ async function recoverStudentPhoto(volunteer: Volunteer) {
     return volunteer.photoUrl;
   }
   try {
-    const raw = localStorage.getItem("nsp-photo-map-v2") || localStorage.getItem("nsp-photo-map");
+    const raw = localStorage.getItem("nsp-photo-map-v3");
     const map = raw ? (JSON.parse(raw) as Record<string, string>) : {};
-    const cached = map[volunteer.volunteerId] || map[volunteer.id] || map[volunteer.fullName.toLowerCase()] || "";
+    const cached = map[volunteer.volunteerId] || map[volunteer.id] || "";
     if (cached.startsWith("data:image/") || cached.startsWith("https://")) return cached;
   } catch {
     /* try the college roll */

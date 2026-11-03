@@ -21,40 +21,28 @@ function noteBuild(build: unknown) {
 
 function rescueOfficerPhotos() {
   try {
-    const cached = readPhotoCache();
     for (const key of ["nsp-portal-data-v1", "nsp-portal-data", STORAGE_DATA]) {
       const raw = localStorage.getItem(key);
       if (!raw || !raw.includes("data:image")) continue;
       const parsed = JSON.parse(raw) as {
-        state?: { settings?: { poPhoto?: string; principalPhoto?: string }; volunteers?: { id?: string; volunteerId?: string; fullName?: string; photoUrl?: string }[] };
+        state?: { settings?: { poPhoto?: string; principalPhoto?: string } };
         settings?: { poPhoto?: string; principalPhoto?: string };
-        volunteers?: { id?: string; volunteerId?: string; fullName?: string; photoUrl?: string }[];
       };
       const settings = parsed.state?.settings || parsed.settings;
       const poPhoto = settings?.poPhoto || "";
       const principalPhoto = settings?.principalPhoto || "";
-      if (poPhoto.startsWith("data:image") || principalPhoto.startsWith("data:image")) {
-        const kept = {
-          poPhoto: poPhoto.startsWith("data:image") ? poPhoto : "",
-          principalPhoto: principalPhoto.startsWith("data:image") ? principalPhoto : "",
-        };
-        sessionStorage.setItem("nsp-rescued-photos", JSON.stringify(kept));
-        try {
-          localStorage.setItem("nsp-officer-photos", JSON.stringify(kept));
-        } catch {
-          /* this device cannot keep the photographs */
-        }
-      }
-      const volunteers = parsed.state?.volunteers || parsed.volunteers || [];
-      for (const volunteer of volunteers) {
-        const photo = volunteer.photoUrl || "";
-        if (!photo.startsWith("data:image/") && !photo.startsWith("https://")) continue;
-        if (volunteer.volunteerId) cached[volunteer.volunteerId] = photo;
-        if (volunteer.id) cached[volunteer.id] = photo;
-        if (volunteer.fullName) cached[volunteer.fullName.toLowerCase()] = photo;
+      if (!poPhoto.startsWith("data:image") && !principalPhoto.startsWith("data:image")) continue;
+      const kept = {
+        poPhoto: poPhoto.startsWith("data:image") ? poPhoto : "",
+        principalPhoto: principalPhoto.startsWith("data:image") ? principalPhoto : "",
+      };
+      sessionStorage.setItem("nsp-rescued-photos", JSON.stringify(kept));
+      try {
+        localStorage.setItem("nsp-officer-photos", JSON.stringify(kept));
+      } catch {
+        /* this device cannot keep the photographs */
       }
     }
-    writePhotoCache(cached);
   } catch {
     /* keep going */
   }
@@ -139,7 +127,7 @@ function markPhotoMiss(id: string) {
 
 function readPhotoCache() {
   try {
-    const raw = localStorage.getItem("nsp-photo-map-v2") || localStorage.getItem("nsp-photo-map");
+    const raw = localStorage.getItem("nsp-photo-map-v3");
     if (!raw) return {};
     const parsed = JSON.parse(raw) as Record<string, string>;
     return Object.fromEntries(Object.entries(parsed).filter(([, photo]) => photo.startsWith("data:image/") || photo.startsWith("https://")));
@@ -151,36 +139,42 @@ function readPhotoCache() {
 function writePhotoCache(map: Record<string, string>) {
   try {
     const photos = Object.fromEntries(Object.entries(map).filter(([, photo]) => photo.startsWith("data:image/") || photo.startsWith("https://")));
-    localStorage.setItem("nsp-photo-map-v2", JSON.stringify(photos));
+    localStorage.setItem("nsp-photo-map-v3", JSON.stringify(photos));
   } catch {
     /* storage full */
   }
 }
 
-function applyPhotoMap(map: Map<string, string>) {
+function forgetMismatchedPhotoCache() {
+  try {
+    localStorage.removeItem("nsp-photo-map-v2");
+    localStorage.removeItem("nsp-photo-map");
+  } catch {
+    /* private mode */
+  }
+}
+
+function applyPhotoMap(map: Map<string, string>, replace: boolean) {
   if (!map.size) return;
   const state = useNssStore.getState();
   useNssStore.setState({
     volunteers: state.volunteers.map((volunteer) => {
-      const photo =
-        map.get(volunteer.volunteerId) ||
-        map.get(volunteer.id) ||
-        map.get(volunteer.fullName.toLowerCase()) ||
-        volunteer.photoUrl ||
-        "";
-      return photo ? { ...volunteer, photoUrl: photo } : volunteer;
+      const photo = map.get(volunteer.volunteerId) || map.get(volunteer.id) || "";
+      if (!photo) return volunteer;
+      if (!replace && volunteer.photoUrl) return volunteer;
+      return photo === volunteer.photoUrl ? volunteer : { ...volunteer, photoUrl: photo };
     }),
   });
 }
 
 function applyCachedPhotos() {
   const cached = readPhotoCache();
-  applyPhotoMap(new Map(Object.entries(cached).filter(([, photo]) => photo.startsWith("data:image/") || photo.startsWith("https://"))));
+  applyPhotoMap(new Map(Object.entries(cached)), false);
 }
 
 async function pullPhotos() {
   const cached = readPhotoCache();
-  applyPhotoMap(new Map(Object.entries(cached)));
+  applyPhotoMap(new Map(Object.entries(cached)), false);
   const res = await fetch("/api/nss-cloud", {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -208,7 +202,7 @@ async function pullPhotos() {
   if (Array.isArray(data.photos) && data.photos.length) {
     const map = new Map<string, string>();
     for (const photo of data.photos) rememberPhoto(photo, data.roster, cached, map);
-    applyPhotoMap(map);
+    applyPhotoMap(map, true);
     writePhotoCache(cached);
     for (const photo of data.photos) seen.add(photo.docId);
   }
@@ -239,7 +233,7 @@ async function pullPhotos() {
         if (!found.has(row.docId)) markPhotoMiss(row.docId);
       }
       for (const photo of batch.photos) rememberPhoto(photo, slice, cached, map);
-      applyPhotoMap(map);
+      applyPhotoMap(map, true);
       writePhotoCache(cached);
     } catch {
       failed = true;
@@ -255,10 +249,8 @@ function rememberPhoto(
   map: Map<string, string>,
 ) {
   if (!photo.photoUrl) return;
-  const keys = [photo.id || "", photo.docId, photo.name || ""].filter(Boolean);
   const rosterRow = roster.find((row) => row.docId === photo.docId);
-  if (rosterRow?.volunteerId) keys.push(rosterRow.volunteerId);
-  if (rosterRow?.name) keys.push(rosterRow.name);
+  const keys = [photo.docId, rosterRow?.volunteerId || ""].filter((key) => key.length > 1 && !key.includes(" "));
   for (const key of keys) {
     cached[key] = photo.photoUrl;
     map.set(key, photo.photoUrl);
@@ -359,6 +351,7 @@ export function HydrateGate({ children }: { children: ReactNode }) {
     }
 
     void (async () => {
+      forgetMismatchedPhotoCache();
       rescueOfficerPhotos();
       dropStalePortalCache();
       try {

@@ -581,7 +581,7 @@ function VolunteerDash() {
                     const photoUrl = await blobToDataUrl(full.blob);
                     const thumbUrl = await blobToDataUrl(card.blob);
                     updateVolunteer(me.id, { photoUrl });
-                    rememberPhoto([me.volunteerId, me.id, me.fullName.toLowerCase()], photoUrl);
+                    rememberPhoto([me.volunteerId, me.id], photoUrl);
                     const session = useSessionStore.getState().session;
                     const res = await fetch("/api/nss-cloud", {
                       method: "POST",
