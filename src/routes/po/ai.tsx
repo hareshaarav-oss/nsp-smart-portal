@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { activeVolunteers, totalServiceHours, useNssStore, volunteerHours } from "@/lib/nss/store";
-import { daysUntilBirthday, isBirthdayOn, todayIso } from "@/lib/nss/format";
+import { daysUntilBirthday, isBirthdayOn, kolkataToday, todayIso } from "@/lib/nss/format";
 
 export const Route = createFileRoute("/po/ai")({ component: SmartCommandPage });
 
@@ -14,6 +14,7 @@ function SmartCommandPage() {
   const [query, setQuery] = useState("");
   const [answer, setAnswer] = useState("");
   const today = todayIso();
+  const birthdayToday = kolkataToday();
   const volunteers = activeVolunteers(state);
 
   const suggestions = [
@@ -29,7 +30,7 @@ function SmartCommandPage() {
     const q = raw.trim().toLowerCase();
     if (!q) return;
     if (q.includes("birthday") || q.includes("જન્મદિવસ")) {
-      const rows = volunteers.filter((v) => isBirthdayOn(v.dob, today));
+      const rows = volunteers.filter((v) => isBirthdayOn(v.dob, birthdayToday));
       setAnswer(rows.length ? `Today: ${rows.map((v) => v.fullName).join(", ")}.` : "No volunteer birthday today.");
       return;
     }
@@ -62,7 +63,7 @@ function SmartCommandPage() {
     setAnswer("No match.");
   }
 
-  const nextBirthday = useMemo(() => [...volunteers].sort((a, b) => daysUntilBirthday(a.dob, today) - daysUntilBirthday(b.dob, today)).slice(0, 3), [volunteers, today]);
+  const nextBirthday = useMemo(() => [...volunteers].sort((a, b) => daysUntilBirthday(a.dob, birthdayToday) - daysUntilBirthday(b.dob, birthdayToday)).slice(0, 3), [volunteers, birthdayToday]);
 
   return <div className="space-y-6">
     <Card className="overflow-hidden border-primary/20 bg-gradient-to-br from-primary/5 via-card to-forest/5">
@@ -80,7 +81,7 @@ function SmartCommandPage() {
       <SmartCard icon={FileText} title="Reports" text="Excel and print" to="/po/reports" />
     </div>
 
-    <Card><CardHeader><CardTitle className="flex items-center gap-2"><Cake className="size-5 text-saffron" /> Birthday radar</CardTitle></CardHeader><CardContent className="grid gap-2 sm:grid-cols-3">{nextBirthday.map((v) => <div key={v.id} className="rounded-xl border border-border p-3"><p className="font-medium">{v.fullName}</p><p className="text-xs text-muted-foreground">{daysUntilBirthday(v.dob, today) === 0 ? "Today 🎉" : `${daysUntilBirthday(v.dob, today)} days`}</p></div>)}</CardContent></Card>
+    <Card><CardHeader><CardTitle className="flex items-center gap-2"><Cake className="size-5 text-saffron" /> Birthday radar</CardTitle></CardHeader><CardContent className="grid gap-2 sm:grid-cols-3">{nextBirthday.map((v) => <div key={v.id} className="rounded-xl border border-border p-3"><p className="font-medium">{v.fullName}</p><p className="text-xs text-muted-foreground">{daysUntilBirthday(v.dob, birthdayToday) === 0 ? "Today 🎉" : `${daysUntilBirthday(v.dob, birthdayToday)} days`}</p></div>)}</CardContent></Card>
   </div>;
 }
 

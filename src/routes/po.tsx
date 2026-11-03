@@ -1,6 +1,7 @@
 import { createFileRoute, Navigate, Outlet, useRouterState } from "@tanstack/react-router";
 import { AppShell } from "@/components/nss/shell";
 import { PoNav } from "@/components/nss/po-nav";
+import { BirthdayMorning } from "@/components/nss/birthday-morning";
 import { isOfficer, useSessionStore } from "@/lib/nss/session";
 
 export const Route = createFileRoute("/po")({
@@ -22,6 +23,7 @@ function PoLayout() {
         <span className="mt-3 block h-px w-24 bg-saffron" />
         <PoNav current={pathname === "/po/" ? "/po" : pathname} />
         <div className="mt-6">
+          <BirthdayMorning />
           <Outlet />
         </div>
       </div>

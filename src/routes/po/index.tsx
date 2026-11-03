@@ -4,7 +4,7 @@ import { Award, CalendarDays, ClipboardCheck, FileSpreadsheet, Images, Newspaper
 import { BarChart, Bar, CartesianGrid, LineChart, Line, PieChart, Pie, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { daysUntilBirthday, formatLongDate, isBirthdayOn, todayIso, byFullName } from "@/lib/nss/format";
+import { daysUntilBirthday, formatLongDate, isBirthdayOn, kolkataToday, todayIso, byFullName } from "@/lib/nss/format";
 import { liveServiceHours, useNssStore } from "@/lib/nss/store";
 import { TomorrowBanner } from "@/components/nss/tomorrow";
 import { ensurePublicGallery } from "@/lib/nss/public-gallery";
@@ -21,6 +21,7 @@ function PoHome() {
     void ensurePublicGallery();
   }, []);
   const today = todayIso();
+  const birthdayToday = kolkataToday();
   const volunteers = useMemo(() => state.volunteers.filter((v) => v.status !== "alumni").sort(byFullName), [state.volunteers]);
   const alumni = state.volunteers.filter((v) => v.status === "alumni").length;
   const hours = liveServiceHours(state);
@@ -43,8 +44,8 @@ function PoHome() {
     return [...map.values()].sort((a,b)=>a.month.localeCompare(b.month)).slice(-8);
   }, [state.events, state.attendance]);
   const unitData = ["Unit 1","Unit 2"].map((unit)=>({ name: unit, volunteers: volunteers.filter(v=>v.unit===unit).length }));
-  const todayBirthdays = volunteers.filter((v) => v.dob && isBirthdayOn(v.dob, today)).length;
-  const upcomingBirthdays = volunteers.filter((v) => v.dob && daysUntilBirthday(v.dob, today) > 0 && daysUntilBirthday(v.dob, today) <= 7).length;
+  const todayBirthdays = volunteers.filter((v) => v.dob && isBirthdayOn(v.dob, birthdayToday)).length;
+  const upcomingBirthdays = volunteers.filter((v) => v.dob && daysUntilBirthday(v.dob, birthdayToday) > 0 && daysUntilBirthday(v.dob, birthdayToday) <= 7).length;
   const rsvpReplies = (state.eventRsvps ?? []).length;
   const lowAttendance = volunteers.filter((v) => {
     const rows = state.attendance.filter((a) => a.volunteerId === v.id || a.volunteerId === v.volunteerId);

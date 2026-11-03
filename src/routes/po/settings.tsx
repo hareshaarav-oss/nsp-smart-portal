@@ -164,6 +164,7 @@ function HomeSection({ settings, update }: Props) {
 function BirthdaySection({ settings, update }: Props) {
   return <Card><CardHeader><CardTitle className="text-base">Birthday automation</CardTitle></CardHeader><CardContent className="space-y-4">
     <Toggle label="Enable Birthday feature" value={settings.birthdayEnabled !== false} onChange={(v) => update({ birthdayEnabled: v })} />
+    <p className="text-sm text-muted-foreground">Each morning the officer desk prepares a photo card and the matching WhatsApp group. One tap opens it. WhatsApp still asks for Send.</p>
     <Toggle label="Show Birthday radar on dashboards" value={settings.birthdayShowOnDashboard !== false} onChange={(v) => update({ birthdayShowOnDashboard: v })} />
     <Field label="Birthday button label"><Input value={settings.birthdayAutoWishLabel ?? "Birthday wishes"} onChange={(e) => update({ birthdayAutoWishLabel: e.target.value })} /></Field>
     <Field label="WhatsApp birthday message · {{NAME}}"><Textarea className="gu min-h-64" value={settings.birthdayTemplate ?? BIRTHDAY_TEMPLATE} onChange={(e) => update({ birthdayTemplate: e.target.value })} /></Field>

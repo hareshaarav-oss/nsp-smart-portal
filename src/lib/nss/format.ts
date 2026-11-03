@@ -92,6 +92,14 @@ export function formatShortDate(iso: string) {
   return `${d}/${m}/${y}`;
 }
 
+function isLeap(year: number) {
+  return (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0;
+}
+
+export function kolkataToday() {
+  return new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
+}
+
 export function todayIso() {
   const n = new Date();
   const y = n.getFullYear();
@@ -107,9 +115,14 @@ export function monthDay(iso: string) {
 }
 
 export function isBirthdayOn(isoDob: string, onIso: string) {
-  const a = monthDay(isoDob);
-  const b = monthDay(onIso);
-  return Boolean(a && b && a === b);
+  const dob = parseDob(isoDob);
+  const on = parseDob(onIso) || onIso;
+  if (!dob || !on) return false;
+  const [, dm, dd] = dob.split("-");
+  const [oy, om, od] = on.split("-");
+  if (dm === om && dd === od) return true;
+  const year = Number(oy);
+  return dm === "02" && dd === "29" && om === "02" && od === "28" && !isLeap(year);
 }
 
 export function nextBirthdayDate(isoDob: string, fromIso = todayIso()) {
@@ -117,10 +130,12 @@ export function nextBirthdayDate(isoDob: string, fromIso = todayIso()) {
   const [, mm, dd] = dob.split("-");
   const [fy, fm, fd] = fromIso.split("-").map(Number);
   if (!mm || !dd || !fy) return dob || isoDob;
+  const thisYearDay = mm === "02" && dd === "29" && !isLeap(fy) ? "28" : dd;
   const stamp = `${String(fm).padStart(2, "0")}${String(fd).padStart(2, "0")}`;
-  const target = `${mm}${dd}`;
+  const target = `${mm}${thisYearDay}`;
   const year = stamp > target ? fy + 1 : fy;
-  return `${year}-${mm}-${dd}`;
+  const day = mm === "02" && dd === "29" && !isLeap(year) ? "28" : dd;
+  return `${year}-${mm}-${day}`;
 }
 
 export function daysUntilBirthday(isoDob: string, fromIso = todayIso()) {

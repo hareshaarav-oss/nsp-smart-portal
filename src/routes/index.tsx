@@ -6,7 +6,7 @@ import { SevaChakra } from "@/components/nss/seva-chakra";
 import { SplashScreen } from "@/components/nss/splash";
 import { Badge } from "@/components/ui/badge";
 import { DEFAULT_SETTINGS } from "@/lib/nss/constants";
-import { daysUntilBirthday, formatLongDate, isBirthdayOn, todayIso } from "@/lib/nss/format";
+import { daysUntilBirthday, formatLongDate, isBirthdayOn, kolkataToday, todayIso } from "@/lib/nss/format";
 import { ensurePublicGallery } from "@/lib/nss/public-gallery";
 import { activeVolunteers, alumniVolunteers, liveServiceHours, useNssStore, volunteerHours } from "@/lib/nss/store";
 import { useUi } from "@/lib/nss/ui-prefs";
@@ -40,6 +40,7 @@ function Home() {
   const alumniCount = useNssStore((s) => Math.max(alumniVolunteers(s).length, s.settings.alumniCount));
   const liveBest = useNssStore((s) => s.liveBest);
   const today = todayIso();
+  const birthdayToday = kolkataToday();
   const volunteerSource = useNssStore((s) => s.volunteers);
   const volunteers = useMemo(() => volunteerSource ?? [], [volunteerSource]);
   const rollCards = useMemo(
@@ -77,16 +78,16 @@ function Home() {
           (v) =>
             v.status !== "alumni" &&
             Boolean(v.dob) &&
-            (isBirthdayOn(v.dob, today) ||
-              daysUntilBirthday(v.dob, today) <= 7),
+            (isBirthdayOn(v.dob, birthdayToday) ||
+              daysUntilBirthday(v.dob, birthdayToday) <= 7),
         )
         .sort(
           (a, b) =>
-            daysUntilBirthday(a.dob, today) -
-            daysUntilBirthday(b.dob, today),
+            daysUntilBirthday(a.dob, birthdayToday) -
+            daysUntilBirthday(b.dob, birthdayToday),
         )
         .slice(0, 6),
-    [volunteers, today],
+    [volunteers, birthdayToday],
   );
 
   const { t, lang } = useUi();
@@ -241,13 +242,13 @@ function Home() {
               {birthdayVolunteers.length ? (
                 <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                   {birthdayVolunteers.map((v) => {
-                    const days = daysUntilBirthday(v.dob, today);
+                    const days = daysUntilBirthday(v.dob, birthdayToday);
                     return (
-                      <div key={v.id} className="flex items-center gap-3 border border-saffron/30 p-3">
-                        {v.photoUrl ? <img src={v.photoUrl} alt="" className="h-12 w-12 object-cover" /> : <div className="h-12 w-12 bg-muted" />}
+                      <div key={v.id} className="flex items-center gap-3 border border-saffron/40 bg-[#fff6ea] p-3">
+                        {v.photoUrl ? <img src={v.photoUrl} alt="" className="h-14 w-14 rounded-full object-cover ring-2 ring-[#E4B15A]" /> : <div className="flex h-14 w-14 items-center justify-center rounded-full bg-navy text-lg text-paper">{v.fullName.slice(0, 1)}</div>}
                         <div>
                           <p className="font-medium text-navy">{v.fullName}</p>
-                          <p className="text-xs text-muted-foreground">{days === 0 ? tr("Today", "આજે") : tr(`${days} day${days === 1 ? "" : "s"} to go`, `${days} દિવસ બાકી`)}</p>
+                          <p className="text-xs text-saffron">{days === 0 ? tr("Today · cake and wishes", "આજે · કેક અને શુભેચ્છા") : tr(`${days} day${days === 1 ? "" : "s"} to go`, `${days} દિવસ બાકી`)}</p>
                         </div>
                       </div>
                     );
