@@ -1,3 +1,4 @@
+import { alphaRank, nssId, rankForNewName, unitForNumber } from "./roll-sequence";
 import { cleanPersonName, latinDigits, padId, parseDob, titleFirstName } from "./format";
 import { nssHourRule } from "./hours";
 import { attendanceDocId as sealedAttendanceId, openChatPass, openText, passwordRecord, sealText, tokenDocId } from "./seal.server";
@@ -313,7 +314,7 @@ async function loadCollegeCloudFresh(opts: { gallery?: boolean; photos?: boolean
   const numbers = rollNumbers(sorted);
   for (const row of sorted) reveal(row, [...SEAL_KEYS, "password"]);
   const volunteers: Volunteer[] = sorted.map((s) => {
-    const n = numbers.get(s) ?? 1;
+    const n = numbers.get(s);
     const semester = latinDigits(text(s.semester) || "1");
     const mobileDigits = mobileKey(s.mobile) || mobileKey(s._id);
     const mobile = mobileDigits.length >= 10 ? mobileDigits : latinDigits(text(s.mobile));
@@ -324,11 +325,11 @@ async function loadCollegeCloudFresh(opts: { gallery?: boolean; photos?: boolean
     const assembled = [s.firstName, s.middleName, s.surname].map(text).filter(Boolean).join(" ");
     const fullName = titleFirstName(cleanPersonName(text(s.fullName) || assembled));
     const storedUnit = text(s.unit);
-    const unit = storedUnit === "Unit 2" ? "Unit 2" : storedUnit === "Unit 1" ? "Unit 1" : n % 2 === 1 ? "Unit 1" : "Unit 2";
+    const unit = typeof n === "number" ? unitForNumber(n) : storedUnit === "Unit 2" ? "Unit 2" : "Unit 1";
     return {
-      id: text(s._id) || `vol-${n}`,
-      volunteerId: text(s.volunteerId) || `NSS${padId(n)}`,
-      enrollment: latinDigits(text(s.enrollment)) || `2026-${semester}-${padId(n)}`,
+      id: text(s._id) || `vol-${n || 1}`,
+      volunteerId: typeof n === "number" ? nssId(n) : text(s.volunteerId) || `NSS${padId(1)}`,
+      enrollment: latinDigits(text(s.enrollment)) || `2026-${semester}-${padId(n || 1)}`,
       fullName,
       mobile,
       email: text(s.email),
@@ -825,14 +826,14 @@ function briefVolunteer(s: Record<string, unknown>, n: number): Volunteer {
   const fullName = titleFirstName(cleanPersonName(text(s.fullName) || assembled));
   return {
     id: text(s._id) || `vol-${n}`,
-    volunteerId: text(s.volunteerId) || `NSS${padId(n)}`,
-    enrollment: latinDigits(text(s.enrollment)) || `2026-${semester}-${padId(n)}`,
+    volunteerId: n > 0 ? nssId(n) : text(s.volunteerId) || `NSS${padId(1)}`,
+    enrollment: latinDigits(text(s.enrollment)) || `2026-${semester}-${padId(n || 1)}`,
     fullName,
     mobile,
     email: text(s.email),
     course: normalizeCourse(s.course) as Volunteer["course"],
     semester,
-    unit: text(s.unit) === "Unit 2" ? "Unit 2" : "Unit 1",
+    unit: n > 0 ? unitForNumber(n) : text(s.unit) === "Unit 2" ? "Unit 2" : "Unit 1",
     nssRole: knownRole(s.nssRole),
     fatherName: text(s.fatherName),
     dob: isoDate(s.dob),
@@ -1003,7 +1004,7 @@ export async function loadOfficerRoll(): Promise<CloudPortal | null> {
             const keys = [text(s._id), text(s.volunteerId), text(s.fullName)].map((item) => item.toLowerCase()).filter(Boolean);
             return keys.length > 0 && keys.every((key) => !known.has(key));
           })
-          .map((s) => briefVolunteer(s, numbers.get(s) ?? students.length));
+          .map((s) => briefVolunteer(s, numbers.get(s) ?? 0));
         for (const extra of extras) {
           const raw = byVid.get(extra.volunteerId.toLowerCase()) || byName.get(extra.fullName.toLowerCase());
           if (raw) rsvps.push(...readStoredRsvps(text(raw.rsvp), extra.id));
@@ -1186,10 +1187,10 @@ async function listPhotoRosterFresh() {
   );
   const numbers = rollNumbers(live);
   return live.map((row) => {
-    const n = numbers.get(row) ?? 1;
+    const n = numbers.get(row);
     return {
       docId: text(row._id),
-      volunteerId: text(row.volunteerId) || `NSS${padId(n)}`,
+      volunteerId: typeof n === "number" ? nssId(n) : text(row.volunteerId) || text(row._id),
       name: text(row.fullName).toLowerCase(),
     };
   }).filter((row) => row.docId);
@@ -1239,43 +1240,27 @@ export function knownRole(value: unknown): (typeof KNOWN_ROLES)[number] {
   return /leader/i.test(raw) ? "Leader" : "Volunteer";
 }
 
-function storedNssNumber(value: unknown) {
-  const match = /NSS(\d+)/i.exec(text(value));
-  return match ? Number(match[1]) : 0;
-}
-
-function nextVolunteerNumber(students: Record<string, unknown>[]) {
+function nextVolunteerNumber(students: Record<string, unknown>[], fullName = "") {
   const live = students.filter((s) => {
     const status = text(s.status).toLowerCase();
-    return status !== "inactive" && status !== "deleted";
+    return status !== "inactive" && status !== "deleted" && status !== "alumni";
   });
-  let max = 0;
-  for (const row of live) max = Math.max(max, storedNssNumber(row.volunteerId));
-  // Older roll rows have no stored NSS id. Their public numbers are 1..count
-  // in joined-date order, so the next registration must continue after that.
-  return Math.max(max, live.length) + 1;
+  const name = fullName.trim();
+  if (name) return rankForNewName(live.map((row) => text(row.fullName)), name);
+  return live.length + 1;
 }
 
-function rollNumbers(sorted: Record<string, unknown>[]) {
-  const taken = new Set<number>();
-  for (const row of sorted) {
-    const n = storedNssNumber(row.volunteerId);
-    if (n > 0) taken.add(n);
-  }
-  let cursor = 1;
-  const numbers = new Map<Record<string, unknown>, number>();
-  for (const row of sorted) {
-    const stored = storedNssNumber(row.volunteerId);
-    if (stored > 0) {
-      numbers.set(row, stored);
-      continue;
-    }
-    while (taken.has(cursor)) cursor += 1;
-    taken.add(cursor);
-    numbers.set(row, cursor);
-    cursor += 1;
-  }
-  return numbers;
+function rollNumbers(rows: Record<string, unknown>[]) {
+  return alphaRank(
+    rows,
+    (row) => text(row.fullName),
+    (row) => text(row._id),
+    (row) => {
+      const status = text(row.status).toLowerCase();
+      const role = text(row.nssRole).toLowerCase();
+      return status !== "inactive" && status !== "deleted" && status !== "alumni" && role !== "alumni";
+    },
+  );
 }
 
 export async function readStudentCerts(docId: string): Promise<IssuedCertificate[]> {
@@ -1446,13 +1431,13 @@ export async function saveStudentToCloud(input: Record<string, unknown>) {
     throw new Error("This mobile number is already on the NSS roll.");
   }
   const students = await listCollection("students");
-  const n = nextVolunteerNumber(students);
+  const fullName = titleFirstName(cleanPersonName(text(input.fullName)));
+  const n = nextVolunteerNumber(students, fullName);
   const semester = latinDigits(text(input.semester) || "1");
   const volunteerId = `NSS${padId(n)}`;
   const enrollment = latinDigits(text(input.enrollment)) || `2026-${semester}-${padId(n)}`;
-  const unit = text(input.unit) === "Unit 2" ? "Unit 2" : "Unit 1";
+  const unit = n <= 100 ? "Unit 1" : "Unit 2";
   const now = new Date().toISOString();
-  const fullName = titleFirstName(cleanPersonName(text(input.fullName)));
   const fields: Record<string, unknown> = {
     fullName: encodeValue(fullName),
     mobile: encodeValue(sealText(mobile)),
@@ -2003,11 +1988,12 @@ export async function listChatPeople(opts?: { includeMobile?: boolean }): Promis
   const numbers = rollNumbers(sorted);
   const rows = sorted
     .map((s) => {
-      const n = numbers.get(s) ?? 1;
+      const n = numbers.get(s) ?? 0;
       const assembled = [s.firstName, s.middleName, s.surname].map(text).filter(Boolean).join(" ");
-      const unit = text(s.unit) === "Unit 2" ? "Unit 2" : "Unit 1";
+      const volunteerId = n ? nssId(n) : text(s.volunteerId);
+      const unit = n ? unitForNumber(n) : text(s.unit) === "Unit 2" ? "Unit 2" : "Unit 1";
       const person: ChatPerson = {
-        id: publicVolunteerId({ id: text(s._id), volunteerId: text(s.volunteerId) }) || text(s.volunteerId) || `NSS${padId(n)}`,
+        id: publicVolunteerId({ id: text(s._id), volunteerId }) || volunteerId || `NSS${padId(n || 1)}`,
         name: titleFirstName(cleanPersonName(text(s.fullName) || assembled)),
         unit,
         role: knownRole(s.nssRole),

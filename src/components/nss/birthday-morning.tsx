@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { BIRTHDAY_TEMPLATE } from "@/lib/nss/constants";
 import { birthdayCardFile, cachedBirthdayCard, shareReadyCards } from "@/lib/nss/birthday-card";
+import { birthdayVideoFile } from "@/lib/nss/birthday-video";
 import { isBirthdayOn, kolkataToday } from "@/lib/nss/format";
 import { useNssStore } from "@/lib/nss/store";
 import { useUi } from "@/lib/nss/ui-prefs";
@@ -38,6 +39,7 @@ export function BirthdayMorning() {
   );
   const [preview, setPreview] = useState("");
   const [ready, setReady] = useState(false);
+  const [making, setMaking] = useState(false);
   const [sent, setSent] = useState<Set<string>>(() => new Set());
 
   useEffect(() => {
@@ -78,6 +80,34 @@ export function BirthdayMorning() {
     boys.length ? { id: "boys", label: tr("Boys group", "છોકરાઓનો ગ્રુપ"), people: boys, gender: "Male" } : null,
     open.length ? { id: "open", label: tr("Pick the group", "ગ્રુપ પસંદ કરો"), people: open, gender: "" } : null,
   ].filter((row): row is { id: string; label: string; people: Volunteer[]; gender: string } => Boolean(row));
+
+  function sendVideos(pack: { id: string; people: Volunteer[]; gender: string }) {
+    setMaking(true);
+    const template = settings.birthdayTemplate || BIRTHDAY_TEMPLATE;
+    const text = birthdayWish(pack.people.map((v) => v.fullName).join(", "), template);
+    const group = pack.gender ? groupsForGender(settings, pack.gender)[0] : undefined;
+    void (async () => {
+      try {
+        const files = [];
+        for (const volunteer of pack.people.slice(0, 4)) {
+          files.push(await birthdayVideoFile(volunteer, settings.collegeName));
+        }
+        const mode = await shareReadyCards(files, text, group?.url);
+        if (mode === "cancelled") return;
+        markSent(today, `video:${pack.id}`);
+        setSent(readSent(today));
+        toast.success(
+          mode === "shared"
+            ? tr("Music video is in the share sheet. Choose the group and press Send.", "સંગીત વીડિયો શેરમાં તૈયાર છે. ગ્રુપ પસંદ કરીને Send દબાવો.")
+            : tr("Video saved and the group opened. Attach it, then send.", "વીડિયો સચવાયો અને ગ્રુપ ખુલ્યો. જોડીને મોકલો."),
+        );
+      } catch {
+        toast.error(tr("Could not make the birthday video.", "જન્મદિવસનો વીડિયો બની શક્યો નહીં."));
+      } finally {
+        setMaking(false);
+      }
+    })();
+  }
 
   function sendPack(pack: { id: string; people: Volunteer[]; gender: string }) {
     const files = pack.people.map((v) => cachedBirthdayCard(v, settings.collegeName)).filter((file): file is File => Boolean(file));
@@ -123,13 +153,26 @@ export function BirthdayMorning() {
                 key={pack.id}
                 type="button"
                 className="h-10 bg-navy px-4 text-sm font-medium text-paper disabled:opacity-50"
-                disabled={!ready}
+                disabled={!ready || making}
                 onClick={() => sendPack(pack)}
               >
                 {sent.has(pack.id)
                   ? `${tr("Send again to", "ફરી મોકલો")} ${pack.label}`
                   : `${tr("Send to", "મોકલો")} ${pack.label}`}
                 {pack.people.length > 1 ? ` (${pack.people.length})` : ""}
+              </button>
+            ))}
+            {packs.map((pack) => (
+              <button
+                key={`video-${pack.id}`}
+                type="button"
+                className="h-10 border border-navy bg-paper px-4 text-sm font-medium text-navy disabled:opacity-50"
+                disabled={making}
+                onClick={() => sendVideos(pack)}
+              >
+                {making
+                  ? tr("Making the video…", "વીડિયો બની રહ્યો છે…")
+                  : `${tr("Music video", "સંગીત વીડિયો")} · ${pack.label}`}
               </button>
             ))}
           </div>

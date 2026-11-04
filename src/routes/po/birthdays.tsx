@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
-import { Cake, ImagePlus } from "lucide-react";
+import { Cake, ImagePlus, Music } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -9,6 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { WhatsAppSendPanel } from "@/components/nss/whatsapp-send";
 import { BIRTHDAY_TEMPLATE } from "@/lib/nss/constants";
 import { birthdayCardFile, cachedBirthdayCard, shareReadyCards } from "@/lib/nss/birthday-card";
+import { birthdayVideoFile, cachedBirthdayVideo } from "@/lib/nss/birthday-video";
 import { daysUntilBirthday, formatLongDate, isBirthdayOn, kolkataToday, parseDob } from "@/lib/nss/format";
 import { useSessionStore } from "@/lib/nss/session";
 import { birthdayWish, groupsForGender } from "@/lib/nss/whatsapp";
@@ -50,7 +51,7 @@ function BirthdaysPage() {
       <div>
         <h2 className="font-display text-xl font-semibold">Birthdays</h2>
         <p className="text-sm text-muted-foreground">
-          Today’s photo card is ready at the top of this desk. Girls go to the girls group, boys to the boys group.
+          Today’s photo card is ready at the top of this desk. A music video uses the volunteer’s own name. Girls go to the girls group, boys to the boys group. WhatsApp still asks you to press Send.
         </p>
       </div>
 
@@ -142,6 +143,20 @@ function BirthdayRow({
     });
   }
 
+  function videoWish() {
+    setBusy(true);
+    const ready = cachedBirthdayVideo(v, settings.collegeName);
+    const job = ready ? Promise.resolve(ready) : birthdayVideoFile(v, settings.collegeName);
+    void job
+      .then((file) => shareReadyCards([file], text, group?.url))
+      .then((mode) => {
+        if (!mode || mode === "cancelled") return;
+        toast.success(mode === "shared" ? "Share the music video, then press Send." : "Video saved and the group opened. Attach it, then send.");
+      })
+      .catch(() => toast.error("Could not make the birthday video."))
+      .finally(() => setBusy(false));
+  }
+
   return (
     <Card className={isToday ? "border-saffron/50" : undefined}>
       <CardContent className="flex flex-wrap items-center justify-between gap-3 pt-5">
@@ -161,6 +176,10 @@ function BirthdayRow({
               <Button size="sm" disabled={busy} onClick={wish}>
                 <ImagePlus />
                 {busy ? "Preparing…" : "Photo wish"}
+              </Button>
+              <Button size="sm" variant="outline" disabled={busy} onClick={videoWish}>
+                <Music />
+                {busy ? "Preparing…" : "Music video"}
               </Button>
               <Button size="sm" variant="outline" onClick={() => {
                 const role = useSessionStore.getState().session?.role === "admin" ? "admin" : "po";

@@ -7,6 +7,7 @@ import {
 } from "./constants";
 import { createSeedState, isDemoRecord } from "./seed";
 import { isOfficer, useSessionStore } from "./session";
+import { alphaRank, nssId, unitForNumber } from "./roll-sequence";
 import { academicYear, byFullName, padId, parseDob, titleFirstName } from "./format";
 import { deleteMedia } from "./media";
 import { cloudPost } from "./dual-store";
@@ -288,6 +289,23 @@ function dedupeVolunteers(items: Volunteer[]) {
     if (v.volunteerId) return `vid:${v.volunteerId}`;
     if (v.id) return `id:${v.id}`;
     return `enrollment:${v.enrollment}`;
+  });
+}
+
+function renumberRoll(volunteers: Volunteer[]) {
+  const rank = alphaRank(
+    volunteers,
+    (v) => v.fullName,
+    (v) => v.id,
+    (v) => v.status !== "alumni" && Boolean(v.fullName.trim()),
+  );
+  return volunteers.map((volunteer) => {
+    const n = rank.get(volunteer);
+    if (!n) return volunteer;
+    const volunteerId = nssId(n);
+    const unit = unitForNumber(n);
+    if (volunteer.volunteerId === volunteerId && volunteer.unit === unit) return volunteer;
+    return { ...volunteer, volunteerId, unit };
   });
 }
 
@@ -942,6 +960,7 @@ export const useNssStore =
                     ),
                 );
             }
+            if (next.volunteers) next.volunteers = renumberRoll(next.volunteers);
           }
 
           if (Array.isArray(cloud.events)) {
@@ -1111,10 +1130,12 @@ export const useNssStore =
 
           set({
             volunteers:
-              dedupeVolunteers([
-                ...volunteers,
-                volunteer,
-              ]).sort(byFullName),
+              renumberRoll(
+                dedupeVolunteers([
+                  ...volunteers,
+                  volunteer,
+                ]).sort(byFullName),
+              ),
           });
 
           return volunteer;
@@ -1146,11 +1167,13 @@ export const useNssStore =
           const current = get();
           const item = current.volunteers.find((v) => v.id === id);
           if (!item) return;
-          const keys = [item.id, item.volunteerId, item.mobile, item.fullName];
+          const keys = [item.id, item.volunteerId, item.mobile, item.fullName].filter(
+            (key) => Boolean(key) && !/^NSS\d+$/i.test(key),
+          );
           rememberPurged(keys);
           purgeCloud(keys);
           set({
-            volunteers: current.volunteers.filter((v) => v.id !== id),
+            volunteers: renumberRoll(current.volunteers.filter((v) => v.id !== id)),
             attendance: current.attendance.filter((a) => a.volunteerId !== id),
             eventRsvps: (current.eventRsvps ?? []).filter((r) => r.volunteerId !== id),
             certificates: current.certificates.filter((c) => c.volunteerId !== id),

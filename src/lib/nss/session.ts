@@ -205,14 +205,20 @@ export function findSessionVolunteer(volunteers: Volunteer[], session: PortalSes
   const enrollment = (session.enrollment || "").trim().toLowerCase();
   const name = (session.name || "").trim().toLowerCase();
   const first = firstNameOf(session.name || "");
-  return (
-    volunteers.find((v) => v.id === session.volunteerId) ||
-    volunteers.find((v) => v.volunteerId.toLowerCase() === key) ||
-    volunteers.find((v) => enrollment && v.enrollment.toLowerCase() === enrollment) ||
-    volunteers.find((v) => d.length >= 10 && digits(v.mobile).slice(-10) === d.slice(-10)) ||
-    volunteers.find((v) => v.fullName.toLowerCase() === name) ||
-    volunteers.find((v) => first && firstNameOf(v.fullName) === first && d.length >= 10 && digits(v.mobile).slice(-10) === d.slice(-10))
-  );
+  const byMobile = d.length >= 10 ? volunteers.find((v) => digits(v.mobile).slice(-10) === d.slice(-10)) : undefined;
+  if (byMobile) return byMobile;
+  const sameName = (v: Volunteer) => !name || v.fullName.toLowerCase() === name;
+  const byId = volunteers.find((v) => v.id === session.volunteerId && sameName(v));
+  if (byId) return byId;
+  const byVid = volunteers.find((v) => key && v.volunteerId.toLowerCase() === key && sameName(v));
+  if (byVid) return byVid;
+  if (enrollment) {
+    const byEnrollment = volunteers.find((v) => v.enrollment.toLowerCase() === enrollment);
+    if (byEnrollment) return byEnrollment;
+  }
+  const named = name ? volunteers.filter((v) => v.fullName.toLowerCase() === name) : [];
+  if (named.length === 1) return named[0];
+  return volunteers.find((v) => first && firstNameOf(v.fullName) === first && d.length >= 10 && digits(v.mobile).slice(-10) === d.slice(-10));
 }
 
 export function dashboardPath(session: PortalSession | null) {
