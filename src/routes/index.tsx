@@ -4,6 +4,7 @@ import { AppShell } from "@/components/nss/shell";
 import { PhotoCarousel } from "@/components/nss/photo-carousel";
 import { SevaChakra } from "@/components/nss/seva-chakra";
 import { SplashScreen } from "@/components/nss/splash";
+import { SamayStrip } from "@/components/nss/samay-strip";
 import { Badge } from "@/components/ui/badge";
 import { DEFAULT_SETTINGS } from "@/lib/nss/constants";
 import { daysUntilBirthday, formatLongDate, isBirthdayOn, kolkataToday, todayIso } from "@/lib/nss/format";
@@ -141,6 +142,10 @@ function Home() {
             <Link to="/login" search={{ role: "po" }} className="underline-offset-4 hover:underline">{t("adminLogin")}</Link>
             <Link to="/verify" search={{ id: "" }} className="underline-offset-4 hover:underline">{t("verify")}</Link>
           </nav>
+
+          <div className="mt-6">
+            <SamayStrip />
+          </div>
 
           <SevaChakra
             hours={hours}

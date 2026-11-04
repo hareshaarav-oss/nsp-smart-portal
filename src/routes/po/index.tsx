@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { daysUntilBirthday, formatLongDate, isBirthdayOn, kolkataToday, todayIso, byFullName } from "@/lib/nss/format";
 import { liveServiceHours, useNssStore } from "@/lib/nss/store";
 import { TomorrowBanner } from "@/components/nss/tomorrow";
+import { SamayStrip } from "@/components/nss/samay-strip";
 import { ensurePublicGallery } from "@/lib/nss/public-gallery";
 import { useUi } from "@/lib/nss/ui-prefs";
 
@@ -64,6 +65,7 @@ function PoHome() {
     [volunteers],
   );
   return <div className="space-y-6">
+    <SamayStrip />
     <TomorrowBanner />
     <div className="rounded-2xl bg-navy p-5 text-paper md:p-6">
       <h2 className="font-display text-2xl font-semibold">{tr("Desk", "ડેસ્ક")}</h2>

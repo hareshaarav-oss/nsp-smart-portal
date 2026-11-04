@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Award, Cake, Fingerprint, KeyRound, Lock } from "lucide-react";
 import { TomorrowBanner } from "@/components/nss/tomorrow";
+import { SamayStrip } from "@/components/nss/samay-strip";
 import { AppShell } from "@/components/nss/shell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -280,6 +281,7 @@ function VolunteerDash() {
   return (
     <AppShell eyebrow="NSS STUDENT DASHBOARD" current="dashboard">
       <div className="mx-auto w-full max-w-6xl space-y-4 px-3 pb-4 sm:space-y-6 sm:px-4 md:px-6">
+        <SamayStrip />
         <TomorrowBanner />
         <div className="overflow-hidden border border-saffron/40 bg-navy p-5 text-paper">
           <div className="flex flex-col items-center gap-4 sm:flex-row">
