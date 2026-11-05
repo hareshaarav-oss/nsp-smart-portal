@@ -1,5 +1,5 @@
 import { alphaRank, nssId, rankForNewName, unitForNumber } from "./roll-sequence";
-import { cleanPersonName, latinDigits, padId, parseDob, titleFirstName } from "./format";
+import { cleanPersonName, joinEnrollment, latinDigits, padId, parseDob, titleFirstName } from "./format";
 import { nssHourRule } from "./hours";
 import { attendanceDocId as sealedAttendanceId, openChatPass, openText, passwordRecord, sealText, tokenDocId } from "./seal.server";
 import type {
@@ -329,7 +329,7 @@ async function loadCollegeCloudFresh(opts: { gallery?: boolean; photos?: boolean
     return {
       id: text(s._id) || `vol-${n || 1}`,
       volunteerId: typeof n === "number" ? nssId(n) : text(s.volunteerId) || `NSS${padId(1)}`,
-      enrollment: latinDigits(text(s.enrollment)) || `2026-${semester}-${padId(n || 1)}`,
+      enrollment: latinDigits(text(s.enrollment)) || joinEnrollment(semester, n || 1, isoDate(s.createdAt) || "2026-06-01"),
       fullName,
       mobile,
       email: text(s.email),
@@ -827,7 +827,7 @@ function briefVolunteer(s: Record<string, unknown>, n: number): Volunteer {
   return {
     id: text(s._id) || `vol-${n}`,
     volunteerId: n > 0 ? nssId(n) : text(s.volunteerId) || `NSS${padId(1)}`,
-    enrollment: latinDigits(text(s.enrollment)) || `2026-${semester}-${padId(n || 1)}`,
+    enrollment: latinDigits(text(s.enrollment)) || joinEnrollment(semester, n || 1, isoDate(s.createdAt) || "2026-06-01"),
     fullName,
     mobile,
     email: text(s.email),
@@ -1435,9 +1435,9 @@ export async function saveStudentToCloud(input: Record<string, unknown>) {
   const n = nextVolunteerNumber(students, fullName);
   const semester = latinDigits(text(input.semester) || "1");
   const volunteerId = `NSS${padId(n)}`;
-  const enrollment = latinDigits(text(input.enrollment)) || `2026-${semester}-${padId(n)}`;
-  const unit = n <= 100 ? "Unit 1" : "Unit 2";
   const now = new Date().toISOString();
+  const enrollment = latinDigits(text(input.enrollment)) || joinEnrollment(semester, n, now.slice(0, 10));
+  const unit = n <= 100 ? "Unit 1" : "Unit 2";
   const fields: Record<string, unknown> = {
     fullName: encodeValue(fullName),
     mobile: encodeValue(sealText(mobile)),

@@ -384,7 +384,7 @@ export function openCertificateDocument(html: string) {
 export function certificateYear(event: NssEvent) {
   const iso = parseDob(event.date) || String(event.date || "");
   const y = iso.slice(0, 4);
-  return /^\d{4}$/.test(y) ? y : "2026";
+  return /^\d{4}$/.test(y) ? y : academicYear().slice(0, 4);
 }
 
 export function parseCertificateSeq(serial?: string | null) {

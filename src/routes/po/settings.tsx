@@ -10,6 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { blobToDataUrl, compressPortrait } from "@/lib/nss/media";
 import { useNssStore } from "@/lib/nss/store";
 import { BIRTHDAY_TEMPLATE } from "@/lib/nss/constants";
+import { academicYear } from "@/lib/nss/format";
 import { cloudPost } from "@/lib/nss/dual-store";
 
 export const Route = createFileRoute("/po/settings")({ component: SettingsPage });
@@ -131,7 +132,7 @@ function CollegeSection({ settings, update, busy, onPhoto, onLogo }: Props & { b
     <Field label="Portal / App name"><Input value={settings.portalName} onChange={(e) => update({ portalName: e.target.value })} /></Field>
     <Field label="College logo"><BrandLogo src={settings.collegeLogo} label="College logo" onFile={(file) => onLogo("college", file)} onClear={() => update({ collegeLogo: "" })} /></Field>
     <Field label="NSS / programme logo"><BrandLogo src={settings.nssLogo} label="NSS logo" onFile={(file) => onLogo("nss", file)} onClear={() => update({ nssLogo: "" })} /></Field>
-    <Field label="Academic year"><Input value={settings.academicYear} onChange={(e) => update({ academicYear: e.target.value })} placeholder="2026-27" /></Field>
+    <Field label="Academic year"><p className="rounded-md border border-border bg-muted/40 px-3 py-2 text-sm font-medium">{academicYear()}</p><p className="text-xs text-muted-foreground">Changes by itself on 1 June. No yearly update.</p></Field>
     <Field label="College address"><Input value={settings.address ?? ""} onChange={(e) => update({ address: e.target.value })} /></Field>
     <Field label="Contact email"><Input type="email" value={settings.contactEmail ?? ""} onChange={(e) => update({ contactEmail: e.target.value })} /></Field>
     <Field label="College website"><Input value={settings.website ?? ""} onChange={(e) => update({ website: e.target.value })} placeholder="https://..." /></Field>

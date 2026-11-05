@@ -8,7 +8,7 @@ import {
 import { createSeedState, isDemoRecord } from "./seed";
 import { isOfficer, useSessionStore } from "./session";
 import { alphaRank, nssId, unitForNumber } from "./roll-sequence";
-import { academicYear, byFullName, padId, parseDob, titleFirstName } from "./format";
+import { academicYear, byFullName, joinEnrollment, padId, parseDob, titleFirstName } from "./format";
 import { deleteMedia } from "./media";
 import { cloudPost } from "./dual-store";
 import { assignSequentialIds, certificateYear, nextCertificateSeq } from "./certificates";
@@ -1100,8 +1100,7 @@ export const useNssStore =
           const volunteerId =
             `NSS${padId(next)}`;
 
-          const enrollment =
-            `2026-${input.semester}-${padId(next)}`;
+          const enrollment = joinEnrollment(input.semester, next);
 
           const volunteer: Volunteer =
             {
@@ -2078,7 +2077,7 @@ export const useNssStore =
           );
           const year = event
             ? certificateYear(event)
-            : "2026";
+            : academicYear().slice(0, 4);
           let seq =
             nextCertificateSeq(
               existing,

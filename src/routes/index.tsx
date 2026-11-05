@@ -5,7 +5,6 @@ import { PhotoCarousel } from "@/components/nss/photo-carousel";
 import { SevaChakra } from "@/components/nss/seva-chakra";
 import { SplashScreen, welcomeNeeded } from "@/components/nss/splash";
 import { SamayStrip } from "@/components/nss/samay-strip";
-import { DashakBoard } from "@/components/nss/dashak-board";
 import { Badge } from "@/components/ui/badge";
 import { DEFAULT_SETTINGS } from "@/lib/nss/constants";
 import { daysUntilBirthday, formatLongDate, isBirthdayOn, kolkataToday } from "@/lib/nss/format";
@@ -146,7 +145,6 @@ function Home() {
             <Link to="/register" className="underline-offset-4 hover:underline">{t("register")}</Link>
             <Link to="/login" search={{ role: "po" }} className="underline-offset-4 hover:underline">{t("adminLogin")}</Link>
             <Link to="/verify" search={{ id: "" }} className="underline-offset-4 hover:underline">{t("verify")}</Link>
-            <a href="#dashak" className="underline-offset-4 hover:underline">{tr("Ten years", "દસ વર્ષ")}</a>
           </nav>
 
           <div className="mt-6">
@@ -206,8 +204,6 @@ function Home() {
             <MiniStat label={tr("Alumni", "ભૂતપૂર્વ")} value={alumniCount} />
             <MiniStat label={tr("Portal visitors", "મુલાકાતીઓ")} value={visitors} />
           </div>
-
-          <DashakBoard />
 
           <OpenTab id="volunteers" title={tr("Volunteers", "સ્વયંસેવકો")}>
             {rollCards.length ? (

@@ -159,11 +159,17 @@ export function latinDigits(value: string) {
   });
 }
 
-export function academicYear(iso = todayIso()) {
-  const [y, m] = iso.split("-").map(Number);
-  const start = (m ?? 1) >= 6 ? y : y - 1;
+export function academicYear(iso = kolkataToday()) {
+  const value = /^\d{4}-\d{2}-\d{2}/.test(iso) ? iso.slice(0, 10) : kolkataToday();
+  const [y, m] = value.split("-").map(Number);
+  const start = (m ?? 1) >= 6 ? y : (y || 2026) - 1;
   const startYear = Math.max(start, 2026);
   return `${startYear}-${String(startYear + 1).slice(-2)}`;
+}
+
+/** Year of joining. Uses that day's academic year, so 2027 does not stay stamped 2026. */
+export function joinEnrollment(semester: string, n: number, onIso = kolkataToday()) {
+  return `${academicYear(onIso).slice(0, 4)}-${latinDigits(semester) || "1"}-${padId(n || 1)}`;
 }
 
 export function digitsOnly(value: string) {

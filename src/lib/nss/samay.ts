@@ -39,9 +39,13 @@ const ANNUAL: Record<string, SamayNote> = {
 };
 
 /**
- * Gujarat 2026 Diwali days.
- * Bestu Varas is 10 November because Kartik Sud 1 is the tithi at sunrise that morning
- * (pratipada begins the previous afternoon). Labh Pancham follows five mornings later.
+ * Gujarat 2026 week is fixed from the local tithi (Bestu Varas is 10 November,
+ * Kartik Sud 1 at sunrise, not the next civil day).
+ * Later years list only the main Diwali day (Lakshmi Puja, India), so the
+ * greeting keeps working through 2036 without an app update.
+ * 2027-10-29, 2028-10-17, 2029-11-05, 2030-10-26, 2031-11-14, 2032-11-02,
+ * 2033-10-22, 2034-11-10, 2035-10-30, 2036-10-18.
+ * Vagh Baras, Bestu Varas and Bhai Bij after 2026 are not guessed.
  */
 const DATED: Record<string, SamayNote> = {
   "2026-11-05": { en: "Vagh Baras", gu: "વઘ બારસ", tone: "festival" },
@@ -51,6 +55,16 @@ const DATED: Record<string, SamayNote> = {
   "2026-11-10": { en: "Bestu Varas", gu: "બેસતું વર્ષ", tone: "festival" },
   "2026-11-11": { en: "Bhai Bij", gu: "ભાઈ બીજ", tone: "festival" },
   "2026-11-14": { en: "Labh Pancham", gu: "લાભ પાંચમ", tone: "festival" },
+  "2027-10-29": { en: "Diwali", gu: "દીવાળી", tone: "festival" },
+  "2028-10-17": { en: "Diwali", gu: "દીવાળી", tone: "festival" },
+  "2029-11-05": { en: "Diwali", gu: "દીવાળી", tone: "festival" },
+  "2030-10-26": { en: "Diwali", gu: "દીવાળી", tone: "festival" },
+  "2031-11-14": { en: "Diwali", gu: "દીવાળી", tone: "festival" },
+  "2032-11-02": { en: "Diwali", gu: "દીવાળી", tone: "festival" },
+  "2033-10-22": { en: "Diwali", gu: "દીવાળી", tone: "festival" },
+  "2034-11-10": { en: "Diwali", gu: "દીવાળી", tone: "festival" },
+  "2035-10-30": { en: "Diwali", gu: "દીવાળી", tone: "festival" },
+  "2036-10-18": { en: "Diwali", gu: "દીવાળી", tone: "festival" },
 };
 
 export function kolkataClock(now = new Date()) {
@@ -82,14 +96,6 @@ export function kolkataClock(now = new Date()) {
     const iso = new Date().toISOString().slice(0, 10);
     return { iso, hour: 0, minute: "00", weekdayEn: "", weekdayGu: "", clock: "--:--" };
   }
-}
-
-export function annualEntries(): { monthDay: string; note: SamayNote }[] {
-  return Object.entries(ANNUAL).map(([monthDay, note]) => ({ monthDay, note }));
-}
-
-export function datedEntries(): { iso: string; note: SamayNote }[] {
-  return Object.entries(DATED).map(([iso, note]) => ({ iso, note }));
 }
 
 export function greetingFor(hour: number) {
