@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react
 import { AppShell } from "@/components/nss/shell";
 import { PhotoCarousel } from "@/components/nss/photo-carousel";
 import { SevaChakra } from "@/components/nss/seva-chakra";
-import { SplashScreen } from "@/components/nss/splash";
+import { SplashScreen, welcomeNeeded } from "@/components/nss/splash";
 import { SamayStrip } from "@/components/nss/samay-strip";
 import { DashakBoard } from "@/components/nss/dashak-board";
 import { Badge } from "@/components/ui/badge";
@@ -29,8 +29,11 @@ const SEED_IDS = new Set([
 ]);
 
 function Home() {
-  const [splashing, setSplashing] = useState(true);
+  const [splashing, setSplashing] = useState(false);
   const dismiss = useCallback(() => setSplashing(false), []);
+  useEffect(() => {
+    if (welcomeNeeded()) setSplashing(true);
+  }, []);
   const events = useNssStore((s) => s.events) ?? [];
   const notices = useNssStore((s) => s.notices) ?? [];
   const visitors = useNssStore((s) => s.visitors);
@@ -47,7 +50,7 @@ function Home() {
   const rollCards = useMemo(
     () =>
       volunteers
-        .filter((v) => v.status !== "alumni" && v.fullName)
+        .filter((v) => v.status !== "alumni" && typeof v.fullName === "string" && v.fullName)
         .slice()
         .sort((a, b) => {
           const photo = Number(Boolean(b.photoUrl)) - Number(Boolean(a.photoUrl));
@@ -59,7 +62,7 @@ function Home() {
   const attendance = useNssStore((s) => s.attendance);
   const featured = useMemo(() => {
     const state = useNssStore.getState();
-    const people = volunteers.filter((v) => v.status !== "alumni" && v.fullName);
+    const people = volunteers.filter((v) => v.status !== "alumni" && typeof v.fullName === "string" && v.fullName);
     const photos = people.filter((v) => v.photoUrl);
     return (photos.length ? photos : people)
       .slice()
@@ -78,6 +81,7 @@ function Home() {
         .filter(
           (v) =>
             v.status !== "alumni" &&
+            typeof v.fullName === "string" &&
             Boolean(v.dob) &&
             (isBirthdayOn(v.dob, today) ||
               daysUntilBirthday(v.dob, today) <= 7),
@@ -95,7 +99,7 @@ function Home() {
   const tr = (en: string, gu: string) => (lang === "gu" ? gu : en);
   const gallery = useNssStore((s) => s.gallery) ?? [];
   const slides = useMemo(
-    () => gallery.filter((item) => item.src.startsWith("data:image/") && !SEED_IDS.has(item.id)).slice(0, 12),
+    () => gallery.filter((item) => (item?.src || "").startsWith("data:image/") && !SEED_IDS.has(item.id)).slice(0, 12),
     [gallery],
   );
   useEffect(() => {
@@ -108,18 +112,19 @@ function Home() {
     () =>
       collegeEvents
         .filter((event) => {
-          const status = event.status.toLowerCase();
+          const status = String(event?.status || "").toLowerCase();
           if (status === "completed" || status === "cancelled") return false;
-          return event.date >= today;
+          const date = String(event?.date || "").slice(0, 10);
+          return Boolean(date) && date >= today;
         })
-        .sort((a, b) => a.date.localeCompare(b.date)),
+        .sort((a, b) => String(a.date || "").localeCompare(String(b.date || ""))),
     [collegeEvents, today],
   );
   const completed = useMemo(
     () =>
       collegeEvents
         .filter((event) => !upcoming.some((row) => row.id === event.id))
-        .sort((a, b) => b.date.localeCompare(a.date))
+        .sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")))
         .slice(0, 6),
     [collegeEvents, upcoming],
   );
@@ -127,7 +132,7 @@ function Home() {
     () =>
       [...collegeNotices]
         .filter((notice) => !notice.audience || notice.audience === "all")
-        .sort((a, b) => b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt)),
+        .sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")) || String(b.createdAt || "").localeCompare(String(a.createdAt || ""))),
     [collegeNotices],
   );
 
@@ -174,7 +179,7 @@ function Home() {
               <RunBanner
                 label={tr("Notice", "નોટિસ")}
                 items={latestNotices.map((notice) => {
-                  const body = notice.body.replace(/\s+/g, " ").trim();
+                  const body = String(notice.body || "").replace(/\s+/g, " ").trim();
                   return body ? `${notice.title} — ${body}` : notice.title;
                 })}
                 empty={t("emptyNotice")}
@@ -187,7 +192,7 @@ function Home() {
                 items={upcoming.map((event) => {
                   const when = `${formatLongDate(event.date)}${event.endDate && event.endDate !== event.date ? ` – ${formatLongDate(event.endDate)}` : ""}`;
                   const place = event.location ? ` · ${event.location}` : "";
-                  const note = event.description ? ` — ${event.description.replace(/\s+/g, " ").trim()}` : "";
+                  const note = event.description ? ` — ${String(event.description).replace(/\s+/g, " ").trim()}` : "";
                   return `${event.name} · ${when}${place}${note}`;
                 })}
                 empty={tr("No upcoming event.", "આગામી કાર્યક્રમ નથી.")}

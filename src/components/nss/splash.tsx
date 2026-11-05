@@ -9,8 +9,8 @@ function markSplashSeen() {
   try { sessionStorage.setItem(SPLASH_SEEN_KEY, "1"); } catch (error) { void error; }
 }
 
-function shouldShowSplash() {
-  try { return sessionStorage.getItem(SPLASH_SEEN_KEY) !== "1"; } catch { return true; }
+export function welcomeNeeded() {
+  try { return sessionStorage.getItem(SPLASH_SEEN_KEY) !== "1"; } catch { return false; }
 }
 
 export function SplashScreen({ onDone }: { onDone: () => void }) {
@@ -19,7 +19,7 @@ export function SplashScreen({ onDone }: { onDone: () => void }) {
   const settings = useNssStore((s) => s.settings);
 
   useEffect(() => {
-    if (!shouldShowSplash()) {
+    if (!welcomeNeeded()) {
       finished.current = true;
       onDone();
       return;

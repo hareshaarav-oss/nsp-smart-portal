@@ -98,7 +98,7 @@ export function SamayStrip() {
             <p className="mt-1 text-sm text-navy">
               <span className="font-medium">{next.name}</span>
               <span className="text-ink/70">
-                {` · ${formatLongDate(next.date.slice(0, 10))}`}
+                {` · ${formatLongDate(String(next.date || "").slice(0, 10))}`}
                 {daysBetween(clock.iso, next.date.slice(0, 10)) === 1
                   ? gu
                     ? " · આવતીકાલે"

@@ -697,7 +697,7 @@ export const useNssStore =
             const localByName = new Map<string, (typeof current.volunteers)[number]>();
             const repeatedNames = new Set<string>();
             for (const v of current.volunteers) {
-              const key = v.fullName.toLowerCase().replace(/[^a-z]/g, "");
+              const key = (v.fullName || "").toLowerCase().replace(/[^a-z]/g, "");
               if (!key) continue;
               if (localByName.has(key)) {
                 localByName.delete(key);
@@ -722,7 +722,7 @@ export const useNssStore =
                       rowName ? localByName.get(rowName) : undefined,
                     ].find((person) => {
                       if (!person) return false;
-                      const prevName = person.fullName.toLowerCase().replace(/[^a-z]/g, "");
+                      const prevName = (person.fullName || "").toLowerCase().replace(/[^a-z]/g, "");
                       return !rowName || !prevName || rowName === prevName;
                     });
 
@@ -966,10 +966,11 @@ export const useNssStore =
           if (Array.isArray(cloud.events)) {
             const localExtra = current.events.filter(
               (e) =>
+                typeof e.id === "string" &&
                 e.id.startsWith("evt-") &&
                 !isDemoRecord(e.id) &&
                 !cloud.events?.some(
-                  (c) => c.id === e.id || c.name.trim().toLowerCase() === e.name.trim().toLowerCase(),
+                  (c) => c.id === e.id || String(c.name || "").trim().toLowerCase() === String(e.name || "").trim().toLowerCase(),
                 ),
             );
 
@@ -2289,7 +2290,7 @@ export function volunteerHours(state: PortalState, volunteerId: string) {
   const person = (state.volunteers ?? []).find((v) => v.id === volunteerId || v.volunteerId === volunteerId);
   const keys = new Set([volunteerId, person?.id || "", person?.volunteerId || ""].filter(Boolean));
   const map = new Map((state.events ?? []).map((e) => [e.id, e]));
-  return (state.attendance ?? []).reduce((sum, row) => {
+  return (Array.isArray(state.attendance) ? state.attendance : []).reduce((sum, row) => {
     if (!keys.has(row.volunteerId) || !row.present) return sum;
     return sum + (map.get(row.eventId)?.hours ?? 0);
   }, 0);
@@ -2312,9 +2313,7 @@ export function totalServiceHours(
       ),
     );
 
-  return (
-    state.attendance ?? []
-  ).reduce(
+  return (Array.isArray(state.attendance) ? state.attendance : []).reduce(
     (sum, row) => {
       if (!row.present) {
         return sum;

@@ -54,27 +54,34 @@ const DATED: Record<string, SamayNote> = {
 };
 
 export function kolkataClock(now = new Date()) {
-  const parts = new Intl.DateTimeFormat("en-GB", {
-    timeZone: "Asia/Kolkata",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    hourCycle: "h23",
-    weekday: "long",
-  }).formatToParts(now);
-  const read = (type: Intl.DateTimeFormatPartTypes) => parts.find((part) => part.type === type)?.value || "";
-  const hour = Number(read("hour"));
-  const minute = read("minute");
-  return {
-    iso: `${read("year")}-${read("month")}-${read("day")}`,
-    hour: Number.isFinite(hour) ? hour : 0,
-    minute,
-    weekdayEn: read("weekday"),
-    weekdayGu: WEEK_GU[read("weekday")] || read("weekday"),
-    clock: `${read("hour")}:${minute}`,
-  };
+  try {
+    const parts = new Intl.DateTimeFormat("en-GB", {
+      timeZone: "Asia/Kolkata",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+      weekday: "long",
+    }).formatToParts(now);
+    const read = (type: Intl.DateTimeFormatPartTypes) => parts.find((part) => part.type === type)?.value || "";
+    let hourText = read("hour");
+    if (hourText === "24") hourText = "00";
+    const hour = Number(hourText);
+    const minute = read("minute") || "00";
+    return {
+      iso: `${read("year")}-${read("month")}-${read("day")}`,
+      hour: Number.isFinite(hour) ? hour : 0,
+      minute,
+      weekdayEn: read("weekday"),
+      weekdayGu: WEEK_GU[read("weekday")] || read("weekday"),
+      clock: `${hourText || "00"}:${minute}`,
+    };
+  } catch {
+    const iso = new Date().toISOString().slice(0, 10);
+    return { iso, hour: 0, minute: "00", weekdayEn: "", weekdayGu: "", clock: "--:--" };
+  }
 }
 
 export function annualEntries(): { monthDay: string; note: SamayNote }[] {
@@ -122,17 +129,18 @@ export function nextNote(iso: string, within = 7): { note: SamayNote; iso: strin
 }
 
 function eventStart(event: SamayEvent) {
-  return (event.date || "").slice(0, 10);
+  return typeof event?.date === "string" ? event.date.slice(0, 10) : "";
 }
 
 function eventEnd(event: SamayEvent) {
-  return (event.endDate || event.date || "").slice(0, 10);
+  const end = event?.endDate || event?.date || "";
+  return typeof end === "string" ? end.slice(0, 10) : "";
 }
 
 export function programmesOn(events: SamayEvent[], iso: string) {
   return events
     .filter((event) => {
-      if ((event.status || "").toLowerCase() === "cancelled") return false;
+      if (String(event?.status || "").toLowerCase() === "cancelled") return false;
       const start = eventStart(event);
       const end = eventEnd(event);
       return Boolean(start) && start <= iso && iso <= end;
@@ -142,6 +150,6 @@ export function programmesOn(events: SamayEvent[], iso: string) {
 
 export function nextProgramme(events: SamayEvent[], iso: string) {
   return events
-    .filter((event) => (event.status || "").toLowerCase() !== "cancelled" && eventStart(event) > iso)
+    .filter((event) => String(event?.status || "").toLowerCase() !== "cancelled" && eventStart(event) > iso)
     .sort((a, b) => eventStart(a).localeCompare(eventStart(b)) || a.name.localeCompare(b.name, "en"))[0];
 }

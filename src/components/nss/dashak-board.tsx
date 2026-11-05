@@ -31,12 +31,12 @@ export function DashakBoard() {
   const programmes = (collegeReady ? events : [])
     .filter((event) => {
       if (SEED_IDS.has(event.id)) return false;
-      const status = (event.status || "").toLowerCase();
+      const status = String(event?.status || "").toLowerCase();
       if (status === "cancelled") return false;
-      const start = (event.date || "").slice(0, 10);
+      const start = String(event?.date || "").slice(0, 10);
       return start >= clock.iso && start <= horizon && Number(start.slice(0, 4)) === year;
     })
-    .sort((a, b) => a.date.localeCompare(b.date) || a.name.localeCompare(b.name, "en"));
+    .sort((a, b) => String(a.date || "").localeCompare(String(b.date || "")) || String(a.name || "").localeCompare(String(b.name || ""), "en"));
 
   return (
     <section id="dashak" className="mt-8 scroll-mt-28 overflow-hidden border border-navy/15 bg-card" suppressHydrationWarning>
@@ -105,7 +105,7 @@ export function DashakBoard() {
             {programmes.map((event) => (
               <li key={event.id} className="text-sm text-navy">
                 <span className="font-medium">{event.name}</span>
-                <span className="text-ink/70">{` · ${formatLongDate(event.date.slice(0, 10))}${event.location ? ` · ${event.location}` : ""}`}</span>
+                <span className="text-ink/70">{` · ${formatLongDate(String(event.date || "").slice(0, 10))}${event.location ? ` · ${event.location}` : ""}`}</span>
               </li>
             ))}
           </ul>
