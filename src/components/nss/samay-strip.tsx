@@ -60,9 +60,9 @@ export function SamayStrip() {
     <section className={`overflow-hidden rounded-2xl border bg-paper ${tone}`}>
       <div className="flex flex-wrap items-end justify-between gap-3 px-4 py-3">
         <div>
-          <p className="text-xs font-semibold tracking-wide text-saffron">{gu ? greet.gu : greet.en}</p>
-          <p className="font-display text-3xl tabular-nums text-navy">{now ? clock.clock : "—:—"}</p>
-          <p className="text-sm text-ink/80">
+          <p className="text-xs font-semibold tracking-wide text-saffron" suppressHydrationWarning>{gu ? greet.gu : greet.en}</p>
+          <p className="font-display text-3xl tabular-nums text-navy" suppressHydrationWarning>{clock.clock}</p>
+          <p className="text-sm text-ink/80" suppressHydrationWarning>
             {gu ? clock.weekdayGu : clock.weekdayEn} · {formatLongDate(clock.iso)} · IST
           </p>
         </div>

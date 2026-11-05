@@ -77,6 +77,14 @@ export function kolkataClock(now = new Date()) {
   };
 }
 
+export function annualEntries(): { monthDay: string; note: SamayNote }[] {
+  return Object.entries(ANNUAL).map(([monthDay, note]) => ({ monthDay, note }));
+}
+
+export function datedEntries(): { iso: string; note: SamayNote }[] {
+  return Object.entries(DATED).map(([iso, note]) => ({ iso, note }));
+}
+
 export function greetingFor(hour: number) {
   if (hour >= 5 && hour < 12) return { en: "Good morning", gu: "સુપ્રભાત" };
   if (hour >= 12 && hour < 16) return { en: "Good afternoon", gu: "શુભ બપોર" };

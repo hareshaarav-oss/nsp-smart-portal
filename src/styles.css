@@ -167,13 +167,15 @@ html.dark .text-paper { color: #f7f3ea; }
   display: flex;
   width: max-content;
   animation: run-banner linear infinite;
+  will-change: transform;
 }
 .run-banner-track span {
+  flex: 0 0 auto;
   white-space: nowrap;
 }
 @keyframes run-banner {
-  from { transform: translateX(0); }
-  to { transform: translateX(-50%); }
+  from { transform: translate3d(0, 0, 0); }
+  to { transform: translate3d(-50%, 0, 0); }
 }
 @media (prefers-reduced-motion: reduce) {
   .splash-rise { animation: none; }

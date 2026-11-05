@@ -5,9 +5,10 @@ import { PhotoCarousel } from "@/components/nss/photo-carousel";
 import { SevaChakra } from "@/components/nss/seva-chakra";
 import { SplashScreen } from "@/components/nss/splash";
 import { SamayStrip } from "@/components/nss/samay-strip";
+import { DashakBoard } from "@/components/nss/dashak-board";
 import { Badge } from "@/components/ui/badge";
 import { DEFAULT_SETTINGS } from "@/lib/nss/constants";
-import { daysUntilBirthday, formatLongDate, isBirthdayOn, kolkataToday, todayIso } from "@/lib/nss/format";
+import { daysUntilBirthday, formatLongDate, isBirthdayOn, kolkataToday } from "@/lib/nss/format";
 import { ensurePublicGallery } from "@/lib/nss/public-gallery";
 import { activeVolunteers, alumniVolunteers, liveServiceHours, useNssStore, volunteerHours } from "@/lib/nss/store";
 import { useUi } from "@/lib/nss/ui-prefs";
@@ -40,8 +41,7 @@ function Home() {
   const shownVolunteers = Math.max(volunteerCount, liveVolunteerCount);
   const alumniCount = useNssStore((s) => Math.max(alumniVolunteers(s).length, s.settings.alumniCount));
   const liveBest = useNssStore((s) => s.liveBest);
-  const today = todayIso();
-  const birthdayToday = kolkataToday();
+  const today = kolkataToday();
   const volunteerSource = useNssStore((s) => s.volunteers);
   const volunteers = useMemo(() => volunteerSource ?? [], [volunteerSource]);
   const rollCards = useMemo(
@@ -79,16 +79,16 @@ function Home() {
           (v) =>
             v.status !== "alumni" &&
             Boolean(v.dob) &&
-            (isBirthdayOn(v.dob, birthdayToday) ||
-              daysUntilBirthday(v.dob, birthdayToday) <= 7),
+            (isBirthdayOn(v.dob, today) ||
+              daysUntilBirthday(v.dob, today) <= 7),
         )
         .sort(
           (a, b) =>
-            daysUntilBirthday(a.dob, birthdayToday) -
-            daysUntilBirthday(b.dob, birthdayToday),
+            daysUntilBirthday(a.dob, today) -
+            daysUntilBirthday(b.dob, today),
         )
         .slice(0, 6),
-    [volunteers, birthdayToday],
+    [volunteers, today],
   );
 
   const { t, lang } = useUi();
@@ -135,12 +135,13 @@ function Home() {
     <>
       {splashing ? <SplashScreen onDone={dismiss} /> : null}
       <AppShell current="home" compactHeader>
-        <section className="mx-auto w-full max-w-6xl flex-1 px-4 md:px-6">
+        <section className="mx-auto w-full max-w-6xl flex-1 overflow-x-clip px-4 md:px-6">
           <nav className="flex flex-wrap justify-center gap-x-8 gap-y-3 border-y border-navy/15 py-4 text-sm text-navy">
             <Link to="/login" search={{ role: "volunteer" }} className="underline-offset-4 hover:underline">{t("studentLogin")}</Link>
             <Link to="/register" className="underline-offset-4 hover:underline">{t("register")}</Link>
             <Link to="/login" search={{ role: "po" }} className="underline-offset-4 hover:underline">{t("adminLogin")}</Link>
             <Link to="/verify" search={{ id: "" }} className="underline-offset-4 hover:underline">{t("verify")}</Link>
+            <a href="#dashak" className="underline-offset-4 hover:underline">{tr("Ten years", "દસ વર્ષ")}</a>
           </nav>
 
           <div className="mt-6">
@@ -201,20 +202,22 @@ function Home() {
             <MiniStat label={tr("Portal visitors", "મુલાકાતીઓ")} value={visitors} />
           </div>
 
+          <DashakBoard />
+
           <OpenTab id="volunteers" title={tr("Volunteers", "સ્વયંસેવકો")}>
             {rollCards.length ? (
               <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8">
-                {rollCards.map((v) => (
-                  <figure key={v.id} className="press text-center">
-                    {v.photoUrl ? (
-                      <img src={v.photoUrl} alt="" className="mx-auto h-24 w-20 object-cover ring-1 ring-saffron/40" />
-                    ) : (
-                      <span className="mx-auto flex h-24 w-20 items-center justify-center bg-navy text-lg font-semibold text-paper">{v.fullName.slice(0, 1)}</span>
-                    )}
-                    <figcaption className="mt-1 text-[11px] leading-tight text-navy">
-                      {v.fullName}
-                      <span className="mt-0.5 block font-semibold text-forest">{v.volunteerId}</span>
-                    </figcaption>
+                {rollCards.map((v, index) => (
+                  <figure key={`${v.volunteerId}-${v.fullName}-${index}`} className="min-w-0 text-center">
+                    <div className="mx-auto h-24 w-20 overflow-hidden bg-navy ring-1 ring-saffron/40">
+                      {v.photoUrl ? (
+                        <img src={v.photoUrl} alt="" className="h-full w-full object-cover" />
+                      ) : (
+                        <span className="flex h-full w-full items-center justify-center text-lg font-semibold text-paper">{v.fullName.slice(0, 1)}</span>
+                      )}
+                    </div>
+                    <figcaption className="mt-1 line-clamp-2 break-words text-[11px] leading-tight text-navy">{v.fullName}</figcaption>
+                    <p className="mt-0.5 text-[11px] font-semibold text-forest">{v.volunteerId}</p>
                   </figure>
                 ))}
               </div>
@@ -227,7 +230,7 @@ function Home() {
             <OpenTab id="activities" title={tr("Completed programmes", "પૂર્ણ કાર્યક્રમ")}>
               <div className="divide-y divide-saffron/20">
                 {completed.map((event) => (
-                  <div key={event.id} className="press flex items-start justify-between gap-3 py-3">
+                  <div key={event.id} className="flex items-start justify-between gap-3 py-3">
                     <div>
                       <p className="font-medium text-navy">{event.name}</p>
                       {event.description ? <p className="mt-1 text-sm leading-relaxed text-muted-foreground">{event.description}</p> : null}
@@ -247,12 +250,14 @@ function Home() {
               {birthdayVolunteers.length ? (
                 <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                   {birthdayVolunteers.map((v) => {
-                    const days = daysUntilBirthday(v.dob, birthdayToday);
+                    const days = daysUntilBirthday(v.dob, today);
                     return (
-                      <div key={v.id} className="flex items-center gap-3 border border-saffron/40 bg-[#fff6ea] p-3">
-                        {v.photoUrl ? <img src={v.photoUrl} alt="" className="h-14 w-14 rounded-full object-cover ring-2 ring-[#E4B15A]" /> : <div className="flex h-14 w-14 items-center justify-center rounded-full bg-navy text-lg text-paper">{v.fullName.slice(0, 1)}</div>}
-                        <div>
-                          <p className="font-medium text-navy">{v.fullName}</p>
+                      <div key={`${v.volunteerId}-${v.fullName}`} className="flex min-w-0 items-center gap-3 border border-saffron/40 bg-[#fff6ea] p-3">
+                        <div className="h-14 w-14 shrink-0 overflow-hidden rounded-full bg-navy ring-2 ring-[#E4B15A]">
+                          {v.photoUrl ? <img src={v.photoUrl} alt="" className="h-full w-full object-cover" /> : <div className="flex h-full w-full items-center justify-center text-lg text-paper">{v.fullName.slice(0, 1)}</div>}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="break-words font-medium text-navy">{v.fullName}</p>
                           <p className="text-xs text-saffron">{days === 0 ? tr("Today · cake and wishes", "આજે · કેક અને શુભેચ્છા") : tr(`${days} day${days === 1 ? "" : "s"} to go`, `${days} દિવસ બાકી`)}</p>
                         </div>
                       </div>
@@ -267,14 +272,16 @@ function Home() {
 
           <OpenTab id="best" title={tr("Best volunteer", "શ્રેષ્ઠ સ્વયંસેવક")}>
             {featuredPerson ? (
-              <div className="flex items-center gap-4">
-                {featuredPerson.photoUrl ? (
-                  <img src={featuredPerson.photoUrl} alt="" className="h-24 w-20 object-cover ring-1 ring-saffron/40" />
-                ) : (
-                  <span className="flex h-24 w-20 items-center justify-center bg-navy text-lg font-semibold text-paper">{featuredPerson.fullName.slice(0, 1)}</span>
-                )}
-                <div>
-                  <p className="font-display text-lg text-navy">{featuredPerson.fullName}</p>
+              <div className="flex min-w-0 items-center gap-4">
+                <div className="h-24 w-20 shrink-0 overflow-hidden bg-navy ring-1 ring-saffron/40">
+                  {featuredPerson.photoUrl ? (
+                    <img src={featuredPerson.photoUrl} alt="" className="h-full w-full object-cover" />
+                  ) : (
+                    <span className="flex h-full w-full items-center justify-center text-lg font-semibold text-paper">{featuredPerson.fullName.slice(0, 1)}</span>
+                  )}
+                </div>
+                <div className="min-w-0">
+                  <p className="break-words font-display text-lg text-navy">{featuredPerson.fullName}</p>
                   <p className="text-sm text-muted-foreground">
                     {featuredPerson.volunteerId} · {featuredPerson.unit} · {Math.max(volunteerHours(useNssStore.getState(), featuredPerson.id), liveBest && (liveBest.id === featuredPerson.id || liveBest.volunteerId === featuredPerson.volunteerId) ? liveBest.hours : 0)} {tr("service hours", "સેવા કલાક")}
                   </p>
@@ -338,8 +345,7 @@ function RunBanner({ label, items, empty }: { label: string; items: string[]; em
       <p className="flex shrink-0 items-center bg-navy px-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-[#e6d3a3]">{label}</p>
       <div className="min-w-0 flex-1 overflow-hidden py-2.5">
         <div className="run-banner-track" style={{ animationDuration: `${seconds}s` }}>
-          <span className="gu px-8 text-sm text-navy">{line}</span>
-          <span className="gu px-8 text-sm text-navy" aria-hidden="true">{line}</span>
+          <span className="gu px-8 text-sm text-navy">{line}</span><span className="gu px-8 text-sm text-navy" aria-hidden="true">{line}</span>
         </div>
       </div>
     </div>

@@ -44,7 +44,7 @@ export const Route = createRootRoute({
       <body>
         <script
           dangerouslySetInnerHTML={{
-            __html: "try{if(localStorage.getItem('nsp-dark')==='1')document.documentElement.classList.add('dark')}catch(e){}",
+            __html: "try{if(localStorage.getItem('nsp-dark')==='1')document.documentElement.classList.add('dark')}catch(e){}try{if(sessionStorage.getItem('nsp-welcome-avyansh')==='1'){var n=document.createElement('style');n.textContent='.nsp-splash-overlay{display:none!important}';document.head.appendChild(n)}}catch(e){}",
           }}
         />
         <PreviewHostBridge />
