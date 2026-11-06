@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { DEFAULT_SETTINGS } from "@/lib/nss/constants";
 import { daysUntilBirthday, formatLongDate, isBirthdayOn, kolkataToday } from "@/lib/nss/format";
 import { ensurePublicGallery } from "@/lib/nss/public-gallery";
+import { publishLocalSlides } from "@/lib/nss/gallery-cloud";
 import { activeVolunteers, alumniVolunteers, liveServiceHours, useNssStore, volunteerHours } from "@/lib/nss/store";
 import { useUi } from "@/lib/nss/ui-prefs";
 
@@ -98,11 +99,21 @@ function Home() {
   const tr = (en: string, gu: string) => (lang === "gu" ? gu : en);
   const gallery = useNssStore((s) => s.gallery) ?? [];
   const slides = useMemo(
-    () => gallery.filter((item) => (item?.src || "").startsWith("data:image/") && !SEED_IDS.has(item.id)).slice(0, 12),
+    () =>
+      gallery
+        .filter((item) => {
+          if (!item || SEED_IDS.has(item.id)) return false;
+          const src = item.src || "";
+          if (src.startsWith("data:image/") && src.length > 80 && src.length < 220000) return true;
+          return Boolean(item.mediaKey || item.posterKey);
+        })
+        .sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")))
+        .slice(0, 12),
     [gallery],
   );
   useEffect(() => {
     void ensurePublicGallery();
+    void publishLocalSlides();
   }, []);
   const collegeReady = shownVolunteers > 0;
   const collegeEvents = collegeReady ? events.filter((event) => !SEED_IDS.has(event.id)) : events;

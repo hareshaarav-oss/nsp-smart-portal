@@ -1,42 +1,42 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { MediaThumb } from "@/components/nss/media-thumb";
 import type { GalleryItem } from "@/lib/nss/types";
 
 export function PhotoCarousel({ items, auto = true, seconds = 5 }: { items: GalleryItem[]; auto?: boolean; seconds?: number }) {
-  const photos = items.filter((item) => item.src || item.mediaKey).slice(0, 16);
+  const photos = items.filter((item) => item.src || item.mediaKey || item.posterKey).slice(0, 16);
   const [index, setIndex] = useState(0);
-  const [paused, setPaused] = useState(false);
+  const touchX = useRef(0);
 
   useEffect(() => {
-    if (photos.length < 2 || paused || auto === false) return;
+    if (photos.length < 2 || auto === false) return;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
     const timer = window.setInterval(() => {
       setIndex((current) => (current + 1) % photos.length);
     }, Math.max(2, seconds) * 1000);
     return () => window.clearInterval(timer);
-  }, [photos.length, paused, auto, seconds]);
+  }, [photos.length, auto, seconds]);
 
   useEffect(() => {
     if (index >= photos.length) setIndex(0);
   }, [index, photos.length]);
 
-  if (photos.length === 0) {
-    return (
-      <div className="flex h-56 items-center justify-center rounded-lg bg-navy text-sm text-paper/80 md:h-80">
-        Photographs appear here after they are uploaded from the gallery desk.
-      </div>
-    );
-  }
+  if (photos.length === 0) return null;
 
-  const current = photos[index];
+  const current = photos[index] ?? photos[0];
+  const step = (dir: number) => setIndex((i) => (i + dir + photos.length) % photos.length);
 
   return (
     <div
       className="relative overflow-hidden rounded-lg bg-navy"
-      onMouseEnter={() => setPaused(true)}
-      onMouseLeave={() => setPaused(false)}
-      onTouchStart={() => setPaused(true)}
-      onTouchEnd={() => setPaused(false)}
+      onTouchStart={(event) => {
+        touchX.current = event.changedTouches[0]?.clientX ?? 0;
+      }}
+      onTouchEnd={(event) => {
+        const dx = (event.changedTouches[0]?.clientX ?? 0) - touchX.current;
+        if (dx > 48) step(-1);
+        else if (dx < -48) step(1);
+      }}
     >
       <div className="relative h-56 w-full md:h-[28rem]">
         {photos.map((photo, i) => (
@@ -51,6 +51,7 @@ export function PhotoCarousel({ items, auto = true, seconds = 5 }: { items: Gall
             <MediaThumb
               item={photo}
               controls={photo.kind === "video"}
+              preferPoster={photo.kind === "video" && i !== index}
               className="h-full w-full object-contain"
             />
           </div>
@@ -59,14 +60,14 @@ export function PhotoCarousel({ items, auto = true, seconds = 5 }: { items: Gall
       <div className="absolute inset-x-0 bottom-0 bg-navy/75 px-4 py-2 text-center text-xs text-paper">
         {current?.caption}
         {current?.eventName && current.eventName !== current.caption ? ` · ${current.eventName}` : ""}
-        {current?.kind === "video" ? " · Video" : ""}
+        {photos.length > 1 ? ` · ${index + 1}/${photos.length}` : ""}
       </div>
       {photos.length > 1 ? (
         <>
           <button
             type="button"
             className="absolute left-2 top-1/2 flex size-11 -translate-y-1/2 items-center justify-center rounded-full bg-navy/70 text-paper"
-            onClick={() => setIndex((i) => (i - 1 + photos.length) % photos.length)}
+            onClick={() => step(-1)}
             aria-label="Previous photograph"
           >
             <ChevronLeft className="size-5" />
@@ -74,7 +75,7 @@ export function PhotoCarousel({ items, auto = true, seconds = 5 }: { items: Gall
           <button
             type="button"
             className="absolute right-2 top-1/2 flex size-11 -translate-y-1/2 items-center justify-center rounded-full bg-navy/70 text-paper"
-            onClick={() => setIndex((i) => (i + 1) % photos.length)}
+            onClick={() => step(1)}
             aria-label="Next photograph"
           >
             <ChevronRight className="size-5" />

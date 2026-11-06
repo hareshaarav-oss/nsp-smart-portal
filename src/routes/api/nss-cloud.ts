@@ -1,4 +1,4 @@
-import { loadCollegeCloud, loadStudentRoll, readOneStudent, loadPublicBoard, loadOfficerRoll, collegeQuotaBlocked, saveStudentToCloud, incrementVisitors, readVisitorCount, knownVisitorCount, patchStudent, safePhoto, knownRole, readChatPass, listRecentChatMessages, saveChatMessage, listChatPeople, clearAttendanceCloud, readBrandPhotos, saveBrandPhotos, listPhotoRoster, readPhotoBatch, saveAttendanceMarks, readLive, publishBestVolunteer, publishServiceHours, purgeCloudIds, deleteChatMessages, readChatMedia, readOneChat, patchNotice, upsertNotice, sideDocId, listChatStatuses, readSide, readStudentCerts, saveStudentCerts, markChatRead, chatReads, markThreadCleared, reviseChatMessage, chatBlocked, readHomeSlides, readOwnMarks, type ChatExtra } from "@/lib/nss/firestore";
+import { loadCollegeCloud, loadStudentRoll, readOneStudent, loadPublicBoard, loadOfficerRoll, collegeQuotaBlocked, saveStudentToCloud, incrementVisitors, readVisitorCount, knownVisitorCount, patchStudent, safePhoto, knownRole, readChatPass, listRecentChatMessages, saveChatMessage, listChatPeople, clearAttendanceCloud, readBrandPhotos, saveBrandPhotos, listPhotoRoster, readPhotoBatch, saveAttendanceMarks, readLive, publishBestVolunteer, publishServiceHours, purgeCloudIds, deleteChatMessages, readChatMedia, readOneChat, patchNotice, upsertNotice, sideDocId, listChatStatuses, readSide, readStudentCerts, saveStudentCerts, markChatRead, chatReads, markThreadCleared, reviseChatMessage, chatBlocked, readHomeSlides, readOwnMarks, saveGallerySlide, type ChatExtra } from "@/lib/nss/firestore";
 import { passwordOk, sealText, signChatPass } from "@/lib/nss/seal.server";
 import { createFileRoute } from "@tanstack/react-router";
 
@@ -456,6 +456,10 @@ export const Route = createFileRoute("/api/nss-cloud")({
             hours?: number;
             rows?: { mobile?: string; name?: string; eventName?: string; present?: boolean; date?: string }[];
             ids?: string[];
+            id?: string;
+            image?: string;
+            caption?: string;
+            date?: string;
           };
           if (body.action === "student-photo") {
             const roster = await listPhotoRoster();
@@ -521,6 +525,19 @@ export const Route = createFileRoute("/api/nss-cloud")({
               })),
             );
             return Response.json({ ok: true, saved });
+          }
+          if (body.action === "save-gallery") {
+            const officer = await signedOfficer(body.chatToken);
+            if (!officer) return Response.json({ ok: false, error: "Open the Programme Officer desk first." }, { status: 403 });
+            const image = typeof body.image === "string" ? body.image.trim() : "";
+            await saveGallerySlide({
+              id: text(body.id),
+              image,
+              caption: text(body.caption).slice(0, 180),
+              eventName: text(body.eventName).slice(0, 180),
+              date: text(body.date).slice(0, 10),
+            });
+            return Response.json({ ok: true });
           }
           if (body.action === "save-brand") {
             const user = await readChatPass(text(body.chatToken));

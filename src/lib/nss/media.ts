@@ -63,6 +63,29 @@ function canvasToJpeg(canvas: HTMLCanvasElement, quality: number) {
   });
 }
 
+export async function compressSlideJpeg(blob: Blob) {
+  let bitmap: ImageBitmap | null = null;
+  try {
+    bitmap = await createImageBitmap(blob);
+    let edge = 960;
+    let quality = 0.72;
+    let result = await drawJpeg(bitmap, bitmap.width, bitmap.height, edge, quality);
+    let url = await blobToDataUrl(result.blob);
+    for (let i = 0; i < 8 && url.length >= 170000; i += 1) {
+      quality = Math.max(0.4, quality - 0.08);
+      edge = Math.max(420, Math.round(edge * 0.8));
+      result = await drawJpeg(bitmap, bitmap.width, bitmap.height, edge, quality);
+      url = await blobToDataUrl(result.blob);
+    }
+    if (!url.startsWith("data:image/jpeg") || url.length < 80 || url.length >= 180000) return "";
+    return url;
+  } catch {
+    return "";
+  } finally {
+    bitmap?.close();
+  }
+}
+
 export async function compressImageFile(file: File, maxEdge = HD_EDGE, quality = PHOTO_QUALITY) {
   const bitmap = await createImageBitmap(file);
   const scale = Math.min(1, maxEdge / Math.max(bitmap.width, bitmap.height));

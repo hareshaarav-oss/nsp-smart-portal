@@ -10,7 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { OfficialLetterhead } from "@/components/nss/official-letterhead";
 import { MediaThumb } from "@/components/nss/media-thumb";
 import { formatLongDate } from "@/lib/nss/format";
-import { defaultGujaratiPress, defaultNaacEnglish, openGujaratiPress, openNaacReport } from "@/lib/nss/press";
+import { defaultGujaratiPress, defaultNaacEnglish, openAllGujaratiPress, openGujaratiPress, openNaacReport } from "@/lib/nss/press";
 import { eventPhotoDataUrls } from "@/lib/nss/reports";
 import { getMedia, putMedia } from "@/lib/nss/media";
 import { presentVolunteers, useNssStore } from "@/lib/nss/store";
@@ -95,6 +95,19 @@ function PressPage() {
   return (
     <div className="space-y-6">
       <OfficialLetterhead title="Press report" compact />
+      <p className="gu text-sm text-muted-foreground">
+        દરેક કાર્યક્રમનું લખાણ તેના નામ, તારીખ, સ્થળ, કલાક અને વિગત પરથી જાતે લખાય છે. એક ક્લિકથી બધી રિપોર્ટ ખુલે છે.
+      </p>
+      <Button
+        onClick={() => {
+          void openAllGujaratiPress(useNssStore.getState()).then((opened) => {
+            if (!opened) toast.error("કોઈ કાર્યક્રમ નોંધાયો નથી.");
+          });
+        }}
+      >
+        <FileText />
+        બધા કાર્યક્રમોની પ્રેસ રિપોર્ટ
+      </Button>
 
       <Card className="border-forest/30">
         <CardHeader><CardTitle className="text-base">External Press Report Upload</CardTitle></CardHeader>

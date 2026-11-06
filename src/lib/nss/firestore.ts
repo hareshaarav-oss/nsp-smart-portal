@@ -1110,7 +1110,12 @@ export async function readHomeSlides(): Promise<GalleryItem[]> {
   if (slideCache && Date.now() - slideCache.at < 60_000) return slideCache.rows;
   if (collegeQuotaBlocked()) return slideCache?.rows ?? [];
   try {
-    const docs = await listCollection("gallery", { maxDocs: 12 });
+    const queried = await runQuery({
+      from: [{ collectionId: "gallery" }],
+      orderBy: [{ field: { fieldPath: "date" }, direction: "DESCENDING" }],
+      limit: 16,
+    });
+    const docs = queried ?? (await listGalleryPage());
     const rows = docs
       .map((item) => {
         const eventName = text(item.eventName) || text(item.title) || "NSS activity";
@@ -1128,11 +1133,70 @@ export async function readHomeSlides(): Promise<GalleryItem[]> {
       .filter((item) => item.src)
       .sort((a, b) => b.date.localeCompare(a.date))
       .slice(0, 12);
-    slideCache = { at: Date.now(), rows };
+    slideCache = { at: rows.length ? Date.now() : Date.now() - 50_000, rows };
     return rows;
   } catch {
     return slideCache?.rows ?? [];
   }
+}
+
+async function listGalleryPage() {
+  const params = new URLSearchParams({ pageSize: "16" });
+  for (const field of ["title", "eventName", "createdAt", "date", "kind", "type", "image", "src"]) {
+    params.append("mask.fieldPaths", field);
+  }
+  const res = await fetch(`${FIRESTORE_BASE}/gallery?${params}`);
+  if (!res.ok) return [];
+  const json = (await res.json()) as { documents?: { name?: string; fields?: Record<string, FsValue> }[] };
+  return (json.documents ?? []).map((doc) => decodeDoc(doc));
+}
+
+export async function saveGallerySlide(input: { id: string; image: string; caption: string; eventName: string; date: string }) {
+  const id = text(input.id).replace(/[^A-Za-z0-9_-]/g, "").slice(0, 80);
+  if (!/^[A-Za-z0-9_-]{6,80}$/.test(id)) throw new Error("Could not save the photograph.");
+  const image = text(input.image);
+  if (!image.startsWith("data:image/jpeg") || image.length < 80 || image.length >= 180000) {
+    throw new Error("Could not save the photograph.");
+  }
+  const values = {
+    title: text(input.caption).slice(0, 180) || text(input.eventName).slice(0, 180) || "NSS activity",
+    eventName: text(input.eventName).slice(0, 180) || "NSS activity",
+    date: isoDate(input.date) || new Date().toISOString().slice(0, 10),
+    createdAt: isoDate(input.date) || new Date().toISOString().slice(0, 10),
+    kind: "photo",
+    type: "photo",
+    image,
+    src: image,
+  };
+  slideCache = null;
+  try {
+    const row = await getDocument(`gallery/${id}`);
+    if (!row) await createDocument("gallery", id, values);
+    else await patchGallery(id, values);
+  } catch {
+    throw new Error("Could not save the photograph.");
+  }
+}
+
+async function patchGallery(id: string, values: Record<string, unknown>) {
+  const fields: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(values)) fields[key] = encodeValue(value);
+  const res = await fetch(`${FIRESTORE_BASE}:commit`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      writes: [
+        {
+          update: {
+            name: `projects/${FIRESTORE_PROJECT_ID}/databases/(default)/documents/gallery/${id}`,
+            fields,
+          },
+          updateMask: { fieldPaths: Object.keys(fields) },
+        },
+      ],
+    }),
+  });
+  if (!res.ok) throw new Error("Could not save the photograph.");
 }
 
 let rosterCache: { at: number; rows: { docId: string; volunteerId: string; name: string }[] } | null = null;

@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { MediaThumb } from "@/components/nss/media-thumb";
 import { formatLongDate, todayIso } from "@/lib/nss/format";
 import { assertVideoSize, compressImageFile, folderName, putMedia, videoPoster } from "@/lib/nss/media";
+import { publishLocalSlides } from "@/lib/nss/gallery-cloud";
 import { useNssStore } from "@/lib/nss/store";
 import type { GalleryItem } from "@/lib/nss/types";
 
@@ -35,6 +36,10 @@ function PoGallery() {
     if (sortedEvents[0]) setEventId(sortedEvents[0].id);
     else setEventId("__general__");
   }, [sortedEvents, eventId]);
+
+  useEffect(() => {
+    void publishLocalSlides();
+  }, []);
 
   const selectedEvent = eventId === "__general__" ? undefined : sortedEvents.find((e) => e.id === eventId);
   const eventName = selectedEvent?.name ?? "General";
@@ -98,7 +103,10 @@ function PoGallery() {
       }
       if (added.length) {
         addGalleryItems(added);
-        toast.success(`${added.length} file(s) saved in HD to “${eventName}”. They appear on Home.`);
+        const cloud = await publishLocalSlides();
+        if (cloud === "ok") toast.success(`${added.length} ફોટા સચવાયા. હોમ પેજ પર આપમેળે ફરશે.`);
+        else if (cloud === "auth") toast.success(`${added.length} ફોટા આ ફોન પર સચવાયા. બધાને હોમ પર દેખાય તે માટે એક વાર ફરી લૉગિન કરો.`);
+        else toast.success(`${added.length} ફોટા આ ફોન પર સચવાયા.`);
         setCaption("");
       }
     } catch (error) {
