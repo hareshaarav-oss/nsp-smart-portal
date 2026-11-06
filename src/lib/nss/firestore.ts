@@ -1110,12 +1110,14 @@ export async function readHomeSlides(): Promise<GalleryItem[]> {
   if (slideCache && Date.now() - slideCache.at < 60_000) return slideCache.rows;
   if (collegeQuotaBlocked()) return slideCache?.rows ?? [];
   try {
-    const queried = await runQuery({
-      from: [{ collectionId: "gallery" }],
-      orderBy: [{ field: { fieldPath: "date" }, direction: "DESCENDING" }],
-      limit: 16,
-    });
-    const docs = queried ?? (await listGalleryPage());
+    let docs = await listGalleryPage();
+    if (!docs.length) {
+      const queried = await runQuery({
+        from: [{ collectionId: "gallery" }],
+        limit: 24,
+      });
+      docs = queried ?? [];
+    }
     const rows = docs
       .map((item) => {
         const eventName = text(item.eventName) || text(item.title) || "NSS activity";
@@ -1131,9 +1133,9 @@ export async function readHomeSlides(): Promise<GalleryItem[]> {
         };
       })
       .filter((item) => item.src)
-      .sort((a, b) => b.date.localeCompare(a.date))
+      .sort((a, b) => b.date.localeCompare(a.date) || a.id.localeCompare(b.id))
       .slice(0, 12);
-    slideCache = { at: rows.length ? Date.now() : Date.now() - 50_000, rows };
+    if (rows.length) slideCache = { at: Date.now(), rows };
     return rows;
   } catch {
     return slideCache?.rows ?? [];
