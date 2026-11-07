@@ -39,7 +39,11 @@ export function PhotoCarousel({ items, auto = true, seconds = 5 }: { items: Gall
       }}
     >
       <div className="relative h-56 w-full md:h-[28rem]">
-        {photos.map((photo, i) => (
+        {photos.map((photo, i) => {
+          const ahead = (index + 1) % photos.length;
+          const behind = (index - 1 + photos.length) % photos.length;
+          if (i !== index && i !== ahead && i !== behind) return null;
+          return (
           <div
             key={photo.id}
             className={
@@ -53,9 +57,11 @@ export function PhotoCarousel({ items, auto = true, seconds = 5 }: { items: Gall
               controls={photo.kind === "video"}
               preferPoster={photo.kind === "video" && i !== index}
               className="h-full w-full object-contain"
+              eager={i === index}
             />
           </div>
-        ))}
+          );
+        })}
       </div>
       <div className="absolute inset-x-0 bottom-0 bg-navy/75 px-4 py-2 text-center text-xs text-paper">
         {current?.caption}

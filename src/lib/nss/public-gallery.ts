@@ -42,7 +42,7 @@ export function ensurePublicGallery() {
   if (typeof window === "undefined") return Promise.resolve();
   if (slidesFresh()) return Promise.resolve();
   if (!flight) {
-    flight = fetch(`/api/nss-cloud?gallery=1&t=${Date.now()}`)
+    flight = fetch("/api/nss-cloud?gallery=1")
       .then((res) => res.json())
       .then((data: { ok?: boolean; gallery?: unknown; brand?: { poPhoto?: string; principalPhoto?: string; poQuote?: string; principalQuote?: string } }) => {
         if (!data?.ok) {

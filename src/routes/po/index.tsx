@@ -26,7 +26,11 @@ function PoHome() {
   const volunteers = useMemo(() => state.volunteers.filter((v) => v.status !== "alumni").sort(byFullName), [state.volunteers]);
   const alumni = state.volunteers.filter((v) => v.status === "alumni").length;
   const hours = liveServiceHours(state);
-  const upcoming = [...state.events].filter((e) => e.status === "upcoming" || e.date >= today).filter((e) => e.status !== "cancelled").sort((a,b)=>a.date.localeCompare(b.date)).slice(0,5);
+  const upcoming = [...state.events].filter((e) => {
+    const date = String(e?.date || "");
+    const status = String(e?.status || "");
+    return (status === "upcoming" || (date && date >= today)) && status !== "cancelled";
+  }).sort((a, b) => String(a.date || "").localeCompare(String(b.date || ""))).slice(0, 5);
   const completed = state.events.filter((e) => e.status === "completed").length;
   const presentRows = state.attendance.filter((a) => a.present).length;
   const markedProgrammes = state.events.filter((event) => state.attendance.some((row) => row.eventId === event.id));
@@ -39,7 +43,9 @@ function PoHome() {
   const monthly = useMemo(() => {
     const map = new Map<string, { month: string; events: number; hours: number }>();
     state.events.forEach((e) => {
-      const key = e.date.slice(0,7); const row = map.get(key) || { month: key, events: 0, hours: 0 };
+      const date = String(e?.date || "");
+      if (date.length < 7) return;
+      const key = date.slice(0, 7); const row = map.get(key) || { month: key, events: 0, hours: 0 };
       row.events += 1; row.hours += state.attendance.filter((a)=>a.eventId===e.id && a.present).length * (e.hours || 0); map.set(key,row);
     });
     return [...map.values()].sort((a,b)=>a.month.localeCompare(b.month)).slice(-8);

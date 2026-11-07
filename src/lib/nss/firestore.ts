@@ -547,8 +547,7 @@ export async function loadStudentRoll(): Promise<Volunteer[] | null> {
   return studentInflight;
 }
 
-const BOARD_TTL_MS = 12 * 60 * 60 * 1000;
-const PUBLIC_MEMORY_MS = 45 * 1000;
+const PUBLIC_MEMORY_MS = 120 * 1000;
 let publicCache: { at: number; data: CloudPortal; galleryReady?: boolean } | null = null;
 let officerCache: { at: number; data: CloudPortal } | null = null;
 
@@ -718,8 +717,7 @@ async function readBoard(): Promise<{ data: CloudPortal; galleryCount: number | 
   try {
     const parsed = JSON.parse(payload) as CloudPortal;
     if (!parsed || !Array.isArray(parsed.volunteers) || parsed.volunteers.length < 1) return null;
-    const updatedAt = Date.parse(text(doc?.rollUpdatedAt));
-    const fresh = doc?.rollStale !== true && Number.isFinite(updatedAt) && Date.now() - updatedAt <= BOARD_TTL_MS;
+    const fresh = doc?.rollStale !== true;
     const rawCount = doc?.galleryCount;
     const galleryCount = typeof rawCount === "number" && Number.isFinite(rawCount) ? rawCount : null;
     return { data: parsed, galleryCount, fresh };

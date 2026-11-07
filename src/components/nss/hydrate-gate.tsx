@@ -361,7 +361,11 @@ export function HydrateGate({ children }: { children: ReactNode }) {
         : await fetch("/api/nss-cloud");
       const cloud = (await res.json()) as CloudBody;
       if (cloud.degraded || !res.ok) nextPull = Date.now() + 10 * 60 * 1000;
-      else nextPull = Date.now() + 40 * 1000;
+      else {
+        const role = useSessionStore.getState().session?.role;
+        const officer = role === "po" || role === "admin";
+        nextPull = Date.now() + (officer ? 60 * 1000 : 3 * 60 * 1000);
+      }
       if (!cancelled) {
         applyBody(cloud);
         applyCachedPhotos();

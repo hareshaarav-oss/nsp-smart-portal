@@ -33,11 +33,13 @@ export function MediaThumb({
   className,
   controls = false,
   preferPoster = false,
+  eager = false,
 }: {
   item: Pick<GalleryItem, "src" | "kind" | "mediaKey" | "posterKey" | "caption">;
   className?: string;
   controls?: boolean;
   preferPoster?: boolean;
+  eager?: boolean;
 }) {
   const url = useMediaUrl(item.mediaKey, item.src);
   const poster = useMediaUrl(item.posterKey, "");
@@ -46,7 +48,7 @@ export function MediaThumb({
   }
   if (item.kind === "video") {
     if (preferPoster && poster) {
-      return <img src={poster} alt={item.caption} className={className} />;
+      return <img src={poster} alt={item.caption} className={className} decoding="async" loading={eager ? "eager" : "lazy"} />;
     }
     return (
       <video
@@ -59,5 +61,5 @@ export function MediaThumb({
       />
     );
   }
-  return <img src={url} alt={item.caption} className={className} />;
+  return <img src={url} alt={item.caption} className={className} decoding="async" loading={eager ? "eager" : "lazy"} />;
 }

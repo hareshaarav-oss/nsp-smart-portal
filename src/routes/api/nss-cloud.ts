@@ -365,6 +365,18 @@ export const Route = createFileRoute("/api/nss-cloud")({
       GET: async ({ request }) => {
         const includeGallery = new URL(request.url).searchParams.get("gallery") === "1";
         try {
+          if (includeGallery) {
+            const [slides, brand] = await Promise.all([
+              readHomeSlides().catch(() => []),
+              collegeQuotaBlocked()
+                ? Promise.resolve({ poPhoto: "", principalPhoto: "", poQuote: "", principalQuote: "" })
+                : readBrandPhotos().catch(() => ({ poPhoto: "", principalPhoto: "", poQuote: "", principalQuote: "" })),
+            ]);
+            return Response.json(
+              { ok: true, gallery: slides, brand, build: appBuild(), degraded: false },
+              { headers: slides.length ? cacheHeaders(180) : { "cache-control": "public, max-age=15, s-maxage=15" } },
+            );
+          }
           const data = await loadPublicBoard({ gallery: false });
           if (!data || data.volunteers.length < 1) {
             return Response.json(degradedBody(), {
@@ -372,10 +384,9 @@ export const Route = createFileRoute("/api/nss-cloud")({
             });
           }
           const brand = collegeQuotaBlocked() ? { poPhoto: "", principalPhoto: "", poQuote: "", principalQuote: "" } : await readBrandPhotos();
-          const slides = includeGallery ? await readHomeSlides().catch(() => []) : [];
           return Response.json(
-            { ...publicPayload(data as unknown as Row, false), gallery: includeGallery ? slides : undefined, brand, degraded: false },
-            { headers: { "cache-control": "public, max-age=20, s-maxage=30" } },
+            { ...publicPayload(data as unknown as Row, false), brand, degraded: false },
+            { headers: cacheHeaders(120) },
           );
         } catch (error) {
           if (busyError(error) || collegeQuotaBlocked()) {
