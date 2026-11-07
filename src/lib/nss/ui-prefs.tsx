@@ -6,6 +6,7 @@ const TEXT: Record<string, { en: string; gu: string }> = {
   back: { en: "Back", gu: "પાછળ" },
   home: { en: "Home", gu: "હોમ" },
   gallery: { en: "Gallery", gu: "ગેલેરી" },
+  poll: { en: "Poll", gu: "મતદાન" },
   contact: { en: "Contact", gu: "સંપર્ક" },
   desk: { en: "Desk", gu: "ડેસ્ક" },
   dashboard: { en: "Dashboard", gu: "ડેશબોર્ડ" },

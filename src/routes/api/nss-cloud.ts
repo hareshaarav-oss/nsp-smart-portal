@@ -1,4 +1,5 @@
-import { loadCollegeCloud, loadStudentRoll, readOneStudent, loadPublicBoard, loadOfficerRoll, collegeQuotaBlocked, saveStudentToCloud, incrementVisitors, readVisitorCount, knownVisitorCount, patchStudent, safePhoto, knownRole, readChatPass, listRecentChatMessages, saveChatMessage, listChatPeople, clearAttendanceCloud, readBrandPhotos, saveBrandPhotos, listPhotoRoster, readPhotoBatch, saveAttendanceMarks, readLive, publishBestVolunteer, publishServiceHours, purgeCloudIds, deleteChatMessages, readChatMedia, readOneChat, patchNotice, upsertNotice, sideDocId, listChatStatuses, readSide, readStudentCerts, saveStudentCerts, markChatRead, chatReads, markThreadCleared, reviseChatMessage, chatBlocked, readHomeSlides, readOwnMarks, saveGallerySlide, type ChatExtra } from "@/lib/nss/firestore";
+import { loadCollegeCloud, loadStudentRoll, readOneStudent, loadPublicBoard, loadOfficerRoll, collegeQuotaBlocked, saveStudentToCloud, incrementVisitors, readVisitorCount, knownVisitorCount, patchStudent, safePhoto, knownRole, readChatPass, listRecentChatMessages, saveChatMessage, listChatPeople, clearAttendanceCloud, readBrandPhotos, saveBrandPhotos, listPhotoRoster, readPhotoBatch, saveAttendanceMarks, readLive, publishBestVolunteer, publishServiceHours, purgeCloudIds, deleteChatMessages, readChatMedia, readOneChat, patchNotice, upsertNotice, sideDocId, listChatStatuses, readSide, readStudentCerts, saveStudentCerts, markChatRead, chatReads, markThreadCleared, reviseChatMessage, chatBlocked, readHomeSlides, readOwnMarks, saveGallerySlide, readLivePolls, updateLivePolls, type ChatExtra } from "@/lib/nss/firestore";
+import { recordReply, upsertPoll } from "@/lib/nss/polls";
 import { passwordOk, sealText, signChatPass } from "@/lib/nss/seal.server";
 import { createFileRoute } from "@tanstack/react-router";
 
@@ -363,8 +364,16 @@ export const Route = createFileRoute("/api/nss-cloud")({
   server: {
     handlers: {
       GET: async ({ request }) => {
-        const includeGallery = new URL(request.url).searchParams.get("gallery") === "1";
+        const url = new URL(request.url);
+        const includeGallery = url.searchParams.get("gallery") === "1";
         try {
+          if (url.searchParams.get("polls") === "1") {
+            const polls = await readLivePolls();
+            return Response.json(
+              { ok: true, polls, build: appBuild(), degraded: false },
+              { headers: { "cache-control": "public, max-age=4, s-maxage=5" } },
+            );
+          }
           if (includeGallery) {
             const [slides, brand] = await Promise.all([
               readHomeSlides().catch(() => []),
@@ -471,6 +480,10 @@ export const Route = createFileRoute("/api/nss-cloud")({
             image?: string;
             caption?: string;
             date?: string;
+            poll?: unknown;
+            pollId?: string;
+            replyId?: string;
+            answers?: Record<string, unknown>;
           };
           if (body.action === "student-photo") {
             const roster = await listPhotoRoster();
@@ -549,6 +562,30 @@ export const Route = createFileRoute("/api/nss-cloud")({
               date: text(body.date).slice(0, 10),
             });
             return Response.json({ ok: true });
+          }
+          if (body.action === "save-poll" || body.action === "delete-poll") {
+            const officer = await signedOfficer(body.chatToken);
+            if (!officer) return Response.json({ ok: false, error: "Open the Programme Officer desk first." }, { status: 403 });
+            const saved = await updateLivePolls((current) => {
+              if (body.action === "delete-poll") {
+                const id = text(body.pollId);
+                return { polls: current.filter((poll) => poll.id !== id), error: "" };
+              }
+              return upsertPoll(current, body.poll);
+            });
+            if (saved.error) return Response.json({ ok: false, error: saved.error }, { status: 400 });
+            return Response.json({ ok: true, polls: saved.polls });
+          }
+          if (body.action === "answer-poll") {
+            const saved = await updateLivePolls((current) =>
+              recordReply(current, text(body.pollId), {
+                id: text(body.replyId),
+                name: text(body.name),
+                answers: body.answers,
+              }),
+            );
+            if (saved.error) return Response.json({ ok: false, error: saved.error }, { status: 400 });
+            return Response.json({ ok: true, polls: saved.polls });
           }
           if (body.action === "save-brand") {
             const user = await readChatPass(text(body.chatToken));

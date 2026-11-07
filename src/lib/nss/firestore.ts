@@ -1,3 +1,4 @@
+import { parsePollBoard, type LivePoll } from "./polls";
 import { alphaRank, nssId, rankForNewName, unitForNumber } from "./roll-sequence";
 import { cleanPersonName, joinEnrollment, latinDigits, padId, parseDob, titleFirstName } from "./format";
 import { nssHourRule } from "./hours";
@@ -1176,6 +1177,67 @@ export async function saveGallerySlide(input: { id: string; image: string; capti
   } catch {
     throw new Error("Could not save the photograph.");
   }
+}
+
+let pollCache: { at: number; polls: LivePoll[] } | null = null;
+let pollWrite: Promise<unknown> = Promise.resolve();
+
+export async function readLivePolls(): Promise<LivePoll[]> {
+  if (pollCache && Date.now() - pollCache.at < 5_000) return pollCache.polls;
+  return readLivePollsFresh();
+}
+
+async function readLivePollsFresh(): Promise<LivePoll[]> {
+  if (collegeQuotaBlocked()) return pollCache?.polls ?? [];
+  try {
+    const doc = await getDocument("portalSettings/livePolls");
+    const polls = parsePollBoard(doc?.board);
+    pollCache = { at: Date.now(), polls };
+    return polls;
+  } catch {
+    return pollCache?.polls ?? [];
+  }
+}
+
+async function persistLivePolls(polls: LivePoll[]) {
+  const board = JSON.stringify(polls);
+  if (board.length > 900_000) throw new Error("The poll is full. Close an old poll first.");
+  const fields = {
+    board: { stringValue: board },
+    updatedAt: { stringValue: new Date().toISOString() },
+  };
+  const patch = await fetch(`${FIRESTORE_BASE}/portalSettings/livePolls?updateMask.fieldPaths=board&updateMask.fieldPaths=updatedAt`, {
+    method: "PATCH",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ fields }),
+  });
+  if (patch.status === 429 || patch.status === 503) {
+    noteQuota();
+    throw new Error("The college register is busy. Try again in a little while.");
+  }
+  if (!patch.ok) {
+    const created = await fetch(`${FIRESTORE_BASE}/portalSettings?documentId=livePolls`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ fields }),
+    });
+    if (!created.ok && created.status !== 409) throw new Error("Could not save the poll.");
+  }
+  pollCache = { at: Date.now(), polls };
+}
+
+export async function updateLivePolls(change: (polls: LivePoll[]) => { polls: LivePoll[]; error: string }) {
+  const run = pollWrite.then(async () => {
+    const current = await readLivePollsFresh();
+    const next = change(current);
+    if (!next.error) await persistLivePolls(next.polls);
+    return next;
+  });
+  pollWrite = run.then(
+    () => undefined,
+    () => undefined,
+  );
+  return run;
 }
 
 async function patchGallery(id: string, values: Record<string, unknown>) {

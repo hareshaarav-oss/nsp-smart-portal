@@ -14,6 +14,7 @@ import {
   GraduationCap,
   Images,
   LayoutDashboard,
+  BarChart3,
   MessageCircle,
   Newspaper,
   Settings,
@@ -47,6 +48,7 @@ const GROUPS = [
     items: [
       { to: "/po/events", label: "Events", icon: CalendarDays },
       { to: "/po/notices", label: "Notices", icon: Bell },
+      { to: "/po/polls", label: "Poll", icon: BarChart3 },
       { to: "/po/gallery", label: "Gallery", icon: Images },
       { to: "/po/press", label: "Press", icon: Newspaper },
     ],
@@ -90,6 +92,7 @@ export function PoNav({ current }: { current: string }) {
     Press: "press",
     Certificates: "certificates",
     Notices: "notices",
+    Poll: "poll",
     Reports: "reports",
     Birthdays: "birthdays",
     Gallery: "gallery",

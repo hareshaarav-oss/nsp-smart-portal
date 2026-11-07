@@ -15,6 +15,7 @@ import { Route as AdminDashboardRouteImport } from './routes/admin-dashboard'
 import { Route as ChatRouteImport } from './routes/chat'
 import { Route as ContactRouteImport } from './routes/contact'
 import { Route as GalleryRouteImport } from './routes/gallery'
+import { Route as PollsRouteImport } from './routes/polls'
 import { Route as InstallRouteImport } from './routes/install'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as PoRouteImport } from './routes/po'
@@ -37,6 +38,7 @@ import { Route as PoGalleryRouteImport } from './routes/po/gallery'
 import { Route as PoImpactRouteImport } from './routes/po/impact'
 import { Route as PoLogsRouteImport } from './routes/po/logs'
 import { Route as PoNoticesRouteImport } from './routes/po/notices'
+import { Route as PoPollsRouteImport } from './routes/po/polls'
 import { Route as PoPressRouteImport } from './routes/po/press'
 import { Route as PoReportsRouteImport } from './routes/po/reports'
 import { Route as PoSettingsRouteImport } from './routes/po/settings'
@@ -70,6 +72,11 @@ const ContactRoute = ContactRouteImport.update({
 const GalleryRoute = GalleryRouteImport.update({
   id: '/gallery',
   path: '/gallery',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PollsRoute = PollsRouteImport.update({
+  id: '/polls',
+  path: '/polls',
   getParentRoute: () => rootRouteImport,
 } as any)
 const InstallRoute = InstallRouteImport.update({
@@ -182,6 +189,11 @@ const PoNoticesRoute = PoNoticesRouteImport.update({
   path: '/notices',
   getParentRoute: () => PoRoute,
 } as any)
+const PoPollsRoute = PoPollsRouteImport.update({
+  id: '/polls',
+  path: '/polls',
+  getParentRoute: () => PoRoute,
+} as any)
 const PoPressRoute = PoPressRouteImport.update({
   id: '/press',
   path: '/press',
@@ -210,6 +222,7 @@ export interface FileRoutesByFullPath {
   '/chat': typeof ChatRoute
   '/contact': typeof ContactRoute
   '/gallery': typeof GalleryRoute
+  '/polls': typeof PollsRoute
   '/install': typeof InstallRoute
   '/login': typeof LoginRoute
   '/po': typeof PoRouteWithChildren
@@ -231,6 +244,7 @@ export interface FileRoutesByFullPath {
   '/po/impact': typeof PoImpactRoute
   '/po/logs': typeof PoLogsRoute
   '/po/notices': typeof PoNoticesRoute
+  '/po/polls': typeof PoPollsRoute
   '/po/press': typeof PoPressRoute
   '/po/reports': typeof PoReportsRoute
   '/po/settings': typeof PoSettingsRoute
@@ -244,6 +258,7 @@ export interface FileRoutesByTo {
   '/chat': typeof ChatRoute
   '/contact': typeof ContactRoute
   '/gallery': typeof GalleryRoute
+  '/polls': typeof PollsRoute
   '/install': typeof InstallRoute
   '/login': typeof LoginRoute
   '/register': typeof RegisterRoute
@@ -264,6 +279,7 @@ export interface FileRoutesByTo {
   '/po/impact': typeof PoImpactRoute
   '/po/logs': typeof PoLogsRoute
   '/po/notices': typeof PoNoticesRoute
+  '/po/polls': typeof PoPollsRoute
   '/po/press': typeof PoPressRoute
   '/po/reports': typeof PoReportsRoute
   '/po/settings': typeof PoSettingsRoute
@@ -278,6 +294,7 @@ export interface FileRoutesById {
   '/chat': typeof ChatRoute
   '/contact': typeof ContactRoute
   '/gallery': typeof GalleryRoute
+  '/polls': typeof PollsRoute
   '/install': typeof InstallRoute
   '/login': typeof LoginRoute
   '/po': typeof PoRouteWithChildren
@@ -299,6 +316,7 @@ export interface FileRoutesById {
   '/po/impact': typeof PoImpactRoute
   '/po/logs': typeof PoLogsRoute
   '/po/notices': typeof PoNoticesRoute
+  '/po/polls': typeof PoPollsRoute
   '/po/press': typeof PoPressRoute
   '/po/reports': typeof PoReportsRoute
   '/po/settings': typeof PoSettingsRoute
@@ -314,6 +332,7 @@ export interface FileRouteTypes {
     | '/chat'
     | '/contact'
     | '/gallery'
+    | '/polls'
     | '/install'
     | '/login'
     | '/po'
@@ -335,6 +354,7 @@ export interface FileRouteTypes {
     | '/po/impact'
     | '/po/logs'
     | '/po/notices'
+    | '/po/polls'
     | '/po/press'
     | '/po/reports'
     | '/po/settings'
@@ -348,6 +368,7 @@ export interface FileRouteTypes {
     | '/chat'
     | '/contact'
     | '/gallery'
+    | '/polls'
     | '/install'
     | '/login'
     | '/register'
@@ -368,6 +389,7 @@ export interface FileRouteTypes {
     | '/po/impact'
     | '/po/logs'
     | '/po/notices'
+    | '/po/polls'
     | '/po/press'
     | '/po/reports'
     | '/po/settings'
@@ -381,6 +403,7 @@ export interface FileRouteTypes {
     | '/chat'
     | '/contact'
     | '/gallery'
+    | '/polls'
     | '/install'
     | '/login'
     | '/po'
@@ -402,6 +425,7 @@ export interface FileRouteTypes {
     | '/po/impact'
     | '/po/logs'
     | '/po/notices'
+    | '/po/polls'
     | '/po/press'
     | '/po/reports'
     | '/po/settings'
@@ -416,6 +440,7 @@ export interface RootRouteChildren {
   ChatRoute: typeof ChatRoute
   ContactRoute: typeof ContactRoute
   GalleryRoute: typeof GalleryRoute
+  PollsRoute: typeof PollsRoute
   InstallRoute: typeof InstallRoute
   LoginRoute: typeof LoginRoute
   PoRoute: typeof PoRouteWithChildren
@@ -469,6 +494,13 @@ declare module '@tanstack/react-router' {
       path: '/gallery'
       fullPath: '/gallery'
       preLoaderRoute: typeof GalleryRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/polls': {
+      id: '/polls'
+      path: '/polls'
+      fullPath: '/polls'
+      preLoaderRoute: typeof PollsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/install': {
@@ -625,6 +657,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PoNoticesRouteImport
       parentRoute: typeof PoRoute
     }
+    '/po/polls': {
+      id: '/po/polls'
+      path: '/polls'
+      fullPath: '/po/polls'
+      preLoaderRoute: typeof PoPollsRouteImport
+      parentRoute: typeof PoRoute
+    }
     '/po/press': {
       id: '/po/press'
       path: '/press'
@@ -678,6 +717,7 @@ interface PoRouteChildren {
   PoImpactRoute: typeof PoImpactRoute
   PoLogsRoute: typeof PoLogsRoute
   PoNoticesRoute: typeof PoNoticesRoute
+  PoPollsRoute: typeof PoPollsRoute
   PoPressRoute: typeof PoPressRoute
   PoReportsRoute: typeof PoReportsRoute
   PoSettingsRoute: typeof PoSettingsRoute
@@ -697,6 +737,7 @@ const PoRouteChildren: PoRouteChildren = {
   PoImpactRoute: PoImpactRoute,
   PoLogsRoute: PoLogsRoute,
   PoNoticesRoute: PoNoticesRoute,
+  PoPollsRoute: PoPollsRoute,
   PoPressRoute: PoPressRoute,
   PoReportsRoute: PoReportsRoute,
   PoSettingsRoute: PoSettingsRoute,
@@ -713,6 +754,7 @@ const rootRouteChildren: RootRouteChildren = {
   ChatRoute: ChatRoute,
   ContactRoute: ContactRoute,
   GalleryRoute: GalleryRoute,
+  PollsRoute: PollsRoute,
   InstallRoute: InstallRoute,
   LoginRoute: LoginRoute,
   PoRoute: PoRouteWithChildren,
