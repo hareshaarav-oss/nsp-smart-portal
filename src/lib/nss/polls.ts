@@ -190,3 +190,20 @@ export function pollShareText(poll: LivePoll, gu: boolean) {
   lines.push(gu ? "લિંક ખોલો, જવાબ આપો અને લાઇવ પરિણામ જુઓ." : "Open the link to answer and see the live result.");
   return lines.join("\n");
 }
+
+export async function sharePoll(poll: LivePoll, gu: boolean) {
+  const text = pollShareText(poll, gu);
+  const url = pollLink(poll.id);
+  if (typeof navigator.share === "function") {
+    try {
+      await navigator.share({ title: poll.title, text, url });
+      return "shared" as const;
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") return "cancelled" as const;
+    }
+  }
+  const href = `https://wa.me/?text=${encodeURIComponent(text)}`;
+  const opened = window.open(href, "_blank", "noopener,noreferrer");
+  if (!opened) window.location.assign(href);
+  return "opened" as const;
+}

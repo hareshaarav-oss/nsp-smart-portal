@@ -8,10 +8,11 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { pollShareText, type LivePoll, type PollKind, type PollQuestion } from "@/lib/nss/polls";
+import { pollShareText, sharePoll, type LivePoll, type PollKind, type PollQuestion } from "@/lib/nss/polls";
 import { useSessionStore } from "@/lib/nss/session";
+import { useNssStore } from "@/lib/nss/store";
 import { useUi } from "@/lib/nss/ui-prefs";
-import { openWhatsApp } from "@/lib/nss/whatsapp";
+import { copyAndOpenGroup, groupLinks } from "@/lib/nss/whatsapp";
 
 export const Route = createFileRoute("/po/polls")({ component: PoPolls });
 
@@ -37,12 +38,14 @@ function PoPolls() {
   const gu = lang === "gu";
   const tr = (en: string, guText: string) => (gu ? guText : en);
   const token = useSessionStore((s) => s.session?.chatToken || "");
+  const settings = useNssStore((s) => s.settings);
   const [polls, setPolls] = useState<LivePoll[]>([]);
   const [title, setTitle] = useState("");
   const [questions, setQuestions] = useState<DraftQuestion[]>([blankQuestion()]);
   const [editing, setEditing] = useState("");
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState("");
+  const [ready, setReady] = useState<LivePoll | null>(null);
 
   useEffect(() => {
     let stop = false;
@@ -110,9 +113,11 @@ function PoPolls() {
         toast.error(message);
         return;
       }
+      const savedTitle = title.trim();
       setPolls(data.polls ?? []);
       resetForm();
-      setNote(tr("Saved. The poll is live.", "સાચવાઈ ગયું. મતદાન લાઇવ છે."));
+      setReady((data.polls ?? []).find((item) => item.title === savedTitle) ?? data.polls?.[0] ?? null);
+      setNote(tr("Saved. Send it on WhatsApp below.", "સાચવાઈ ગયું. નીચેથી વોટ્સએપ પર મોકલો."));
       toast.success(tr("Poll is live.", "મતદાન લાઇવ થઈ ગયું."));
     } finally {
       setBusy(false);
@@ -137,6 +142,43 @@ function PoPolls() {
       return;
     }
     setPolls(data.polls ?? []);
+  }
+
+  const groups = groupLinks(settings);
+  const groupName = (id: string) =>
+    id === "girls" ? tr("Girls group", "છોકરીઓનું ગ્રુપ") : id === "boys" ? tr("Boys group", "છોકરાઓનું ગ્રુપ") : tr("Leaders group", "લીડરનું ગ્રુપ");
+
+  function sendWhatsApp(poll: LivePoll) {
+    void sharePoll(poll, gu);
+  }
+
+  function sendGroup(poll: LivePoll, url: string) {
+    void copyAndOpenGroup(url, pollShareText(poll, gu));
+    toast.success(tr("Message copied. Paste it in the group and send.", "સંદેશ નકલ થયો. ગ્રુપમાં પેસ્ટ કરીને મોકલો."));
+  }
+
+  function ShareRow({ poll }: { poll: LivePoll }) {
+    return (
+      <div className="space-y-2 rounded-md border border-[#128C7E]/40 bg-[#128C7E]/5 p-3">
+        <Button type="button" className="bg-[#128C7E] text-white hover:bg-[#0f766e]" onClick={() => sendWhatsApp(poll)}>
+          <MessageCircle className="size-4" />
+          {tr("Share on WhatsApp", "વોટ્સએપ પર મોકલો")}
+        </Button>
+        <div className="flex flex-wrap gap-2">
+          {groups.map((group) => (
+            <Button key={group.id} type="button" size="sm" variant="outline" onClick={() => sendGroup(poll, group.url)}>
+              {groupName(group.id)}
+            </Button>
+          ))}
+        </div>
+        <p className="text-xs text-muted-foreground">
+          {tr(
+            "WhatsApp opens with the live link and the current result. In a group, paste the copied message and press Send.",
+            "વોટ્સએપ લાઇવ લિંક અને અત્યારના પરિણામ સાથે ખુલે. ગ્રુપમાં નકલ થયેલો સંદેશ પેસ્ટ કરીને Send દબાવો.",
+          )}
+        </p>
+      </div>
+    );
   }
 
   return (
@@ -220,6 +262,7 @@ function PoPolls() {
             ) : null}
           </div>
           {note ? <p className="text-sm text-navy">{note}</p> : null}
+          {ready ? <ShareRow poll={ready} /> : null}
         </CardContent>
       </Card>
 
@@ -232,10 +275,6 @@ function PoPolls() {
                 <p className="text-xs text-muted-foreground">{poll.open ? tr("Open", "ખુલ્લું") : tr("Closed", "બંધ")} · {poll.replies.length}</p>
               </div>
               <div className="flex flex-wrap gap-2">
-                <Button size="sm" onClick={() => openWhatsApp("", pollShareText(poll, gu))}>
-                  <MessageCircle className="size-4" />
-                  WhatsApp
-                </Button>
                 <Button size="sm" variant="outline" onClick={() => edit(poll)}>
                   {tr("Edit", "ફેરફાર")}
                 </Button>
@@ -247,6 +286,7 @@ function PoPolls() {
                 </Button>
               </div>
             </div>
+            <ShareRow poll={poll} />
             <PollBoard poll={poll} gu={gu} />
           </CardContent>
         </Card>

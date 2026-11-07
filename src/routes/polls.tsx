@@ -1,5 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
+import { MessageCircle } from "lucide-react";
 import { AppShell } from "@/components/nss/shell";
 import { OfficialLetterhead } from "@/components/nss/official-letterhead";
 import { PollBoard } from "@/components/nss/poll-board";
@@ -7,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import type { LivePoll } from "@/lib/nss/polls";
+import { sharePoll, type LivePoll } from "@/lib/nss/polls";
 import { useSessionStore } from "@/lib/nss/session";
 import { useUi } from "@/lib/nss/ui-prefs";
 
@@ -163,8 +164,12 @@ function PollsPage() {
                 <p className="text-sm text-muted-foreground">{tr("This poll is closed. The result stays below.", "આ મતદાન બંધ છે. પરિણામ નીચે રહેશે.")}</p>
               )}
               <PollBoard poll={poll} gu={gu} />
+              <Button type="button" className="bg-[#128C7E] text-white hover:bg-[#0f766e]" onClick={() => void sharePoll(poll, gu)}>
+                <MessageCircle className="size-4" />
+                {tr("Share on WhatsApp", "વોટ્સએપ પર મોકલો")}
+              </Button>
               <p className="text-xs text-muted-foreground">
-                {tr("This page refreshes on its own. Open the same link in WhatsApp to watch it live.", "આ પાનું પોતે તાજું થાય છે. વોટ્સએપમાં આ જ લિંક ખોલો એટલે લાઇવ દેખાશે.")}
+                {tr("WhatsApp gets the live link and the result so far. Anyone who opens it can answer and watch it change.", "વોટ્સએપમાં લાઇવ લિંક અને અત્યારનું પરિણામ જાય છે. લિંક ખોલનાર જવાબ આપી શકે અને બદલાતું જોઈ શકે.")}
               </p>
             </CardContent>
           </Card>
