@@ -1190,8 +1190,8 @@ export async function readLivePolls(): Promise<LivePoll[]> {
 async function readLivePollsFresh(): Promise<LivePoll[]> {
   if (collegeQuotaBlocked()) return pollCache?.polls ?? [];
   try {
-    const doc = await getDocument("portalSettings/livePolls");
-    const polls = parsePollBoard(doc?.board);
+    const doc = await getDocument("portalSettings/live");
+    const polls = parsePollBoard(doc?.pollBoard);
     pollCache = { at: Date.now(), polls };
     return polls;
   } catch {
@@ -1202,27 +1202,16 @@ async function readLivePollsFresh(): Promise<LivePoll[]> {
 async function persistLivePolls(polls: LivePoll[]) {
   const board = JSON.stringify(polls);
   if (board.length > 900_000) throw new Error("The poll is full. Close an old poll first.");
-  const fields = {
-    board: { stringValue: board },
-    updatedAt: { stringValue: new Date().toISOString() },
-  };
-  const patch = await fetch(`${FIRESTORE_BASE}/portalSettings/livePolls?updateMask.fieldPaths=board&updateMask.fieldPaths=updatedAt`, {
+  const patch = await fetch(`${FIRESTORE_BASE}/portalSettings/live?updateMask.fieldPaths=pollBoard`, {
     method: "PATCH",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ fields }),
+    body: JSON.stringify({ fields: { pollBoard: { stringValue: board } } }),
   });
   if (patch.status === 429 || patch.status === 503) {
     noteQuota();
     throw new Error("The college register is busy. Try again in a little while.");
   }
-  if (!patch.ok) {
-    const created = await fetch(`${FIRESTORE_BASE}/portalSettings?documentId=livePolls`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ fields }),
-    });
-    if (!created.ok && created.status !== 409) throw new Error("Could not save the poll.");
-  }
+  if (!patch.ok) throw new Error("Could not save the poll.");
   pollCache = { at: Date.now(), polls };
 }
 

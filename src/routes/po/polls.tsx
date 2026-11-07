@@ -42,6 +42,7 @@ function PoPolls() {
   const [questions, setQuestions] = useState<DraftQuestion[]>([blankQuestion()]);
   const [editing, setEditing] = useState("");
   const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState("");
 
   useEffect(() => {
     let stop = false;
@@ -77,10 +78,11 @@ function PoPolls() {
 
   async function save() {
     if (!token) {
-      toast.error(tr("Sign in again from the officer desk.", "ડેસ્કમાંથી ફરી પ્રવેશ કરો."));
+      setNote(tr("Sign out and sign in again on the officer desk, then save.", "ડેસ્કમાંથી બહાર નીકળી ફરી પ્રવેશ કરો, પછી સાચવો."));
       return;
     }
     setBusy(true);
+    setNote("");
     try {
       const res = await fetch("/api/nss-cloud", {
         method: "POST",
@@ -101,11 +103,16 @@ function PoPolls() {
       });
       const data = (await res.json()) as { ok?: boolean; error?: string; polls?: LivePoll[] };
       if (!res.ok || !data.ok) {
-        toast.error(data.error || tr("Could not save the poll.", "મતદાન સાચવાયું નહીં."));
+        const message = res.status === 403
+          ? tr("Sign out and sign in again on the officer desk, then save.", "ડેસ્કમાંથી બહાર નીકળી ફરી પ્રવેશ કરો, પછી સાચવો.")
+          : data.error || tr("Could not save the poll.", "મતદાન સાચવાયું નહીં.");
+        setNote(message);
+        toast.error(message);
         return;
       }
       setPolls(data.polls ?? []);
       resetForm();
+      setNote(tr("Saved. The poll is live.", "સાચવાઈ ગયું. મતદાન લાઇવ છે."));
       toast.success(tr("Poll is live.", "મતદાન લાઇવ થઈ ગયું."));
     } finally {
       setBusy(false);
@@ -212,6 +219,7 @@ function PoPolls() {
               </Button>
             ) : null}
           </div>
+          {note ? <p className="text-sm text-navy">{note}</p> : null}
         </CardContent>
       </Card>
 
