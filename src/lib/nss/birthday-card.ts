@@ -16,9 +16,19 @@ function initials(name: string) {
   return (parts.slice(-2).map((part) => part[0]).join("") || "NSS").toUpperCase();
 }
 
-function fitLine(ctx: CanvasRenderingContext2D, text: string, max: number) {
-  if (ctx.measureText(text).width <= max) return [text];
-  const words = text.split(" ");
+function roundPath(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
+  const radius = Math.min(r, w / 2, h / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + radius, y);
+  ctx.arcTo(x + w, y, x + w, y + h, radius);
+  ctx.arcTo(x + w, y + h, x, y + h, radius);
+  ctx.arcTo(x, y + h, x, y, radius);
+  ctx.arcTo(x, y, x + w, y, radius);
+  ctx.closePath();
+}
+
+function wrap(ctx: CanvasRenderingContext2D, text: string, max: number, limit = 5) {
+  const words = text.split(/\s+/).filter(Boolean);
   const lines: string[] = [];
   let line = "";
   for (const word of words) {
@@ -31,252 +41,444 @@ function fitLine(ctx: CanvasRenderingContext2D, text: string, max: number) {
     }
   }
   if (line) lines.push(line);
-  return lines.slice(0, 2);
+  return lines.slice(0, limit);
 }
 
-function roundPath(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
-  const radius = Math.min(r, w / 2, h / 2);
-  ctx.beginPath();
-  ctx.moveTo(x + radius, y);
-  ctx.arcTo(x + w, y, x + w, y + h, radius);
-  ctx.arcTo(x + w, y + h, x, y + h, radius);
-  ctx.arcTo(x, y + h, x, y, radius);
-  ctx.arcTo(x, y, x + w, y, radius);
-  ctx.closePath();
+function givenName(fullName: string) {
+  const part = fullName
+    .trim()
+    .split(/\s+/)
+    .find((token) => token.length > 1 && !token.endsWith(".")) || fullName.trim() || "Friend";
+  const lower = part.toLocaleLowerCase("en-IN");
+  return lower.charAt(0).toLocaleUpperCase("en-IN") + lower.slice(1);
 }
 
-function balloon(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, color: string) {
+function posterWords(role: string, name: string) {
+  const leader = role !== "Volunteer";
+  return {
+    leader,
+    badge: leader ? "NSS LEADER" : "NSS VOLUNTEER",
+    dream: leader ? ["Dream Big...", "Lead Strong...", "Serve Society..."] : ["Dream Big...", "Serve with Heart...", "Not Me, But You..."],
+    yellow: leader
+      ? "Your dedication, leadership, positive attitude and spirit of social service make you truly special."
+      : "Your kindness, discipline and spirit of social service make you truly special.",
+    body: leader
+      ? "As an NSS Leader, may you continue to inspire others, lead with compassion and create meaningful change in society."
+      : "As an NSS volunteer, may you keep learning, helping others and standing beside people who need a hand.",
+    blue: "Keep dreaming big, keep serving humanity and keep spreading smiles, wherever you go.",
+    pink: "May you achieve greater heights and make your family, institution and NSS proud!",
+    foot: leader
+      ? `Happy Birthday, ${name}!  Keep Shining, Keep Leading, Keep Inspiring!`
+      : `Happy Birthday, ${name}!  Keep Shining, Keep Serving, Keep Inspiring!`,
+  };
+}
+
+function heart(ctx: CanvasRenderingContext2D, x: number, y: number, s: number, color: string) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.scale(s, s);
   ctx.beginPath();
-  ctx.ellipse(x, y, r * 0.72, r, 0, 0, Math.PI * 2);
+  ctx.moveTo(0, 8);
+  ctx.bezierCurveTo(-16, -4, -8, -18, 0, -8);
+  ctx.bezierCurveTo(8, -18, 16, -4, 0, 8);
   ctx.fillStyle = color;
   ctx.fill();
+  ctx.restore();
+}
+
+function nssSeal(ctx: CanvasRenderingContext2D, x: number, y: number, r: number) {
   ctx.beginPath();
-  ctx.ellipse(x - r * 0.22, y - r * 0.32, r * 0.16, r * 0.26, -0.5, 0, Math.PI * 2);
-  ctx.fillStyle = "rgba(255,255,255,0.42)";
+  ctx.arc(x, y, r, 0, Math.PI * 2);
+  ctx.fillStyle = "#0C3C86";
   ctx.fill();
-  ctx.beginPath();
-  ctx.moveTo(x - 7, y + r - 2);
-  ctx.lineTo(x + 7, y + r - 2);
-  ctx.lineTo(x, y + r + 14);
-  ctx.closePath();
-  ctx.fillStyle = color;
-  ctx.fill();
-  ctx.beginPath();
-  ctx.strokeStyle = "rgba(19,41,75,0.28)";
-  ctx.lineWidth = 2;
-  ctx.moveTo(x, y + r + 14);
-  ctx.bezierCurveTo(x + 28, y + r + 70, x - 22, y + r + 120, x + 6, y + r + 180);
+  ctx.lineWidth = r * 0.08;
+  ctx.strokeStyle = "#F4C430";
   ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(x, y, r * 0.78, 0, Math.PI * 2);
+  ctx.fillStyle = "#FFFFFF";
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(x, y, r * 0.58, 0, Math.PI * 2);
+  ctx.fillStyle = "#E10600";
+  ctx.fill();
+  ctx.strokeStyle = "#FFFFFF";
+  ctx.lineWidth = Math.max(3, r * 0.07);
+  for (let i = 0; i < 8; i += 1) {
+    const angle = (Math.PI / 4) * i;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(x + Math.cos(angle) * r * 0.5, y + Math.sin(angle) * r * 0.5);
+    ctx.stroke();
+  }
+  ctx.beginPath();
+  ctx.arc(x, y, r * 0.14, 0, Math.PI * 2);
+  ctx.fillStyle = "#FFFFFF";
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(x, y, r * 0.14, 0, Math.PI * 2);
+  ctx.fillStyle = "#0C3C86";
+  ctx.fill();
 }
 
-function star(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, color: string) {
+function rose(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, color: string) {
+  ctx.save();
+  ctx.translate(x, y);
+  for (let i = 0; i < 7; i += 1) {
+    const angle = (Math.PI * 2 * i) / 7;
+    ctx.beginPath();
+    ctx.ellipse(Math.cos(angle) * r * 0.38, Math.sin(angle) * r * 0.32, r * 0.46, r * 0.3, angle, 0, Math.PI * 2);
+    ctx.fillStyle = color;
+    ctx.fill();
+  }
   ctx.beginPath();
-  for (let i = 0; i < 4; i += 1) {
-    const point = (Math.PI / 2) * i - Math.PI / 2;
-    const inner = point + Math.PI / 4;
-    ctx.lineTo(x + Math.cos(point) * r, y + Math.sin(point) * r);
-    ctx.lineTo(x + Math.cos(inner) * r * 0.36, y + Math.sin(inner) * r * 0.36);
+  ctx.arc(0, 0, r * 0.28, 0, Math.PI * 2);
+  ctx.fillStyle = "rgba(255,255,255,0.35)";
+  ctx.fill();
+  ctx.restore();
+}
+
+function leaf(ctx: CanvasRenderingContext2D, x: number, y: number, rot: number) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(rot);
+  ctx.beginPath();
+  ctx.ellipse(0, 0, 28, 10, 0, 0, Math.PI * 2);
+  ctx.fillStyle = "#2E7D32";
+  ctx.fill();
+  ctx.restore();
+}
+
+function cake(ctx: CanvasRenderingContext2D, cx: number, base: number, flicker: number) {
+  ctx.beginPath();
+  ctx.ellipse(cx, base + 18, 210, 22, 0, 0, Math.PI * 2);
+  ctx.fillStyle = "#F3E6D4";
+  ctx.fill();
+  ctx.beginPath();
+  ctx.ellipse(cx, base + 18, 210, 22, 0, 0, Math.PI * 2);
+  ctx.strokeStyle = "#E7D3B0";
+  ctx.lineWidth = 3;
+  ctx.stroke();
+
+  roundPath(ctx, cx - 168, base - 150, 336, 160, 18);
+  ctx.fillStyle = "#FFF9F2";
+  ctx.fill();
+  ctx.save();
+  roundPath(ctx, cx - 168, base - 150, 336, 160, 18);
+  ctx.clip();
+  ctx.fillStyle = "#5D4037";
+  ctx.beginPath();
+  ctx.moveTo(cx - 180, base - 150);
+  ctx.lineTo(cx + 180, base - 150);
+  ctx.lineTo(cx + 180, base - 112);
+  for (let x = cx + 160; x >= cx - 180; x -= 28) {
+    ctx.quadraticCurveTo(x - 8, base - 70, x - 18, base - 112);
   }
   ctx.closePath();
-  ctx.fillStyle = color;
   ctx.fill();
+  ctx.restore();
+
+  ctx.fillStyle = "#4E342E";
+  for (let x = cx - 150; x < cx + 150; x += 22) {
+    ctx.beginPath();
+    ctx.ellipse(x, base - 28, 10, 7, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  roundPath(ctx, cx - 78, base - 118, 156, 46, 24);
+  ctx.fillStyle = "#FFF6E8";
+  ctx.fill();
+  ctx.strokeStyle = "#E7C9A4";
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  ctx.fillStyle = "#5D4037";
+  ctx.font = '700 18px "Dancing Script", cursive';
+  ctx.textAlign = "center";
+  ctx.fillText("Happy Birthday", cx, base - 88);
+  heart(ctx, cx + 78, base - 108, 0.7, "#E31C79");
+
+  const candles: [number, string][] = [[-54, "#BA68C8"], [-18, "#FFD54F"], [18, "#81C784"], [54, "#F48FB1"]];
+  for (const [dx, color] of candles) {
+    ctx.fillStyle = color;
+    ctx.fillRect(cx + dx - 5, base - 176, 10, 58);
+    const flame = 16 + Math.sin(flicker * 9 + dx) * 3;
+    ctx.beginPath();
+    ctx.ellipse(cx + dx, base - 184 - flame / 2, 7, flame / 2, 0, 0, Math.PI * 2);
+    ctx.fillStyle = "#FFB300";
+    ctx.fill();
+    ctx.beginPath();
+    ctx.ellipse(cx + dx, base - 180 - flame / 3, 3, flame / 4, 0, 0, Math.PI * 2);
+    ctx.fillStyle = "#FFF8E1";
+    ctx.fill();
+  }
 }
 
-function cake(ctx: CanvasRenderingContext2D, cx: number, base: number) {
-  ctx.beginPath();
-  ctx.ellipse(cx, base + 10, 230, 24, 0, 0, Math.PI * 2);
-  ctx.fillStyle = "#E7D3B8";
-  ctx.fill();
+function cover(ctx: CanvasRenderingContext2D, image: HTMLImageElement, x: number, y: number, w: number, h: number) {
+  const scale = Math.max(w / image.width, h / image.height);
+  const dw = image.width * scale;
+  const dh = image.height * scale;
+  ctx.drawImage(image, x + (w - dw) / 2, y + (h - dh) / 2, dw, dh);
+}
 
-  roundPath(ctx, cx - 180, base - 96, 360, 96, 16);
-  ctx.fillStyle = "#13294B";
-  ctx.fill();
-  ctx.fillStyle = "#F6E7D4";
-  ctx.fillRect(cx - 180, base - 96, 360, 20);
-  ctx.fillStyle = "#F6E7D4";
-  for (let x = cx - 156; x <= cx + 140; x += 36) {
+export function drawBirthdayPoster(
+  ctx: CanvasRenderingContext2D,
+  photo: HTMLImageElement | null,
+  fullName: string,
+  role: string,
+  college: string,
+  flicker = 0,
+) {
+  const name = givenName(fullName);
+  const copy = posterWords(role, name);
+  const W = ctx.canvas.width;
+  const H = ctx.canvas.height;
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
+  ctx.textBaseline = "alphabetic";
+
+  const paper = ctx.createLinearGradient(0, 0, W, H);
+  paper.addColorStop(0, "#FFF9F4");
+  paper.addColorStop(1, "#FFF3E8");
+  ctx.fillStyle = paper;
+  ctx.fillRect(0, 0, W, H);
+
+  const night = ctx.createLinearGradient(0, 0, 0, H);
+  night.addColorStop(0, "#1A237E");
+  night.addColorStop(0.55, "#311B72");
+  night.addColorStop(1, "#0D2C5A");
+  ctx.fillStyle = night;
+  ctx.fillRect(0, 0, 640, H);
+  const lights: [number, number, number, string][] = [
+    [90, 80, 46, "rgba(255,224,130,0.85)"],
+    [240, 40, 28, "rgba(255,255,255,0.7)"],
+    [420, 110, 36, "rgba(244,143,177,0.75)"],
+    [70, 260, 22, "rgba(255,255,255,0.55)"],
+    [520, 200, 30, "rgba(255,213,79,0.7)"],
+    [180, 520, 40, "rgba(129,212,250,0.35)"],
+    [40, 700, 26, "rgba(255,183,77,0.6)"],
+  ];
+  for (const [x, y, r, color] of lights) {
+    const glow = ctx.createRadialGradient(x, y, 0, x, y, r * 2.2);
+    glow.addColorStop(0, color);
+    glow.addColorStop(1, "rgba(255,255,255,0)");
+    ctx.fillStyle = glow;
     ctx.beginPath();
-    ctx.moveTo(x, base - 76);
-    ctx.quadraticCurveTo(x + 16, base - 36, x + 32, base - 76);
-    ctx.closePath();
+    ctx.arc(x, y, r * 2.2, 0, Math.PI * 2);
     ctx.fill();
   }
 
-  roundPath(ctx, cx - 120, base - 186, 240, 92, 16);
-  ctx.fillStyle = "#C45C26";
-  ctx.fill();
-  ctx.fillStyle = "#F3D3A1";
-  ctx.fillRect(cx - 120, base - 186, 240, 18);
-
-  for (const dx of [-46, 0, 46]) {
-    ctx.fillStyle = dx === 0 ? "#F6F1E7" : "#1B5E3B";
-    ctx.fillRect(cx + dx - 5, base - 236, 10, 52);
-    ctx.beginPath();
-    ctx.ellipse(cx + dx, base - 248, 8, 14, 0, 0, Math.PI * 2);
-    ctx.fillStyle = "#F2C14E";
-    ctx.fill();
-    ctx.beginPath();
-    ctx.ellipse(cx + dx, base - 246, 3, 7, 0, 0, Math.PI * 2);
-    ctx.fillStyle = "#FFF8DE";
-    ctx.fill();
+  ctx.save();
+  roundPath(ctx, 36, 150, 560, 760, 36);
+  ctx.clip();
+  if (photo) {
+    cover(ctx, photo, 36, 150, 560, 760);
+  } else {
+    ctx.fillStyle = "#13294B";
+    ctx.fillRect(36, 150, 560, 760);
+    ctx.fillStyle = "#FFF8EF";
+    ctx.font = "700 160px Fraunces, Georgia, serif";
+    ctx.textAlign = "center";
+    ctx.fillText(initials(fullName), 316, 560);
   }
+  const fade = ctx.createLinearGradient(430, 0, 620, 0);
+  fade.addColorStop(0, "rgba(255,249,244,0)");
+  fade.addColorStop(1, "rgba(255,249,244,1)");
+  ctx.fillStyle = fade;
+  ctx.fillRect(400, 150, 220, 760);
+  ctx.restore();
 
+  const wash = ctx.createRadialGradient(820, 180, 20, 820, 220, 340);
+  wash.addColorStop(0, "rgba(144,202,249,0.55)");
+  wash.addColorStop(1, "rgba(144,202,249,0)");
+  ctx.fillStyle = wash;
+  ctx.fillRect(520, 0, 560, 520);
+
+  ctx.save();
+  ctx.translate(58, 78);
+  ctx.rotate(-0.12);
+  ctx.fillStyle = "#FFFFFF";
+  ctx.textAlign = "left";
+  ctx.font = '700 34px "Dancing Script", cursive';
+  copy.dream.forEach((line, index) => ctx.fillText(line, 0, index * 40));
+  ctx.strokeStyle = "#F5C542";
+  ctx.lineWidth = 5;
   ctx.beginPath();
-  ctx.arc(cx - 70, base - 150, 10, 0, Math.PI * 2);
-  ctx.arc(cx + 70, base - 150, 10, 0, Math.PI * 2);
+  ctx.moveTo(8, 118);
+  ctx.quadraticCurveTo(90, 108, 168, 122);
+  ctx.stroke();
+  ctx.restore();
+
+  ctx.textAlign = "left";
+  ctx.fillStyle = "#D4145A";
+  ctx.font = '700 92px "Dancing Script", cursive';
+  ctx.fillText("Happy", 600, 150);
+  heart(ctx, 980, 92, 1.35, "#E31C79");
+  ctx.fillStyle = "#7B1FA2";
+  ctx.font = '700 108px "Dancing Script", cursive';
+  ctx.fillText("Birthday", 560, 250);
+  ctx.strokeStyle = "#F5C542";
+  ctx.lineWidth = 7;
+  ctx.beginPath();
+  ctx.moveTo(620, 268);
+  ctx.quadraticCurveTo(820, 250, 1000, 274);
+  ctx.stroke();
+
+  let nameSize = 96;
+  ctx.textAlign = "center";
+  ctx.fillStyle = "#1565C0";
+  ctx.font = `700 ${nameSize}px "Dancing Script", cursive`;
+  while (nameSize > 54 && ctx.measureText(name).width > 460) {
+    nameSize -= 4;
+    ctx.font = `700 ${nameSize}px "Dancing Script", cursive`;
+  }
+  ctx.fillText(name, 820, 360);
+  ctx.strokeStyle = "#F48FB1";
+  ctx.lineWidth = 6;
+  ctx.beginPath();
+  ctx.moveTo(640, 378);
+  ctx.quadraticCurveTo(820, 360, 1000, 382);
+  ctx.stroke();
+
   ctx.fillStyle = "#9E2A2B";
-  ctx.fill();
-}
+  ctx.font = '700 26px "Noto Sans Gujarati", sans-serif';
+  ctx.fillText("હાર્દિક જન્મદિવસની શુભેચ્છાઓ", 820, 418);
 
-const CONFETTI: [number, number, string, number][] = [
-  [70, 80, "#C45C26", 0.4],
-  [160, 48, "#13294B", -0.3],
-  [250, 110, "#1B5E3B", 0.6],
-  [820, 60, "#C45C26", -0.5],
-  [930, 120, "#E4B15A", 0.3],
-  [990, 70, "#13294B", 0.2],
-  [40, 700, "#E4B15A", 0.8],
-  [1040, 760, "#C45C26", -0.6],
-  [80, 1180, "#1B5E3B", 0.2],
-  [1000, 1240, "#E4B15A", -0.4],
-];
+  nssSeal(ctx, 630, 500, 62);
+  ctx.save();
+  ctx.translate(700, 468);
+  ctx.rotate(-0.04);
+  roundPath(ctx, 0, 0, 340, 70, 16);
+  ctx.fillStyle = "#0D47A1";
+  ctx.fill();
+  ctx.fillStyle = "#FFE14A";
+  let badgeSize = 34;
+  ctx.font = `800 ${badgeSize}px Fraunces, Georgia, serif`;
+  while (badgeSize > 22 && ctx.measureText(copy.badge).width > 300) {
+    badgeSize -= 2;
+    ctx.font = `800 ${badgeSize}px Fraunces, Georgia, serif`;
+  }
+  ctx.textAlign = "center";
+  ctx.fillText(copy.badge, 170, 48);
+  ctx.restore();
+
+  ctx.textAlign = "left";
+  ctx.font = '600 26px "Source Sans 3", sans-serif';
+  const lead = "Wishing you a very ";
+  const leadWidth = ctx.measureText(lead).width;
+  ctx.font = '700 26px "Source Sans 3", sans-serif';
+  const cheer = "Happy Birthday!";
+  const cheerWidth = ctx.measureText(cheer).width;
+  const wishStart = 820 - (leadWidth + cheerWidth) / 2;
+  ctx.font = '600 26px "Source Sans 3", sans-serif';
+  ctx.fillStyle = "#1A1A1A";
+  ctx.fillText(lead, wishStart, 590);
+  ctx.font = '700 26px "Source Sans 3", sans-serif';
+  ctx.fillStyle = "#E31C23";
+  ctx.fillText(cheer, wishStart + leadWidth, 590);
+  ctx.textAlign = "center";
+  ctx.fillStyle = "#263238";
+  ctx.font = '500 24px "Source Sans 3", sans-serif';
+  const shine = wrap(ctx, "May your life always shine with happiness, success and endless opportunities.", 440, 2);
+  shine.forEach((line, index) => ctx.fillText(line, 820, 634 + index * 30));
+
+  const yellowTop = 646 + shine.length * 30;
+  ctx.save();
+  ctx.translate(590, yellowTop);
+  ctx.rotate(-0.02);
+  roundPath(ctx, 0, 0, 460, 108, 24);
+  ctx.fillStyle = "#FFF3B0";
+  ctx.fill();
+  ctx.restore();
+  ctx.fillStyle = "#E31C23";
+  ctx.font = "700 20px Fraunces, Georgia, serif";
+  ctx.fillText("★", 620, yellowTop + 36);
+  ctx.fillText("★", 1020, yellowTop + 84);
+  ctx.fillStyle = "#1A1A1A";
+  ctx.font = '700 21px "Source Sans 3", sans-serif';
+  const yellow = wrap(ctx, copy.yellow, 400, 3);
+  yellow.forEach((line, index) => ctx.fillText(line, 820, yellowTop + 34 + index * 24));
+
+  let y = yellowTop + 124;
+  ctx.fillStyle = "#263238";
+  ctx.font = '500 22px "Source Sans 3", sans-serif';
+  const body = wrap(ctx, copy.body, 450, 3);
+  body.forEach((line, index) => ctx.fillText(line, 820, y + index * 28));
+  y += body.length * 28 + 14;
+
+  ctx.save();
+  ctx.translate(580, y);
+  ctx.rotate(-0.03);
+  roundPath(ctx, 0, 0, 470, 100, 20);
+  ctx.fillStyle = "#1565C0";
+  ctx.fill();
+  ctx.restore();
+  ctx.fillStyle = "#FFF176";
+  ctx.font = '700 26px "Dancing Script", cursive';
+  const blue = wrap(ctx, copy.blue, 420, 3);
+  blue.forEach((line, index) => ctx.fillText(line, 815, y + 36 + index * 28));
+  y += 114;
+
+  ctx.save();
+  ctx.translate(590, y);
+  ctx.rotate(-0.02);
+  roundPath(ctx, 0, 0, 460, 78, 18);
+  ctx.fillStyle = "#F48FB1";
+  ctx.fill();
+  ctx.restore();
+  ctx.fillStyle = "#1A1A1A";
+  ctx.font = '700 21px "Source Sans 3", sans-serif';
+  const pink = wrap(ctx, copy.pink, 420, 2);
+  pink.forEach((line, index) => ctx.fillText(line, 820, y + 32 + index * 24));
+  y += 92;
+
+  const footTop = Math.min(y, H - 118);
+  roundPath(ctx, 560, footTop, 490, 86, 18);
+  ctx.fillStyle = "#6A1B9A";
+  ctx.fill();
+  ctx.fillStyle = "#FFF176";
+  ctx.font = '700 22px "Source Sans 3", sans-serif';
+  const foot = wrap(ctx, copy.foot, 450, 2);
+  foot.forEach((line, index) => ctx.fillText(line, 805, footTop + 34 + index * 26));
+
+  ctx.fillStyle = "rgba(255,249,244,0.92)";
+  ctx.font = '600 18px "Source Sans 3", sans-serif';
+  ctx.textAlign = "left";
+  ctx.fillText((college || "NSS Unit").slice(0, 42), 40, H - 22);
+
+  for (const [x, yy, rot] of [[120, 980, -0.6], [230, 900, 0.4], [80, 860, 0.8], [430, 940, -0.2]] as [number, number, number][]) {
+    leaf(ctx, x, yy, rot);
+  }
+  rose(ctx, 150, 930, 42, "#E53935");
+  rose(ctx, 250, 900, 36, "#F48FB1");
+  rose(ctx, 90, 1000, 30, "#AD1457");
+  rose(ctx, 340, 980, 34, "#C62828");
+  rose(ctx, 200, 1040, 24, "#F8BBD0");
+  cake(ctx, 250, 1240, flicker);
+}
 
 async function warmFonts() {
   if (typeof document === "undefined" || !document.fonts) return;
   await Promise.race([
     Promise.all([
-      document.fonts.load("700 72px Fraunces"),
-      document.fonts.load('700 40px "Noto Sans Gujarati"'),
+      document.fonts.load('700 108px "Dancing Script"'),
+      document.fonts.load("700 40px Fraunces"),
+      document.fonts.load('700 26px "Noto Sans Gujarati"'),
+      document.fonts.load('600 24px "Source Sans 3"'),
     ]),
-    new Promise((resolve) => window.setTimeout(resolve, 900)),
+    new Promise((resolve) => window.setTimeout(resolve, 1200)),
   ]);
 }
 
-export async function renderBirthdayCard(opts: { name: string; photoUrl?: string; college: string }) {
+export async function renderBirthdayCard(opts: { name: string; photoUrl?: string; college: string; role?: string }) {
   await warmFonts();
   const canvas = document.createElement("canvas");
   canvas.width = 1080;
-  canvas.height = 1520;
+  canvas.height = 1350;
   const ctx = canvas.getContext("2d");
   if (!ctx) throw new Error("Could not draw the birthday card.");
-  ctx.imageSmoothingEnabled = true;
-  ctx.imageSmoothingQuality = "high";
-
-  const sky = ctx.createLinearGradient(0, 0, 0, 1520);
-  sky.addColorStop(0, "#FFF8EF");
-  sky.addColorStop(0.45, "#F8E2CC");
-  sky.addColorStop(1, "#F3D0B4");
-  ctx.fillStyle = sky;
-  ctx.fillRect(0, 0, 1080, 1520);
-
-  const glow = ctx.createRadialGradient(540, 620, 40, 540, 620, 420);
-  glow.addColorStop(0, "rgba(255,255,255,0.85)");
-  glow.addColorStop(1, "rgba(255,255,255,0)");
-  ctx.fillStyle = glow;
-  ctx.fillRect(0, 0, 1080, 1520);
-
-  for (const [x, y, color, tilt] of CONFETTI) {
-    ctx.save();
-    ctx.translate(x, y);
-    ctx.rotate(tilt);
-    ctx.fillStyle = color;
-    ctx.fillRect(-8, -16, 16, 32);
-    ctx.restore();
-  }
-
-  balloon(ctx, 150, 250, 78, "#C45C26");
-  balloon(ctx, 78, 430, 52, "#13294B");
-  balloon(ctx, 210, 470, 40, "#1B5E3B");
-  balloon(ctx, 930, 230, 74, "#9E2A2B");
-  balloon(ctx, 1004, 410, 50, "#E4B15A");
-  balloon(ctx, 860, 470, 36, "#13294B");
-  star(ctx, 300, 180, 16, "#E4B15A");
-  star(ctx, 780, 160, 14, "#C45C26");
-  star(ctx, 250, 560, 12, "#1B5E3B");
-  star(ctx, 830, 560, 12, "#E4B15A");
-
-  ctx.textAlign = "center";
-  ctx.fillStyle = "#1B5E3B";
-  ctx.font = "600 26px Fraunces, Georgia, serif";
-  ctx.fillText("NSS SMART PORTAL", 540, 118);
-  ctx.fillStyle = "#13294B";
-  ctx.font = "700 78px Fraunces, Georgia, serif";
-  ctx.fillText("Happy Birthday", 540, 200);
-
-  const cx = 540;
-  const cy = 560;
-  const radius = 210;
-  ctx.beginPath();
-  ctx.arc(cx, cy, radius + 22, 0, Math.PI * 2);
-  ctx.fillStyle = "#E4B15A";
-  ctx.fill();
-  ctx.beginPath();
-  ctx.arc(cx, cy, radius + 10, 0, Math.PI * 2);
-  ctx.fillStyle = "#FFF8EF";
-  ctx.fill();
-  ctx.save();
-  ctx.beginPath();
-  ctx.arc(cx, cy, radius, 0, Math.PI * 2);
-  ctx.clip();
-  let drew = false;
-  if (opts.photoUrl) {
-    try {
-      const image = await loadImage(opts.photoUrl);
-      const scale = Math.max((radius * 2) / image.width, (radius * 2) / image.height);
-      const width = image.width * scale;
-      const height = image.height * scale;
-      ctx.drawImage(image, cx - width / 2, cy - height / 2, width, height);
-      drew = true;
-    } catch {
-      drew = false;
-    }
-  }
-  if (!drew) {
-    ctx.fillStyle = "#13294B";
-    ctx.fillRect(cx - radius, cy - radius, radius * 2, radius * 2);
-    ctx.fillStyle = "#FFF8EF";
-    ctx.font = "700 140px Fraunces, Georgia, serif";
-    ctx.textBaseline = "middle";
-    ctx.fillText(initials(opts.name), cx, cy);
-    ctx.textBaseline = "alphabetic";
-  }
-  ctx.restore();
-
-  ctx.fillStyle = "#13294B";
-  let size = 64;
-  ctx.font = `700 ${size}px Fraunces, Georgia, serif`;
-  while (size > 36 && ctx.measureText(opts.name).width > 920) {
-    size -= 2;
-    ctx.font = `700 ${size}px Fraunces, Georgia, serif`;
-  }
-  const nameLines = fitLine(ctx, opts.name, 920);
-  nameLines.forEach((line, index) => ctx.fillText(line, 540, 860 + index * (size + 6)));
-
-  const afterName = 860 + nameLines.length * (size + 6) + 8;
-  ctx.fillStyle = "#9E2A2B";
-  ctx.font = '700 40px "Noto Sans Gujarati", sans-serif';
-  ctx.fillText("હાર્દિક જન્મદિવસની શુભેચ્છાઓ", 540, afterName);
-  ctx.font = '600 28px "Noto Sans Gujarati", sans-serif';
-  ctx.fillStyle = "#1B5E3B";
-  ctx.fillText("NSS પરિવાર તરફથી", 540, afterName + 46);
-  ctx.font = "600 24px Fraunces, Georgia, serif";
-  ctx.fillStyle = "#13294B";
-  ctx.fillText("Not Me, But You", 540, afterName + 92);
-
-  cake(ctx, 540, 1368);
-
-  ctx.font = '500 24px "Source Sans 3", "Noto Sans Gujarati", sans-serif';
-  ctx.fillStyle = "#5C5348";
-  const collegeLines = fitLine(ctx, opts.college || "NSS Unit", 860);
-  collegeLines.forEach((line, index) => ctx.fillText(line, 540, 1436 + index * 26));
-
-  ctx.fillStyle = "#C45C26";
-  ctx.fillRect(0, 1484, 1080, 12);
-  ctx.fillStyle = "#FFFFFF";
-  ctx.fillRect(0, 1496, 1080, 8);
-  ctx.fillStyle = "#138808";
-  ctx.fillRect(0, 1504, 1080, 16);
-
+  let photo: HTMLImageElement | null = null;
+  if (opts.photoUrl) photo = await loadImage(opts.photoUrl).catch(() => null);
+  drawBirthdayPoster(ctx, photo, opts.name, opts.role || "Volunteer", opts.college, 0.4);
   const blob = await new Promise<Blob>((resolve, reject) => {
     canvas.toBlob((file) => (file ? resolve(file) : reject(new Error("Could not save the card."))), "image/png");
   });
@@ -286,7 +488,7 @@ export async function renderBirthdayCard(opts: { name: string; photoUrl?: string
 const readyCards = new Map<string, File>();
 
 function cardKey(volunteer: Volunteer, college: string) {
-  return `${volunteer.id}|${volunteer.fullName}|${volunteer.photoUrl?.length || 0}|${college}`;
+  return `${volunteer.id}|${volunteer.fullName}|${volunteer.nssRole}|${volunteer.photoUrl?.length || 0}|${college}|poster`;
 }
 
 export function cachedBirthdayCard(volunteer: Volunteer, college: string) {
@@ -301,6 +503,7 @@ export async function birthdayCardFile(volunteer: Volunteer, college: string) {
     name: volunteer.fullName,
     photoUrl: volunteer.photoUrl,
     college,
+    role: volunteer.nssRole || "Volunteer",
   });
   const file = new File([blob], `nss-birthday-${volunteer.volunteerId || "wish"}.png`, { type: "image/png" });
   readyCards.set(key, file);
