@@ -74,6 +74,11 @@ function PollsPage() {
 
   async function submit() {
     if (!poll) return;
+    const whoName = (session?.name || name).trim();
+    if (whoName.length < 2) {
+      setNote(tr("Write your name before you answer.", "જવાબ પહેલાં તમારું નામ લખો."));
+      return;
+    }
     setBusy(true);
     setNote("");
     try {
@@ -85,13 +90,16 @@ function PollsPage() {
           action: "answer-poll",
           pollId: poll.id,
           replyId: who,
-          name: session?.name || name,
+          name: whoName,
           answers,
         }),
       });
       const data = (await res.json()) as { ok?: boolean; error?: string; polls?: LivePoll[] };
       if (!res.ok || !data.ok) {
-        setNote(data.error || tr("The answer was not saved.", "જવાબ સાચવાયો નહીં."));
+        const message = data.error === "Write your name."
+          ? tr("Write your name before you answer.", "જવાબ પહેલાં તમારું નામ લખો.")
+          : data.error || tr("The answer was not saved.", "જવાબ સાચવાયો નહીં.");
+        setNote(message);
         return;
       }
       if (Array.isArray(data.polls)) setPolls(data.polls);

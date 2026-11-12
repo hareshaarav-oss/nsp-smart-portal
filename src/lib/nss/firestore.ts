@@ -745,19 +745,21 @@ async function writeBoard(data: CloudPortal) {
     }
   }
   if (payload.length > 900000) return;
-  const fields = {
+  const fields: Record<string, unknown> = {
     roll: { stringValue: payload },
     rollStale: { booleanValue: false },
     rollUpdatedAt: { stringValue: new Date().toISOString() },
     volunteers: { integerValue: String(shaped.volunteers.length) },
-    galleryCount: { integerValue: String(shaped.gallery.length) },
     activeStudents: { integerValue: String(shaped.volunteers.filter((v) => v.status !== "alumni").length) },
     serviceHours: { integerValue: String(Math.max(0, Math.round(shaped.serviceHours || 0))) },
     cloudTouch: { nullValue: null },
   };
-  const mask = ["roll", "rollStale", "rollUpdatedAt", "volunteers", "galleryCount", "activeStudents", "serviceHours", "cloudTouch"]
-    .map((field) => `updateMask.fieldPaths=${field}`)
-    .join("&");
+  const maskFields = ["roll", "rollStale", "rollUpdatedAt", "volunteers", "activeStudents", "serviceHours", "cloudTouch"];
+  if (shaped.gallery.length > 0) {
+    fields.galleryCount = { integerValue: String(shaped.gallery.length) };
+    maskFields.push("galleryCount");
+  }
+  const mask = maskFields.map((field) => `updateMask.fieldPaths=${field}`).join("&");
   const patch = await fetch(`${FIRESTORE_BASE}/portalSettings/publicStats?${mask}`, {
     method: "PATCH",
     headers: { "content-type": "application/json" },
@@ -786,8 +788,19 @@ export async function loadPublicBoard(opts: { gallery?: boolean } = {}): Promise
   }
   const board = await readBoard();
   if (board && (board.fresh || collegeQuotaBlocked())) {
-    const clean = omitPurged(board.data);
-    const usable = !wantGallery || clean.gallery.length > 0 || board.galleryCount === 0;
+    let clean = omitPurged(board.data);
+    if (!clean.attendance.length && !collegeQuotaBlocked()) {
+      try {
+        const marked = await withOfficerMarks(clean);
+        if (marked.attendance.length) {
+          clean = publicBoardShape({ ...marked, gallery: clean.gallery });
+          await writeBoard(clean);
+        }
+      } catch {
+        /* the stored roll stays without marks */
+      }
+    }
+    const usable = !wantGallery || clean.gallery.length > 0;
     if (!wantGallery || usable) return rememberBoard(clean, usable);
   }
   if (collegeQuotaBlocked()) return board ? rememberBoard(omitPurged(board.data), board.data.gallery.length > 0) : publicCache?.data ? omitPurged(publicCache.data) : null;

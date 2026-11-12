@@ -96,7 +96,8 @@ export function cleanReply(raw: unknown, questions: PollQuestion[]): PollReply |
     }
   }
   if (!Object.keys(answers).length) return null;
-  const name = String(row.name ?? "").trim().slice(0, 60) || "Volunteer";
+  const name = String(row.name ?? "").trim().slice(0, 60);
+  if (name.length < 2) return null;
   return {
     id: cleanId(row.id, ""),
     name,
@@ -143,6 +144,8 @@ export function recordReply(polls: LivePoll[], pollId: string, raw: unknown) {
   const poll = polls.find((item) => item.id === pollId);
   if (!poll) return { polls, error: "This poll is not open." };
   if (!poll.open) return { polls, error: "This poll is closed." };
+  const typedName = raw && typeof raw === "object" ? String((raw as { name?: unknown }).name ?? "").trim() : "";
+  if (typedName.length < 2) return { polls, error: "Write your name." };
   const reply = cleanReply(raw, poll.questions);
   if (!reply?.id) return { polls, error: "Answer at least one question." };
   const replies = [reply, ...poll.replies.filter((item) => item.id !== reply.id)].slice(0, 250);
