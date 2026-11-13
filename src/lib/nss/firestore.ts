@@ -2141,7 +2141,7 @@ let chatCache: { at: number; rows: ChatRow[] } | null = null;
 let readCache: { id: string; thread: string; at: string }[] = [];
 const goneCache = new Set<string>();
 const clearedAt = new Map<string, string>();
-const CHAT_LIFE_MS = 7 * 24 * 60 * 60 * 1000;
+export const CHAT_LIFE_MS = 180 * 24 * 60 * 60 * 1000;
 
 function chatStillLive(createdAt: string) {
   const at = new Date(createdAt).getTime();

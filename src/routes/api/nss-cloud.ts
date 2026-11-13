@@ -1,4 +1,4 @@
-import { loadCollegeCloud, loadStudentRoll, readOneStudent, loadPublicBoard, loadOfficerRoll, collegeQuotaBlocked, saveStudentToCloud, incrementVisitors, readVisitorCount, knownVisitorCount, patchStudent, safePhoto, knownRole, readChatPass, listRecentChatMessages, saveChatMessage, listChatPeople, clearAttendanceCloud, readBrandPhotos, saveBrandPhotos, listPhotoRoster, readPhotoBatch, saveAttendanceMarks, readLive, publishBestVolunteer, publishServiceHours, purgeCloudIds, deleteChatMessages, readChatMedia, readOneChat, patchNotice, upsertNotice, sideDocId, listChatStatuses, readSide, readStudentCerts, saveStudentCerts, markChatRead, chatReads, markThreadCleared, reviseChatMessage, chatBlocked, readHomeSlides, readOwnMarks, saveGallerySlide, readLivePolls, updateLivePolls, type ChatExtra } from "@/lib/nss/firestore";
+import { loadCollegeCloud, loadStudentRoll, readOneStudent, loadPublicBoard, loadOfficerRoll, collegeQuotaBlocked, saveStudentToCloud, incrementVisitors, readVisitorCount, knownVisitorCount, patchStudent, safePhoto, knownRole, readChatPass, listRecentChatMessages, saveChatMessage, listChatPeople, clearAttendanceCloud, readBrandPhotos, saveBrandPhotos, listPhotoRoster, readPhotoBatch, saveAttendanceMarks, readLive, publishBestVolunteer, publishServiceHours, purgeCloudIds, deleteChatMessages, readChatMedia, readOneChat, patchNotice, upsertNotice, sideDocId, listChatStatuses, readSide, readStudentCerts, saveStudentCerts, markChatRead, chatReads, markThreadCleared, reviseChatMessage, chatBlocked, readHomeSlides, readOwnMarks, saveGallerySlide, readLivePolls, updateLivePolls, CHAT_LIFE_MS, type ChatExtra } from "@/lib/nss/firestore";
 import { recordReply, upsertPoll } from "@/lib/nss/polls";
 import { passwordOk, sealText, signChatPass } from "@/lib/nss/seal.server";
 import { createFileRoute } from "@tanstack/react-router";
@@ -923,7 +923,7 @@ export const Route = createFileRoute("/api/nss-cloud")({
               });
               return Response.json({ ok: true, message: saved });
             }
-            const messages = (await listRecentChatMessages().catch(() => [])).filter((row) => canSeeThread(user, canonicalThread(row.threadId)) && Date.now() - new Date(row.createdAt).getTime() < 7 * 24 * 60 * 60 * 1000);
+            const messages = (await listRecentChatMessages().catch(() => [])).filter((row) => canSeeThread(user, canonicalThread(row.threadId)) && Date.now() - new Date(row.createdAt).getTime() < CHAT_LIFE_MS);
             const officer = user.role === "po" || user.role === "admin";
             const people = officer ? await listChatPeople({ includeMobile: false }).catch(() => []) : [];
             return Response.json({

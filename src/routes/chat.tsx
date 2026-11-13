@@ -1520,7 +1520,7 @@ function ChatPage() {
   }
 
 
-  const threadMessages = messages.filter((message) => canonicalThread(message.threadId) === canonicalThread(active) && Date.now() - new Date(message.createdAt).getTime() < 7 * 24 * 60 * 60 * 1000);
+  const threadMessages = messages.filter((message) => canonicalThread(message.threadId) === canonicalThread(active) && Date.now() - new Date(message.createdAt).getTime() < 180 * 24 * 60 * 60 * 1000);
   const directory = (() => {
     const map = new Map<string, Person>();
     for (const volunteer of roll) {
