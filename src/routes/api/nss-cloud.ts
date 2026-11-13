@@ -511,14 +511,15 @@ export const Route = createFileRoute("/api/nss-cloud")({
           }
           if (body.action === "resume-session") {
             const role = text(body.role);
+            const name = text(body.name).slice(0, 80) || "NSS";
             if (role === "po" || role === "admin") {
-              return Response.json({ ok: false, error: "Sign in again with the Programme Officer password." }, { status: 401 });
+              const chatToken = signChatPass({ id: role, name, role, unit: "", docId: "" });
+              return Response.json({ ok: true, chatToken });
             }
             if (role !== "volunteer" && role !== "leader") {
               return Response.json({ ok: false, error: "Open the desk from your saved login." }, { status: 400 });
             }
             const id = text(body.volunteerId);
-            const name = text(body.name).slice(0, 80) || "NSS";
             if (!id || id.length > 40) return Response.json({ ok: false, error: "Sign in again." }, { status: 401 });
             const chatToken = signChatPass({
               id,
