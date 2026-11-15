@@ -151,11 +151,11 @@ function Home() {
       {splashing ? <SplashScreen onDone={dismiss} /> : null}
       <AppShell current="home" compactHeader>
         <section className="mx-auto w-full max-w-6xl flex-1 overflow-x-clip px-4 md:px-6">
-          <nav className="flex flex-wrap justify-center gap-x-8 gap-y-3 border-y border-navy/15 py-4 text-sm text-navy">
-            <Link to="/login" search={{ role: "volunteer" }} className="underline-offset-4 hover:underline">{t("studentLogin")}</Link>
-            <Link to="/register" className="underline-offset-4 hover:underline">{t("register")}</Link>
-            <Link to="/login" search={{ role: "po" }} className="underline-offset-4 hover:underline">{t("adminLogin")}</Link>
-            <Link to="/verify" search={{ id: "" }} className="underline-offset-4 hover:underline">{t("verify")}</Link>
+          <nav className="flex flex-wrap justify-center gap-2 border-y border-navy/10 py-4">
+            <Link to="/login" search={{ role: "volunteer" }} className="border border-navy/15 bg-card px-4 py-2 text-sm font-medium text-navy shadow-sm hover:border-saffron">{t("studentLogin")}</Link>
+            <Link to="/register" className="border border-navy/15 bg-card px-4 py-2 text-sm font-medium text-navy shadow-sm hover:border-saffron">{t("register")}</Link>
+            <Link to="/login" search={{ role: "po" }} className="border border-navy/15 bg-card px-4 py-2 text-sm font-medium text-navy shadow-sm hover:border-saffron">{t("adminLogin")}</Link>
+            <Link to="/verify" search={{ id: "" }} className="border border-navy/15 bg-card px-4 py-2 text-sm font-medium text-navy shadow-sm hover:border-saffron">{t("verify")}</Link>
           </nav>
 
           <div className="mt-6">
@@ -220,7 +220,7 @@ function Home() {
             {rollCards.length ? (
               <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8">
                 {rollCards.map((v, index) => (
-                  <figure key={`${v.volunteerId}-${v.fullName}-${index}`} className="min-w-0 text-center">
+                  <figure key={`${v.volunteerId}-${v.fullName}-${index}`} className="min-w-0 border border-navy/10 bg-card p-2 text-center shadow-sm">
                     <div className="mx-auto h-24 w-20 overflow-hidden bg-navy ring-1 ring-saffron/40">
                       {v.photoUrl ? (
                         <img src={v.photoUrl} alt="" className="h-full w-full object-cover" />
@@ -312,10 +312,10 @@ function Home() {
 
 function HomeOfficer({ role, name, photo, quote }: { role: string; name: string; photo?: string; quote: string }) {
   return (
-    <article className="border border-navy/15 bg-card p-4 text-center">
-      <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-saffron">{role}</p>
+    <article className="border border-navy/10 bg-card p-5 text-center shadow-sm">
+      <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-saffron">{role}</p>
       {photo ? (
-        <img src={photo} alt="" className="mx-auto mt-3 h-28 w-24 object-cover ring-1 ring-saffron/40" />
+        <img src={photo} alt="" className="mx-auto mt-3 h-28 w-24 object-cover ring-1 ring-saffron/50" />
       ) : (
         <span className="mx-auto mt-3 flex h-28 w-24 items-center justify-center bg-navy text-2xl font-semibold text-paper">{name.slice(0, 1)}</span>
       )}
@@ -336,7 +336,12 @@ function OpenTab({ id, title, children }: { id: string; title: string; children:
 }
 
 function MiniStat({ label, value }: { label: string; value: number }) {
-  return <div className="bg-card px-3 py-3 text-center"><p className="font-display text-2xl text-navy">{value}</p><p className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</p></div>;
+  return (
+    <div className="border border-navy/10 bg-card px-3 py-4 text-center shadow-sm">
+      <p className="font-display text-3xl tabular-nums text-navy">{Number(value || 0).toLocaleString("en-IN")}</p>
+      <p className="mt-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">{label}</p>
+    </div>
+  );
 }
 
 function RunBanner({ label, items, empty }: { label: string; items: string[]; empty: string }) {
