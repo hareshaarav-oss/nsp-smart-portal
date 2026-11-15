@@ -375,9 +375,38 @@ function dedupePressReports(
   );
 }
 
+const OFFLINE_ATTENDANCE_KEY = "nsp-offline-attendance";
+
+function readOfflineAttendance() {
+  if (typeof localStorage === "undefined") return [] as { mobile: string; name: string; eventName: string; present: boolean; date?: string }[];
+  try {
+    const parsed = JSON.parse(localStorage.getItem(OFFLINE_ATTENDANCE_KEY) || "[]");
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+export function offlineAttendanceCount() {
+  return readOfflineAttendance().length;
+}
+
+export function flushOfflineAttendance() {
+  const queued = readOfflineAttendance();
+  if (!queued.length || (typeof navigator !== "undefined" && !navigator.onLine)) return 0;
+  localStorage.removeItem(OFFLINE_ATTENDANCE_KEY);
+  persistAttendance(queued);
+  return queued.length;
+}
+
 function persistAttendance(rows: { mobile: string; name: string; eventName: string; present: boolean; date?: string }[]) {
   const ready = rows.filter((row) => row.mobile.replace(/\D/g, "").length >= 10 && row.eventName);
   if (!ready.length) return;
+  if (typeof navigator !== "undefined" && !navigator.onLine) {
+    const queued = [...readOfflineAttendance(), ...ready].slice(-500);
+    localStorage.setItem(OFFLINE_ATTENDANCE_KEY, JSON.stringify(queued));
+    return;
+  }
   const session = useSessionStore.getState().session;
   const token = session?.chatToken || "";
   const deskRole = session?.role === "admin" ? "admin" : "po";
@@ -409,6 +438,12 @@ function persistAttendance(rows: { mobile: string; name: string; eventName: stri
       unit: best.unit,
       hours: volunteerHours(state, best.id),
     });
+  });
+}
+
+if (typeof window !== "undefined") {
+  window.addEventListener("online", () => {
+    flushOfflineAttendance();
   });
 }
 

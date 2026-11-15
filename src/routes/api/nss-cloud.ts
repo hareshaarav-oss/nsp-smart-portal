@@ -488,6 +488,8 @@ export const Route = createFileRoute("/api/nss-cloud")({
             pollId?: string;
             replyId?: string;
             answers?: Record<string, unknown>;
+            photoId?: string;
+            who?: string;
           };
           if (body.action === "student-photo") {
             const roster = await listPhotoRoster();

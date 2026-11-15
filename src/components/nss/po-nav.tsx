@@ -29,6 +29,7 @@ const GROUPS = [
     gu: "ડેસ્ક",
     items: [
       { to: "/po", label: "Dashboard", icon: LayoutDashboard },
+      { to: "/po/world", label: "Camp diary", icon: ClipboardList },
       { to: "/chat", label: "Chat", icon: MessageCircle },
     ],
   },
@@ -84,6 +85,7 @@ export function PoNav({ current }: { current: string }) {
   const group = GROUPS.find((item) => item.en === open) ?? GROUPS[0];
   const label: Record<string, string> = {
     Dashboard: "dashboard",
+    "Camp diary": "camp",
     Chat: "chat",
     Volunteers: "volunteers",
     Alumni: "alumni",

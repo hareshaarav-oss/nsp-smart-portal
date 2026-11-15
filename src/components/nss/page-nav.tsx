@@ -55,6 +55,9 @@ export function PageNav({
           <Link to="/gallery" className={cn(item, on("/gallery") && "is-on")}>
             {t("gallery")}
           </Link>
+          <Link to="/passport" className={cn(item, on("/passport") && "is-on")}>
+            {t("passport")}
+          </Link>
           <Link to="/polls" className={cn(item, on("/polls") && "is-on")}>
             {t("poll")}
           </Link>

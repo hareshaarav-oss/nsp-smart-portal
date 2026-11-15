@@ -10,6 +10,8 @@ const TEXT: Record<string, { en: string; gu: string }> = {
   contact: { en: "Contact", gu: "સંપર્ક" },
   desk: { en: "Desk", gu: "ડેસ્ક" },
   dashboard: { en: "Dashboard", gu: "ડેશબોર્ડ" },
+  camp: { en: "Camp diary", gu: "કેમ્પ ડાયરી" },
+  passport: { en: "Passport", gu: "પાસપોર્ટ" },
   chat: { en: "Chat", gu: "ચેટ" },
   attendance: { en: "Attendance", gu: "હાજરી" },
   reports: { en: "Reports", gu: "અહેવાલ" },

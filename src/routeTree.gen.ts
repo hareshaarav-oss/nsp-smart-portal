@@ -24,6 +24,7 @@ import { Route as StudentDashboardRouteImport } from './routes/student-dashboard
 import { Route as StudentRegisterRouteImport } from './routes/student-register'
 import { Route as VerifyRouteImport } from './routes/verify'
 import { Route as VolunteerRouteImport } from './routes/volunteer'
+import { Route as PassportRouteImport } from './routes/passport'
 import { Route as AdminSplatRouteImport } from './routes/admin.$'
 import { Route as ApiNssCloudRouteImport } from './routes/api/nss-cloud'
 import { Route as PoIndexRouteImport } from './routes/po/index'
@@ -43,6 +44,7 @@ import { Route as PoPressRouteImport } from './routes/po/press'
 import { Route as PoReportsRouteImport } from './routes/po/reports'
 import { Route as PoSettingsRouteImport } from './routes/po/settings'
 import { Route as PoVolunteersRouteImport } from './routes/po/volunteers'
+import { Route as PoWorldRouteImport } from './routes/po/world'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -117,6 +119,11 @@ const VerifyRoute = VerifyRouteImport.update({
 const VolunteerRoute = VolunteerRouteImport.update({
   id: '/volunteer',
   path: '/volunteer',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PassportRoute = PassportRouteImport.update({
+  id: '/passport',
+  path: '/passport',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdminSplatRoute = AdminSplatRouteImport.update({
@@ -214,6 +221,11 @@ const PoVolunteersRoute = PoVolunteersRouteImport.update({
   path: '/volunteers',
   getParentRoute: () => PoRoute,
 } as any)
+const PoWorldRoute = PoWorldRouteImport.update({
+  id: '/world',
+  path: '/world',
+  getParentRoute: () => PoRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -231,6 +243,7 @@ export interface FileRoutesByFullPath {
   '/student-register': typeof StudentRegisterRoute
   '/verify': typeof VerifyRoute
   '/volunteer': typeof VolunteerRoute
+  '/passport': typeof PassportRoute
   '/admin/$': typeof AdminSplatRoute
   '/api/nss-cloud': typeof ApiNssCloudRoute
   '/po/ai': typeof PoAiRoute
@@ -249,6 +262,7 @@ export interface FileRoutesByFullPath {
   '/po/reports': typeof PoReportsRoute
   '/po/settings': typeof PoSettingsRoute
   '/po/volunteers': typeof PoVolunteersRoute
+  '/po/world': typeof PoWorldRoute
   '/po/': typeof PoIndexRoute
 }
 export interface FileRoutesByTo {
@@ -266,6 +280,7 @@ export interface FileRoutesByTo {
   '/student-register': typeof StudentRegisterRoute
   '/verify': typeof VerifyRoute
   '/volunteer': typeof VolunteerRoute
+  '/passport': typeof PassportRoute
   '/admin/$': typeof AdminSplatRoute
   '/api/nss-cloud': typeof ApiNssCloudRoute
   '/po/ai': typeof PoAiRoute
@@ -284,6 +299,7 @@ export interface FileRoutesByTo {
   '/po/reports': typeof PoReportsRoute
   '/po/settings': typeof PoSettingsRoute
   '/po/volunteers': typeof PoVolunteersRoute
+  '/po/world': typeof PoWorldRoute
   '/po': typeof PoIndexRoute
 }
 export interface FileRoutesById {
@@ -303,6 +319,7 @@ export interface FileRoutesById {
   '/student-register': typeof StudentRegisterRoute
   '/verify': typeof VerifyRoute
   '/volunteer': typeof VolunteerRoute
+  '/passport': typeof PassportRoute
   '/admin/$': typeof AdminSplatRoute
   '/api/nss-cloud': typeof ApiNssCloudRoute
   '/po/ai': typeof PoAiRoute
@@ -321,6 +338,7 @@ export interface FileRoutesById {
   '/po/reports': typeof PoReportsRoute
   '/po/settings': typeof PoSettingsRoute
   '/po/volunteers': typeof PoVolunteersRoute
+  '/po/world': typeof PoWorldRoute
   '/po/': typeof PoIndexRoute
 }
 export interface FileRouteTypes {
@@ -341,6 +359,7 @@ export interface FileRouteTypes {
     | '/student-register'
     | '/verify'
     | '/volunteer'
+    | '/passport'
     | '/admin/$'
     | '/api/nss-cloud'
     | '/po/ai'
@@ -359,6 +378,7 @@ export interface FileRouteTypes {
     | '/po/reports'
     | '/po/settings'
     | '/po/volunteers'
+    | '/po/world'
     | '/po/'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -376,6 +396,7 @@ export interface FileRouteTypes {
     | '/student-register'
     | '/verify'
     | '/volunteer'
+    | '/passport'
     | '/admin/$'
     | '/api/nss-cloud'
     | '/po/ai'
@@ -394,6 +415,7 @@ export interface FileRouteTypes {
     | '/po/reports'
     | '/po/settings'
     | '/po/volunteers'
+    | '/po/world'
     | '/po'
   id:
     | '__root__'
@@ -412,6 +434,7 @@ export interface FileRouteTypes {
     | '/student-register'
     | '/verify'
     | '/volunteer'
+    | '/passport'
     | '/admin/$'
     | '/api/nss-cloud'
     | '/po/ai'
@@ -430,6 +453,7 @@ export interface FileRouteTypes {
     | '/po/reports'
     | '/po/settings'
     | '/po/volunteers'
+    | '/po/world'
     | '/po/'
   fileRoutesById: FileRoutesById
 }
@@ -449,6 +473,7 @@ export interface RootRouteChildren {
   StudentRegisterRoute: typeof StudentRegisterRoute
   VerifyRoute: typeof VerifyRoute
   VolunteerRoute: typeof VolunteerRoute
+  PassportRoute: typeof PassportRoute
   ApiNssCloudRoute: typeof ApiNssCloudRoute
 }
 
@@ -557,6 +582,13 @@ declare module '@tanstack/react-router' {
       path: '/volunteer'
       fullPath: '/volunteer'
       preLoaderRoute: typeof VolunteerRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/passport': {
+      id: '/passport'
+      path: '/passport'
+      fullPath: '/passport'
+      preLoaderRoute: typeof PassportRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/admin/$': {
@@ -692,6 +724,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PoVolunteersRouteImport
       parentRoute: typeof PoRoute
     }
+    '/po/world': {
+      id: '/po/world'
+      path: '/world'
+      fullPath: '/po/world'
+      preLoaderRoute: typeof PoWorldRouteImport
+      parentRoute: typeof PoRoute
+    }
   }
 }
 
@@ -722,6 +761,7 @@ interface PoRouteChildren {
   PoReportsRoute: typeof PoReportsRoute
   PoSettingsRoute: typeof PoSettingsRoute
   PoVolunteersRoute: typeof PoVolunteersRoute
+  PoWorldRoute: typeof PoWorldRoute
   PoIndexRoute: typeof PoIndexRoute
 }
 
@@ -742,6 +782,7 @@ const PoRouteChildren: PoRouteChildren = {
   PoReportsRoute: PoReportsRoute,
   PoSettingsRoute: PoSettingsRoute,
   PoVolunteersRoute: PoVolunteersRoute,
+  PoWorldRoute: PoWorldRoute,
   PoIndexRoute: PoIndexRoute,
 }
 
@@ -763,6 +804,7 @@ const rootRouteChildren: RootRouteChildren = {
   StudentRegisterRoute: StudentRegisterRoute,
   VerifyRoute: VerifyRoute,
   VolunteerRoute: VolunteerRoute,
+  PassportRoute: PassportRoute,
   ApiNssCloudRoute: ApiNssCloudRoute,
 }
 export const routeTree = rootRouteImport
