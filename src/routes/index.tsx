@@ -60,6 +60,14 @@ function Home() {
     [volunteers],
   );
   const attendance = useNssStore((s) => s.attendance);
+  const ranking = useMemo(() => {
+    const state = useNssStore.getState();
+    return volunteers
+      .filter((v) => v.status !== "alumni" && v.fullName)
+      .map((v) => ({ volunteer: v, hours: volunteerHours(state, v.id) }))
+      .sort((a, b) => b.hours - a.hours || a.volunteer.fullName.localeCompare(b.volunteer.fullName, "en"))
+      .slice(0, 10);
+  }, [volunteers, attendance]);
   const featured = useMemo(() => {
     const state = useNssStore.getState();
     const people = volunteers.filter((v) => v.status !== "alumni" && typeof v.fullName === "string" && v.fullName);
@@ -215,6 +223,34 @@ function Home() {
             <MiniStat label={tr("Alumni", "ભૂતપૂર્વ")} value={alumniCount} />
             <MiniStat label={tr("Portal visitors", "મુલાકાતીઓ")} value={visitors} />
           </div>
+
+          <section className="mt-8 border border-navy/10 bg-card shadow-sm">
+            <div className="flex items-end justify-between gap-3 border-b border-navy/10 px-4 py-3">
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-saffron">{tr("Honour roll", "સેવા ક્રમ")}</p>
+                <h2 className="font-display text-2xl text-navy">{tr("Top service hours", "સૌથી વધુ સેવા કલાક")}</h2>
+              </div>
+            </div>
+            {ranking.some((row) => row.hours > 0) ? (
+              <ol className="divide-y divide-navy/10">
+                {ranking.filter((row) => row.hours > 0).map((row, index) => (
+                  <li key={row.volunteer.id} className="flex items-center gap-3 px-4 py-3">
+                    <span className="w-8 font-display text-xl text-saffron">{index + 1}</span>
+                    <span className="flex size-10 shrink-0 items-center justify-center overflow-hidden bg-navy text-sm font-semibold text-paper">
+                      {row.volunteer.photoUrl ? <img src={row.volunteer.photoUrl} alt="" className="h-full w-full object-cover" /> : row.volunteer.fullName.slice(0, 1)}
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate font-medium text-navy">{row.volunteer.fullName}</span>
+                      <span className="text-xs text-muted-foreground">{row.volunteer.volunteerId} · {row.volunteer.unit}</span>
+                    </span>
+                    <span className="font-display text-xl tabular-nums text-navy">{row.hours}</span>
+                  </li>
+                ))}
+              </ol>
+            ) : (
+              <p className="px-4 py-6 text-sm text-muted-foreground">{tr("Hours appear after attendance is marked.", "હાજરી નોંધાય પછી કલાક અહીં દેખાશે.")}</p>
+            )}
+          </section>
 
           <OpenTab id="volunteers" title={tr("Volunteers", "સ્વયંસેવકો")}>
             {rollCards.length ? (
