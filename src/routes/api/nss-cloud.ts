@@ -1,4 +1,4 @@
-import { loadCollegeCloud, loadStudentRoll, readOneStudent, loadPublicBoard, loadOfficerRoll, collegeQuotaBlocked, saveStudentToCloud, incrementVisitors, readVisitorCount, knownVisitorCount, patchStudent, safePhoto, knownRole, readChatPass, listRecentChatMessages, saveChatMessage, listChatPeople, clearAttendanceCloud, readBrandPhotos, saveBrandPhotos, listPhotoRoster, readPhotoBatch, saveAttendanceMarks, readLive, publishBestVolunteer, publishServiceHours, purgeCloudIds, deleteChatMessages, readChatMedia, readOneChat, patchNotice, upsertNotice, sideDocId, listChatStatuses, readSide, readStudentCerts, saveStudentCerts, markChatRead, chatReads, markThreadCleared, reviseChatMessage, chatBlocked, readHomeSlides, readOwnMarks, saveGallerySlide, readLivePolls, updateLivePolls, CHAT_LIFE_MS, type ChatExtra } from "@/lib/nss/firestore";
+import { loadCollegeCloud, loadStudentRoll, readOneStudent, loadPublicBoard, loadOfficerRoll, collegeQuotaBlocked, saveStudentToCloud, incrementVisitors, readVisitorCount, knownVisitorCount, patchStudent, safePhoto, knownRole, readChatPass, listRecentChatMessages, saveChatMessage, listChatPeople, clearAttendanceCloud, readBrandPhotos, saveBrandPhotos, listPhotoRoster, readPhotoBatch, saveAttendanceMarks, readLive, publishBestVolunteer, publishServiceHours, purgeCloudIds, deleteChatMessages, readChatMedia, readOneChat, patchNotice, upsertNotice, sideDocId, listChatStatuses, readSide, readStudentCerts, saveStudentCerts, markChatRead, chatReads, markThreadCleared, reviseChatMessage, chatBlocked, readHomeSlides, readOwnMarks, saveGallerySlide, readLivePolls, updateLivePolls, readFeedMarks, updateFeedMarks, CHAT_LIFE_MS, type ChatExtra } from "@/lib/nss/firestore";
 import { recordReply, upsertPoll } from "@/lib/nss/polls";
 import { passwordOk, sealText, signChatPass } from "@/lib/nss/seal.server";
 import { createFileRoute } from "@tanstack/react-router";
@@ -367,6 +367,10 @@ export const Route = createFileRoute("/api/nss-cloud")({
         const url = new URL(request.url);
         const includeGallery = url.searchParams.get("gallery") === "1";
         try {
+          if (url.searchParams.get("feed") === "1") {
+            const marks = await readFeedMarks();
+            return Response.json({ ok: true, marks, build: appBuild() }, { headers: { "cache-control": "public, max-age=4, s-maxage=5" } });
+          }
           if (url.searchParams.get("polls") === "1") {
             const polls = await readLivePolls();
             return Response.json(
@@ -576,6 +580,26 @@ export const Route = createFileRoute("/api/nss-cloud")({
             });
             if (saved.error) return Response.json({ ok: false, error: saved.error }, { status: 400 });
             return Response.json({ ok: true, polls: saved.polls });
+          }
+          if (body.action === "feed-like" || body.action === "feed-comment") {
+            const photoId = text(body.photoId).replace(/[^A-Za-z0-9_-]/g, "").slice(0, 48);
+            const who = text(body.who).replace(/[^A-Za-z0-9_-]/g, "").slice(0, 40);
+            if (!photoId) return Response.json({ ok: false, error: "Choose a photograph." }, { status: 400 });
+            const marks = await updateFeedMarks((current) => {
+              const next = current.filter((row) => row.id !== photoId);
+              const found = current.find((row) => row.id === photoId) || { id: photoId, likes: [], comments: [] };
+              if (body.action === "feed-like") {
+                if (!who) return current;
+                const likes = found.likes.includes(who) ? found.likes.filter((id) => id !== who) : [...found.likes, who].slice(-400);
+                return [...next, { ...found, likes }];
+              }
+              const name = text(body.name).slice(0, 60);
+              const note = text(body.text).slice(0, 140);
+              if (name.length < 2 || note.length < 1) return current;
+              const comments = [...found.comments, { id: `c${Date.now().toString(36)}`, name, text: note, at: new Date().toISOString() }].slice(-20);
+              return [...next, { ...found, comments }];
+            });
+            return Response.json({ ok: true, marks });
           }
           if (body.action === "answer-poll") {
             const saved = await updateLivePolls((current) =>

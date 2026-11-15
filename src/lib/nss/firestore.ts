@@ -1192,8 +1192,79 @@ export async function saveGallerySlide(input: { id: string; image: string; capti
   }
 }
 
+export type FeedComment = { id: string; name: string; text: string; at: string };
+export type FeedMark = { id: string; likes: string[]; comments: FeedComment[] };
+
+function cleanFeed(raw: unknown): FeedMark[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((item) => {
+      const row = item as { id?: unknown; likes?: unknown; comments?: unknown };
+      const id = String(row.id ?? "").replace(/[^A-Za-z0-9_-]/g, "").slice(0, 48);
+      if (!id) return null;
+      const likes = Array.isArray(row.likes) ? [...new Set(row.likes.map((like) => String(like).slice(0, 40)).filter((like) => like.length > 2))].slice(0, 400) : [];
+      const comments = Array.isArray(row.comments)
+        ? row.comments
+            .map((comment) => {
+              const note = comment as { id?: unknown; name?: unknown; text?: unknown; at?: unknown };
+              const text = String(note.text ?? "").trim().slice(0, 140);
+              const name = String(note.name ?? "").trim().slice(0, 60);
+              if (text.length < 1 || name.length < 2) return null;
+              return { id: String(note.id ?? "").slice(0, 40) || `c${Date.now()}`, name, text, at: String(note.at ?? "").slice(0, 32) };
+            })
+            .filter((comment): comment is FeedComment => Boolean(comment))
+            .slice(-20)
+        : [];
+      return { id, likes, comments };
+    })
+    .filter((row): row is FeedMark => Boolean(row))
+    .slice(0, 80);
+}
+
+let feedCache: { at: number; marks: FeedMark[] } | null = null;
+let feedWrite: Promise<unknown> = Promise.resolve();
 let pollCache: { at: number; polls: LivePoll[] } | null = null;
 let pollWrite: Promise<unknown> = Promise.resolve();
+
+export async function readFeedMarks(): Promise<FeedMark[]> {
+  if (feedCache && Date.now() - feedCache.at < 5_000) return feedCache.marks;
+  if (collegeQuotaBlocked()) return feedCache?.marks ?? [];
+  try {
+    const doc = await getDocument("portalSettings/live");
+    const raw = typeof doc?.feedBoard === "string" ? JSON.parse(doc.feedBoard) : [];
+    const marks = cleanFeed(raw);
+    feedCache = { at: Date.now(), marks };
+    return marks;
+  } catch {
+    return feedCache?.marks ?? [];
+  }
+}
+
+async function persistFeedMarks(marks: FeedMark[]) {
+  const board = JSON.stringify(marks);
+  if (board.length > 700_000) throw new Error("The feed is full.");
+  const patch = await fetch(`${FIRESTORE_BASE}/portalSettings/live?updateMask.fieldPaths=feedBoard`, {
+    method: "PATCH",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ fields: { feedBoard: { stringValue: board } } }),
+  });
+  if (!patch.ok) throw new Error("Could not save the feed.");
+  feedCache = { at: Date.now(), marks };
+}
+
+export async function updateFeedMarks(change: (marks: FeedMark[]) => FeedMark[]) {
+  const run = feedWrite.then(async () => {
+    const current = await readFeedMarks();
+    const next = change(current);
+    await persistFeedMarks(next);
+    return next;
+  });
+  feedWrite = run.then(
+    () => undefined,
+    () => undefined,
+  );
+  return run;
+}
 
 export async function readLivePolls(): Promise<LivePoll[]> {
   if (pollCache && Date.now() - pollCache.at < 5_000) return pollCache.polls;
