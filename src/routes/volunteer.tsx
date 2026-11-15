@@ -1,4 +1,4 @@
-import { createFileRoute, Navigate } from "@tanstack/react-router";
+import { createFileRoute, Link, Navigate } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Award, Cake, Fingerprint, KeyRound, Lock } from "lucide-react";
@@ -330,6 +330,55 @@ function VolunteerDash() {
             <button type="button" className="underline-offset-4 hover:underline" onClick={() => setPanel(panel === "password" ? "none" : "password")}>{tr("Change password", "પાસવર્ડ બદલો")}</button>
           </div>
         </div>
+
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <Link to="/passport" className="border border-navy/10 bg-card p-4 shadow-sm">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-saffron">{tr("Passport", "પાસપોર્ટ")}</p>
+            <p className="mt-2 font-display text-2xl text-navy">{hours}<span className="text-base text-muted-foreground"> / 240</span></p>
+            <div className="mt-2 h-2 bg-muted"><div className="h-full bg-forest" style={{ width: `${Math.min(100, Math.round((hours / 240) * 100))}%` }} /></div>
+            <p className="mt-1 text-xs text-muted-foreground">{tr("Remaining", "બાકી")} {Math.max(0, 240 - hours)}</p>
+          </Link>
+          <Link to="/gallery" className="border border-navy/10 bg-card p-4 shadow-sm">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-saffron">{tr("Photo feed", "ફોટો ફીડ")}</p>
+            <p className="mt-2 text-sm text-navy">{tr("See camp photos, like and comment.", "કેમ્પના ફોટા જુઓ, પસંદ અને ટિપ્પણી કરો.")}</p>
+          </Link>
+          <Link to="/polls" className="border border-navy/10 bg-card p-4 shadow-sm">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-saffron">{tr("Poll", "મતદાન")}</p>
+            <p className="mt-2 text-sm text-navy">{tr("Answer the live college poll.", "કૉલેજનો લાઇવ મતદાન ભરો.")}</p>
+          </Link>
+          <Link to="/chat" className="border border-navy/10 bg-card p-4 shadow-sm">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-saffron">{tr("Chat", "ચેટ")}</p>
+            <p className="mt-2 text-sm text-navy">{tr("Message the unit and the officer.", "એકમ અને અધિકારીને સંદેશ લખો.")}</p>
+          </Link>
+        </div>
+
+        <section className="border border-navy/10 bg-card p-4 shadow-sm">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h2 className="font-display text-xl text-navy">{tr("My camp diary", "મારી કેમ્પ ડાયરી")}</h2>
+            <Button size="sm" variant="outline" onClick={() => {
+              const nextEvent = upcoming[0];
+              const text = [
+                me.fullName,
+                `${me.volunteerId} · ${me.unit}`,
+                `${tr("Service hours", "સેવા કલાક")}: ${hours} / 240`,
+                nextEvent ? `${tr("Next", "આગળ")}: ${nextEvent.name} · ${formatLongDate(nextEvent.date)}` : "",
+                mine[0]?.cert.certificateId ? `${tr("Certificate", "પ્રમાણપત્ર")}: ${mine[0].cert.certificateId}` : "",
+              ].filter(Boolean).join("\n");
+              window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank", "noopener,noreferrer");
+            }}>{tr("Share on WhatsApp", "વોટ્સએપ પર મોકલો")}</Button>
+          </div>
+          {(upcoming[0] ? [upcoming[0]] : events.slice(0, 1)).filter(Boolean).map((event) => {
+            const mark = attendanceOf(portalState, me.id, event.id);
+            const shots = (portalState.gallery ?? []).filter((item) => item.eventId === event.id || item.eventName === event.name).slice(0, 3);
+            return (
+              <div key={event.id} className="mt-3">
+                <p className="font-medium text-navy">{event.name}</p>
+                <p className="text-sm text-muted-foreground">{formatLongDate(event.date)} · {event.location} · {mark?.present ? tr("Present", "હાજર") : tr("Not marked yet", "હજી હાજરી નથી")}</p>
+                {shots.length ? <div className="mt-2 grid grid-cols-3 gap-1">{shots.map((shot) => shot.src ? <img key={shot.id} src={shot.src} alt="" className="aspect-square w-full object-cover" /> : null)}</div> : null}
+              </div>
+            );
+          })}
+        </section>
 
         {panel === "edit" ? <EditProfile volunteerId={me.id} /> : null}
 
