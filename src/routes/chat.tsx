@@ -408,7 +408,7 @@ function ChatPage() {
 
   useEffect(() => {
     if (!token) return;
-    const open = !mobileList || window.innerWidth >= 1280;
+    const open = !mobileList || window.innerWidth >= 900;
     const typing = open && draft.trim().length > 0;
     if (typing === typingOn.current) return;
     typingOn.current = typing;
@@ -619,7 +619,7 @@ function ChatPage() {
 
   useEffect(() => {
     if (!token) return;
-    const open = !mobileList || window.innerWidth >= 1280;
+    const open = !mobileList || window.innerWidth >= 900;
     const thread = open ? canonicalThread(active) : "";
     const other = thread.startsWith("dm:") ? thread.slice(3).split(":").find((part) => part !== (me?.id || "")) || "" : "";
     let stop = false;
@@ -1352,7 +1352,7 @@ function ChatPage() {
           </div>
         ) : null}
         {threadId === "channel" && !officer ? <div className="bg-[#f0f2f5] px-3 py-3 text-center text-xs text-[#667781]">Only the Programme Officer can post here.</div> : (
-        <form className="relative shrink-0 bg-[#f0f2f5] px-1.5 py-1.5 pb-[max(0.35rem,env(safe-area-inset-bottom))]" onSubmit={(e) => void send(e, threadId)}>
+        <form className="relative z-20 shrink-0 border-t border-[#d1d7db] bg-[#f0f2f5] px-1.5 py-1.5 pb-[max(0.35rem,env(safe-area-inset-bottom))]" onSubmit={(e) => void send(e, threadId)}>
           {reply ? (
             <div className="mb-1 flex items-start justify-between gap-2 rounded-lg border-l-4 border-[#06cf9c] bg-white px-3 py-2 text-xs">
               <span className="min-w-0 truncate text-[#111b21]">{reply.name}: {reply.text}</span>
@@ -1597,7 +1597,7 @@ function ChatPage() {
   return (
     <AppShell eyebrow="NSS CHAT" current="page">
       <div className={`fixed inset-0 z-50 flex ${prefs.dark ? "bg-[#0b141a]" : "bg-[#efeae2]"}`} onContextMenu={(event) => event.preventDefault()}>
-        <aside className={`${mobileList ? "flex" : "hidden"} h-full w-full flex-col min-[1280px]:flex min-[1280px]:w-96 min-[1280px]:border-r min-[1280px]:border-[#d1d7db] ${prefs.dark ? "bg-[#111b21] text-white" : "bg-white"}`}>
+        <aside className={`${mobileList ? "flex" : "hidden"} h-full w-full flex-col min-[900px]:flex min-[900px]:w-96 min-[900px]:border-r min-[900px]:border-[#d1d7db] ${prefs.dark ? "bg-[#111b21] text-white" : "bg-white"}`}>
           <div className="flex items-center gap-3 bg-[#075e54] px-3 py-3 text-white">
             <button type="button" className="rounded-full p-1 hover:bg-white/10" aria-label="Back" onClick={leaveChats}>
               <ArrowLeft className="size-5" />
@@ -1670,9 +1670,9 @@ function ChatPage() {
             {eventChats.map((event) => threadButton(`event:${event.id}`))}
           </div>
         </aside>
-        <section className={`${mobileList ? "hidden" : "flex"} relative h-full min-h-0 min-w-0 flex-1 flex-col min-[1280px]:flex`}>
+        <section className={`${mobileList ? "hidden" : "flex"} relative h-full min-h-0 min-w-0 flex-1 flex-col min-[900px]:flex`}>
           <header className="flex items-center gap-2 bg-[#075e54] px-2 py-2.5 text-white">
-            <button type="button" className="rounded-md p-2 hover:bg-white/10 min-[1280px]:hidden" onClick={closeThread} aria-label="Back to chats">
+            <button type="button" className="rounded-md p-2 hover:bg-white/10 min-[900px]:hidden" onClick={closeThread} aria-label="Back to chats">
               <ArrowLeft className="size-5" />
             </button>
             <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-white/20 text-sm font-semibold">{threadTitle(active).slice(0, 1)}</span>
